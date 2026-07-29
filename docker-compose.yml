@@ -1,0 +1,72 @@
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: dedieufy-navidrome
+    user: "${PUID}:${PGID}"
+    ports:
+      - "${NAVIDROME_PORT}:4533"
+    restart: unless-stopped
+    environment:
+      ND_PLUGINS_ENABLED: "true"
+      ND_PLUGINS_AUTORELOAD: "true"
+      ND_LOGLEVEL: "${ND_LOGLEVEL}"
+      ND_SESSIONTIMEOUT: "${ND_SESSIONTIMEOUT}"
+      ND_SCANNER_SCANONSTARTUP: "${ND_SCANNER_SCANONSTARTUP}"
+      ND_SCANNER_SCHEDULE: "${ND_SCANNER_SCHEDULE}"
+      ND_ENABLEINSIGHTSCOLLECTOR: "${ND_ENABLEINSIGHTSCOLLECTOR}"
+      ND_AGENTS: "listenbrainz,musicbrainz,apple-music,deezer,lastfm"
+      ND_LASTFM_SECRET: "${ND_LASTFM_SECRET}"
+      ND_LASTFM_APIKEY: "${ND_LASTFM_APIKEY}"
+      ND_AUTOIMPORTPLAYLISTS: "false"
+    volumes:
+      - "${DEDIEUFY_ROOT}/navidrome/data:/data"
+      - "${MUSIC_PATH}:/music:ro"
+
+  picard:
+    image: jlesage/musicbrainz-picard:latest
+    container_name: dedieufy-picard
+    restart: unless-stopped
+    ports:
+      - "5802:5800"
+    environment:
+      USER_ID: "${PUID}"
+      GROUP_ID: "${PGID}"
+      TZ: "${TZ}"
+      TAKE_CONFIG_OWNERSHIP: "1"
+      UMASK: "002"
+      SECURE_CONNECTION: "0"
+    volumes:
+      - "${DEDIEUFY_ROOT}/picard/config:/config"
+      - "${MUSIC_PATH}:/storage:rw"
+    shm_size: "1gb"
+
+  metube:
+    image: ghcr.io/alexta69/metube:latest
+    container_name: metube
+    ports:
+      - "8081:8081"
+    volumes:
+      - "${MUSIC_PATH}/youtube:/downloads"
+      - /tmp/metube:/tmp/metube
+    environment:
+      - DOWNLOAD_DIR=/downloads
+      - TEMP_DIR=/tmp/metube
+      - CUSTOM_DIRS=true
+      - CREATE_CUSTOM_DIRS=true
+      - OUTPUT_TEMPLATE=%(title)s.%(ext)s
+    restart: unless-stopped
+
+  releases:
+    build: ./release-tracker
+    container_name: musicreleasarr
+    user: "${PUID}:${PGID}"
+    restart: unless-stopped
+    ports:
+      - "${RELEASES_PORT}:8000"
+    environment:
+      TZ: "${TZ}"
+    volumes:
+      - "${DEDIEUFY_ROOT}/releases/data:/data"
+    depends_on:
+      - navidrome
+      - metube
