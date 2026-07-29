@@ -1,6 +1,8 @@
 """Client MeTube : envoie une URL YouTube Music a telecharger.
 
-MeTube expose un endpoint HTTP POST /add ({url, quality, format, folder}).
+MeTube expose un endpoint HTTP POST /add ({url, download_type, quality, format, folder}).
+download_type est obligatoire depuis les versions recentes de MeTube (valeurs
+possibles : video/audio/captions/thumbnail) - on veut "audio" pour de la musique.
 CUSTOM_DIRS=true est deja active sur le conteneur metube existant, ce qui
 permet de ranger le telechargement dans un sous-dossier par artiste.
 """
@@ -9,7 +11,7 @@ import httpx
 
 
 def queue_download(metube_url: str, url: str, folder: str | None = None) -> tuple[bool, str]:
-    payload = {"url": url, "quality": "best", "format": "mp3"}
+    payload = {"url": url, "download_type": "audio", "quality": "best", "format": "mp3"}
     if folder:
         payload["folder"] = folder
 
