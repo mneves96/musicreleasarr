@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -9,8 +10,8 @@ from sqlalchemy.orm import Session
 from .db import SessionLocal
 from .enrichment import enrich_artist
 from .matching import normalize_text
-from .models import Artist, DownloadStatus, OwnershipStatus, Release, Settings
-from .services import deezer, metube, musicbrainz, navidrome, notify, ytmusic
+from .models import Artist, DownloadStatus, OwnershipStatus, Release, ReleaseType, Settings
+from .services import coverart, deezer, metube, musicbrainz, navidrome, notify, ytmusic
 
 logger = logging.getLogger("dedieufy.scheduler")
 
@@ -55,7 +56,26 @@ def discover_new_releases(db: Session) -> None:
 
 
 def _discover_for_artist(db: Session, artist: Artist) -> None:
+    # Nettoie les release-groups "poubelle" (bootlegs/broadcasts/demos) inserees
+    # avant l'ajout du filtrage - elles ne seront de toute facon plus reinserees.
+    db.query(Release).filter(
+        Release.artist_id == artist.id, Release.release_type == ReleaseType.other
+    ).delete()
+
     release_groups = musicbrainz.get_release_groups(artist.musicbrainz_id)
+
+    candidates: list[tuple[dict, str]] = []
+    for rg in release_groups:
+        if db.query(Release).filter(Release.musicbrainz_id == rg["id"]).first():
+            continue
+        release_type = musicbrainz.classify_release_type(rg)
+        if release_type is None:
+            continue
+        candidates.append((rg, release_type))
+
+    if not candidates:
+        db.commit()
+        return
 
     deezer_albums = None
     if artist.deezer_id:
@@ -64,21 +84,26 @@ def _discover_for_artist(db: Session, artist: Artist) -> None:
         except Exception:
             logger.warning("Deezer indisponible pour %s", artist.name)
 
-    for rg in release_groups:
-        mbid = rg["id"]
-        existing = db.query(Release).filter(Release.musicbrainz_id == mbid).first()
-        if existing:
-            continue
+    with ThreadPoolExecutor(max_workers=24) as pool:
+        caa_covers = list(pool.map(lambda item: coverart.get_release_group_cover(item[0]["id"]), candidates))
 
+    cutoff = (artist.created_at or datetime.utcnow()).date()
+
+    for (rg, release_type), caa_cover in zip(candidates, caa_covers):
         release_date, precision = musicbrainz.parse_release_date(rg.get("first-release-date"))
-        release_type = musicbrainz.classify_release_type(rg)
 
-        cover_url, deezer_id = None, None
+        cover_url, deezer_id = caa_cover, None
         if deezer_albums:
             match = deezer.find_matching_album(deezer_albums, rg["title"])
             if match:
-                cover_url = match.get("cover_xl") or match.get("cover_big")
                 deezer_id = str(match.get("id"))
+                if not cover_url:
+                    cover_url = match.get("cover_xl") or match.get("cover_big")
+
+        # Les releases deja sorties avant que l'artiste soit suivi sont du "backlog" :
+        # on les marque comme deja notifiees pour ne pas spammer, mais elles restent
+        # eligibles au scan de possession et au telechargement automatique.
+        is_backlog = release_date is None or release_date < cutoff
 
         release = Release(
             artist_id=artist.id,
@@ -87,20 +112,23 @@ def _discover_for_artist(db: Session, artist: Artist) -> None:
             release_date=release_date,
             release_date_precision=precision,
             cover_url=cover_url,
-            musicbrainz_id=mbid,
+            musicbrainz_id=rg["id"],
             deezer_id=deezer_id,
+            notified_at=datetime.utcnow() if is_backlog else None,
         )
         db.add(release)
     db.commit()
 
 
-def scan_ownership(db: Session, only_queued: bool = False) -> None:
+def scan_ownership(db: Session, only_queued: bool = False, artist_id: int | None = None) -> None:
     settings = get_settings(db)
     if not (settings.navidrome_url and settings.navidrome_username and settings.navidrome_password):
         logger.info("Connexion Navidrome non configuree, scan de possession ignore")
         return
 
     query = db.query(Release)
+    if artist_id is not None:
+        query = query.filter(Release.artist_id == artist_id)
     if only_queued:
         query = query.filter(Release.download_status == DownloadStatus.queued)
     else:
@@ -129,35 +157,39 @@ def scan_ownership(db: Session, only_queued: bool = False) -> None:
     db.commit()
 
 
-def process_pending(db: Session) -> None:
+def process_pending(db: Session, artist_id: int | None = None) -> None:
     settings = get_settings(db)
-    releases = (
-        db.query(Release)
-        .filter(Release.ownership_status != OwnershipStatus.unknown)
-        .filter(Release.notified_at.is_(None))
-        .all()
+
+    download_query = db.query(Release).filter(
+        Release.ownership_status == OwnershipStatus.missing,
+        Release.download_status == DownloadStatus.not_requested,
     )
+    if artist_id is not None:
+        download_query = download_query.filter(Release.artist_id == artist_id)
 
-    for release in releases:
+    for release in download_query.all():
         artist = release.artist
-        if not artist.is_followed:
+        if not artist.is_followed or not artist.auto_download:
             continue
-
-        type_followed = release.release_type.value in (artist.followed_release_types or [])
-        if not type_followed:
+        if release.release_type.value not in (artist.followed_release_types or []):
             continue
+        _trigger_download(db, settings, artist, release)
 
-        if (
-            artist.auto_download
-            and release.ownership_status == OwnershipStatus.missing
-            and release.download_status == DownloadStatus.not_requested
-        ):
-            _trigger_download(db, settings, artist, release)
+    notify_query = db.query(Release).filter(
+        Release.ownership_status != OwnershipStatus.unknown,
+        Release.notified_at.is_(None),
+    )
+    if artist_id is not None:
+        notify_query = notify_query.filter(Release.artist_id == artist_id)
 
-        if artist.notify_enabled:
-            notify.notify_new_release(settings, artist, release)
+    for release in notify_query.all():
+        artist = release.artist
+        if artist.is_followed and artist.notify_enabled:
+            type_followed = release.release_type.value in (artist.followed_release_types or [])
+            if type_followed:
+                notify.notify_new_release(settings, artist, release)
+        release.notified_at = datetime.utcnow()
 
-        release.notified_at = release.notified_at or datetime.utcnow()
     db.commit()
 
 
@@ -186,6 +218,14 @@ def _trigger_download(db: Session, settings: Settings, artist: Artist, release: 
     except Exception:
         logger.exception("Echec du declenchement de telechargement pour %s - %s", artist.name, release.title)
         release.download_status = DownloadStatus.failed
+
+
+def scan_artist(db: Session, artist: Artist) -> None:
+    """Scan cible sur un seul artiste : utilise a la fois quand on suit un nouvel
+    artiste et par le bouton "Actualiser" de la page artiste."""
+    _discover_for_artist(db, artist)
+    scan_ownership(db, only_queued=False, artist_id=artist.id)
+    process_pending(db, artist_id=artist.id)
 
 
 def run_full_cycle() -> None:

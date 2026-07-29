@@ -56,6 +56,7 @@ export interface Track {
 
 export interface Settings {
   metube_url: string | null
+  metube_public_url: string | null
   navidrome_url: string | null
   navidrome_username: string | null
   navidrome_password: string | null
@@ -107,6 +108,8 @@ export const api = {
 
   updateArtist: (id: number, payload: Partial<Pick<Artist, 'is_followed' | 'notify_enabled' | 'auto_download' | 'followed_release_types'>>) =>
     request<Artist>(`/artists/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
+  scanArtist: (id: number) => request<TestConnectionResult>(`/artists/${id}/scan`, { method: 'POST' }),
 
   listReleases: (from?: string, to?: string) => {
     const params = new URLSearchParams()

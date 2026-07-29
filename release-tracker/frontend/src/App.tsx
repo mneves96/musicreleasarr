@@ -5,6 +5,7 @@ import SearchPage from './pages/SearchPage'
 import CalendarPage from './pages/CalendarPage'
 import ArtistPage from './pages/ArtistPage'
 import SettingsPage from './pages/SettingsPage'
+import MetubePage from './pages/MetubePage'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="search" element={<SearchPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="artists/:id" element={<ArtistPage />} />
+          <Route path="metube" element={<MetubePage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

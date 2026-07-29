@@ -62,10 +62,30 @@ def get_release_groups(artist_mbid: str) -> list[dict]:
     return release_groups
 
 
-def classify_release_type(release_group: dict) -> str:
-    primary = (release_group.get("primary-type") or "").lower()
-    secondary = [s.lower() for s in release_group.get("secondary-types") or []]
+# Types qui polluent le suivi (bootlegs, radio broadcasts, demos, mixtapes...) :
+# on ignore completement ces release-groups plutot que de les ranger dans "other".
+_JUNK_SECONDARY_TYPES = {
+    "live",
+    "demo",
+    "dj-mix",
+    "mixtape/street",
+    "interview",
+    "audiobook",
+    "audio drama",
+    "spokenword",
+    "field recording",
+    "remix",
+}
 
+
+def classify_release_type(release_group: dict) -> str | None:
+    """Renvoie le type de release (album/ep/single/compilation), ou None si la
+    release-group doit etre ignoree (broadcast, live, demo, remix, etc.)."""
+    primary = (release_group.get("primary-type") or "").lower()
+    secondary = {s.lower() for s in release_group.get("secondary-types") or []}
+
+    if secondary & _JUNK_SECONDARY_TYPES:
+        return None
     if "compilation" in secondary:
         return "compilation"
     if primary == "album":
@@ -74,7 +94,7 @@ def classify_release_type(release_group: dict) -> str:
         return "ep"
     if primary == "single":
         return "single"
-    return "other"
+    return None
 
 
 def parse_release_date(value: str | None) -> tuple[date | None, str | None]:

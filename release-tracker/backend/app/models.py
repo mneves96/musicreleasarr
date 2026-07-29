@@ -129,6 +129,9 @@ class Settings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
 
     metube_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    # URL jointe depuis le navigateur (peut differer de metube_url, qui est l'URL
+    # interne au reseau Docker utilisee par le backend pour parler a MeTube).
+    metube_public_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
     navidrome_url: Mapped[str | None] = mapped_column(String, nullable=True)
     navidrome_username: Mapped[str | None] = mapped_column(String, nullable=True)

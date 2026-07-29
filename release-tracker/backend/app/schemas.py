@@ -79,6 +79,7 @@ class SettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     metube_url: str | None
+    metube_public_url: str | None
     navidrome_url: str | None
     navidrome_username: str | None
     navidrome_password: str | None
@@ -97,6 +98,7 @@ class SettingsOut(BaseModel):
 
 class SettingsUpdateIn(BaseModel):
     metube_url: str | None = None
+    metube_public_url: str | None = None
     navidrome_url: str | None = None
     navidrome_username: str | None = None
     navidrome_password: str | None = None

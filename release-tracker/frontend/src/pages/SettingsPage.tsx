@@ -84,6 +84,11 @@ export default function SettingsPage() {
           </button>
           <ResultLine result={results.metube ?? null} />
         </div>
+        <Field
+          label="URL publique de MeTube (accessible depuis ton navigateur, pour l'onglet integre - ex: http://192.168.1.128:8081)"
+          value={settings.metube_public_url ?? ''}
+          onChange={(v) => set('metube_public_url', v)}
+        />
       </Section>
 
       <Section title="Navidrome (verification de possession)">

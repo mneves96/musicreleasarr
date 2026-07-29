@@ -28,6 +28,9 @@ export default function Layout() {
             <NavLink to="/calendar" className={navLinkClass}>
               Calendrier
             </NavLink>
+            <NavLink to="/metube" className={navLinkClass}>
+              MeTube
+            </NavLink>
             <NavLink to="/settings" className={navLinkClass}>
               Reglages
             </NavLink>

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..enrichment import enrich_artist
 from ..models import ALL_RELEASE_TYPES, Artist
-from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn
+from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
 from ..services import musicbrainz
 from .. import scheduler
 
@@ -35,7 +35,24 @@ def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
     ]
     db.commit()
     db.refresh(artist)
+
+    scheduler.scan_artist(db, artist)
+    db.refresh(artist)
     return artist
+
+
+@router.post("/{artist_id}/scan", response_model=TestConnectionResult)
+def scan_artist_now(artist_id: int, db: Session = Depends(get_db)):
+    artist = db.get(Artist, artist_id)
+    if artist is None:
+        raise HTTPException(404, "Artiste introuvable")
+
+    try:
+        scheduler.scan_artist(db, artist)
+    except Exception as exc:
+        raise HTTPException(502, f"Echec du scan : {exc}") from exc
+
+    return TestConnectionResult(ok=True, message="Scan termine")
 
 
 @router.get("/{artist_id}", response_model=ArtistWithReleases)

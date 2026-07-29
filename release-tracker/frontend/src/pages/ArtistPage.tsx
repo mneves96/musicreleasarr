@@ -10,6 +10,8 @@ export default function ArtistPage() {
   const artistId = Number(id)
   const [artist, setArtist] = useState<ArtistWithReleases | null>(null)
   const [saving, setSaving] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<ReleaseType | 'all'>('all')
 
   const load = useCallback(() => {
@@ -32,6 +34,20 @@ export default function ArtistPage() {
     }
   }
 
+  async function refresh() {
+    setScanning(true)
+    setScanMessage(null)
+    try {
+      await api.scanArtist(artistId)
+      await load()
+      setScanMessage('A jour')
+    } catch (err) {
+      setScanMessage(err instanceof Error ? err.message : 'Echec du scan')
+    } finally {
+      setScanning(false)
+    }
+  }
+
   function toggleType(type: ReleaseType) {
     const current = artist!.followed_release_types
     const next = current.includes(type) ? current.filter((t) => t !== type) : [...current, type]
@@ -46,8 +62,18 @@ export default function ArtistPage() {
         ) : (
           <div className="w-20 h-20 rounded-full bg-neutral-800 flex items-center justify-center text-2xl">🎤</div>
         )}
-        <div>
-          <h1 className="text-2xl font-semibold">{artist.name}</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold">{artist.name}</h1>
+            <button
+              onClick={refresh}
+              disabled={scanning}
+              className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 whitespace-nowrap"
+            >
+              {scanning ? 'Scan en cours...' : '↻ Actualiser'}
+            </button>
+            {scanMessage && <span className="text-xs text-neutral-400">{scanMessage}</span>}
+          </div>
           <div className="flex gap-3 text-sm mt-1">
             {artist.lastfm_url && (
               <a href={artist.lastfm_url} target="_blank" rel="noreferrer" className="text-neutral-400 hover:text-white">
