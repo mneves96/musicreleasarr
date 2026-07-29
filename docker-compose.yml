@@ -57,8 +57,7 @@ services:
     restart: unless-stopped
 
   releases:
-    build:
-      context: https://github.com/mneves96/musicreleasarr.git#main:release-tracker
+    build: ./release-tracker
     container_name: musicreleasarr
     user: "${PUID}:${PGID}"
     restart: unless-stopped
