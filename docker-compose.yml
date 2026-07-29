@@ -57,7 +57,7 @@ services:
     restart: unless-stopped
 
   releases:
-    build: ./release-tracker
+    image: ghcr.io/mneves96/musicreleasarr:latest
     container_name: musicreleasarr
     user: "${PUID}:${PGID}"
     restart: unless-stopped
