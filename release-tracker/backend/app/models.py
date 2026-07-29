@@ -60,6 +60,10 @@ class Artist(Base):
     spotify_id: Mapped[str | None] = mapped_column(String, nullable=True)
     ytmusic_browse_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    country: Mapped[str | None] = mapped_column(String, nullable=True)
+    area_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     is_followed: Mapped[bool] = mapped_column(Boolean, default=False)
     notify_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     auto_download: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -77,6 +81,19 @@ class Artist(Base):
     @property
     def ytmusic_url(self) -> str | None:
         return f"https://music.youtube.com/channel/{self.ytmusic_browse_id}" if self.ytmusic_browse_id else None
+
+    @property
+    def album_count(self) -> int:
+        return sum(1 for r in self.releases if r.release_type == ReleaseType.album)
+
+    @property
+    def release_count(self) -> int:
+        return len(self.releases)
+
+    @property
+    def latest_release_date(self) -> date | None:
+        dated = [r.release_date for r in self.releases if r.release_date]
+        return max(dated) if dated else None
 
 
 class Release(Base):

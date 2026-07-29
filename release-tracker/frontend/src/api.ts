@@ -19,6 +19,12 @@ export interface Artist {
   lastfm_url: string | null
   spotify_id: string | null
   ytmusic_url: string | null
+  country: string | null
+  area_name: string | null
+  bio: string | null
+  album_count: number
+  release_count: number
+  latest_release_date: string | null
   is_followed: boolean
   notify_enabled: boolean
   auto_download: boolean
@@ -110,6 +116,8 @@ export const api = {
     request<Artist>(`/artists/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
   scanArtist: (id: number) => request<TestConnectionResult>(`/artists/${id}/scan`, { method: 'POST' }),
+
+  importFavorites: () => request<TestConnectionResult>('/artists/import-favorites', { method: 'POST' }),
 
   listReleases: (from?: string, to?: string) => {
     const params = new URLSearchParams()

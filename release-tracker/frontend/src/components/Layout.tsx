@@ -20,7 +20,10 @@ export default function Layout() {
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-neutral-800 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">
         <div className="max-w-5xl mx-auto flex items-center gap-4 px-4 py-3">
-          <span className="font-semibold text-lg whitespace-nowrap">🎵 MusicReleasarr</span>
+          <span className="flex items-center gap-2 font-semibold text-lg whitespace-nowrap">
+            <img src="/favicon.svg" alt="" className="w-6 h-6" />
+            MusicReleasarr
+          </span>
           <nav className="flex gap-1">
             <NavLink to="/" end className={navLinkClass}>
               Suivis

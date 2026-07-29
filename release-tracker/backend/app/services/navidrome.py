@@ -67,3 +67,16 @@ def album_exists(base_url: str, username: str, password: str, artist_name: str, 
         if title_score >= TITLE_THRESHOLD and artist_score >= ARTIST_THRESHOLD:
             return True
     return False
+
+
+def get_starred_artists(base_url: str, username: str, password: str) -> list[str]:
+    """Noms des artistes marques favoris ("starred") dans Navidrome."""
+    resp = httpx.get(
+        f"{base_url.rstrip('/')}/rest/getStarred2.view",
+        params=_auth_params(username, password),
+        timeout=15,
+    )
+    resp.raise_for_status()
+    body = resp.json().get("subsonic-response", {})
+    artists = body.get("starred2", {}).get("artist", [])
+    return [a["name"] for a in artists if a.get("name")]

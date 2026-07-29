@@ -45,6 +45,12 @@ class ArtistOut(BaseModel):
     lastfm_url: str | None
     spotify_id: str | None
     ytmusic_url: str | None
+    country: str | None
+    area_name: str | None
+    bio: str | None
+    album_count: int
+    release_count: int
+    latest_release_date: date | None
     is_followed: bool
     notify_enabled: bool
     auto_download: bool

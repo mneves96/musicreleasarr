@@ -44,6 +44,13 @@ def get_artist(artist_mbid: str) -> dict:
     return _throttled_get(f"/artist/{artist_mbid}", {})
 
 
+def extract_area(mb_artist: dict) -> tuple[str | None, str | None]:
+    """Code pays ISO (ex: "GB") et nom de la zone (ex: "United Kingdom") pour la nationalite."""
+    country = mb_artist.get("country")
+    area_name = (mb_artist.get("area") or {}).get("name")
+    return country, area_name
+
+
 def get_release_groups(artist_mbid: str) -> list[dict]:
     """Toutes les release-groups (albums/EP/singles/compiles) d'un artiste, avec leur date de premiere sortie."""
     release_groups: list[dict] = []

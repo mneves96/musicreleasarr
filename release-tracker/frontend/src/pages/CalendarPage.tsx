@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type Release } from '../api'
+import { api, RELEASE_TYPE_LABELS, type Release } from '../api'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const MONTH_NAMES = [
@@ -104,23 +104,33 @@ export default function CalendarPage() {
           return (
             <div
               key={iso}
-              className={`min-h-24 rounded-md border p-1 flex flex-col gap-1 ${
+              className={`min-h-32 rounded-md border p-1 flex flex-col gap-1 ${
                 inMonth ? 'border-neutral-800 bg-neutral-900' : 'border-neutral-900 bg-neutral-950 opacity-40'
               } ${iso === today ? 'ring-1 ring-purple-500' : ''}`}
             >
               <div className="text-xs text-neutral-500">{day.getDate()}</div>
-              {dayReleases.slice(0, 3).map((r) => (
+              {dayReleases.slice(0, 2).map((r) => (
                 <Link
                   key={r.id}
                   to={`/artists/${r.artist_id}`}
-                  className="text-[11px] leading-tight bg-neutral-800 hover:bg-neutral-700 rounded px-1 py-0.5 truncate"
-                  title={`${r.artist_name} - ${r.title}`}
+                  className="flex items-center gap-1 bg-neutral-800 hover:bg-neutral-700 rounded px-1 py-0.5"
+                  title={`${r.artist_name} - ${r.title} (${RELEASE_TYPE_LABELS[r.release_type]})`}
                 >
-                  {r.artist_name}
+                  {r.cover_url ? (
+                    <img src={r.cover_url} alt="" className="w-5 h-5 rounded object-cover bg-neutral-700 shrink-0" />
+                  ) : (
+                    <div className="w-5 h-5 rounded bg-neutral-700 shrink-0" />
+                  )}
+                  <div className="min-w-0 leading-tight">
+                    <div className="text-[11px] font-medium truncate">{r.artist_name}</div>
+                    <div className="text-[10px] text-neutral-400 truncate">
+                      {r.title} · {RELEASE_TYPE_LABELS[r.release_type]}
+                    </div>
+                  </div>
                 </Link>
               ))}
-              {dayReleases.length > 3 && (
-                <span className="text-[11px] text-neutral-500">+{dayReleases.length - 3} autres</span>
+              {dayReleases.length > 2 && (
+                <span className="text-[11px] text-neutral-500">+{dayReleases.length - 2} autres</span>
               )}
             </div>
           )

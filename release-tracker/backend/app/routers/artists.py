@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..enrichment import enrich_artist
 from ..models import ALL_RELEASE_TYPES, Artist
 from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
-from ..services import musicbrainz
+from ..services import musicbrainz, navidrome
 from .. import scheduler
 
 router = APIRouter(prefix="/api/artists", tags=["artists"])
@@ -24,7 +24,7 @@ def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
         mb_artist = musicbrainz.get_artist(payload.musicbrainz_id)
         artist = Artist(name=mb_artist["name"], musicbrainz_id=payload.musicbrainz_id)
         settings = scheduler.get_settings(db)
-        enrich_artist(artist, settings.lastfm_api_key)
+        enrich_artist(artist, settings.lastfm_api_key, mb_artist=mb_artist)
         db.add(artist)
 
     artist.is_followed = True
@@ -39,6 +39,29 @@ def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
     scheduler.scan_artist(db, artist)
     db.refresh(artist)
     return artist
+
+
+@router.post("/import-favorites", response_model=TestConnectionResult)
+def import_favorites(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    settings = scheduler.get_settings(db)
+    if not (settings.navidrome_url and settings.navidrome_username and settings.navidrome_password):
+        raise HTTPException(422, "Connexion Navidrome non configuree dans les reglages")
+
+    try:
+        names = navidrome.get_starred_artists(
+            settings.navidrome_url, settings.navidrome_username, settings.navidrome_password
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"Impossible de recuperer les favoris Navidrome : {exc}") from exc
+
+    if not names:
+        return TestConnectionResult(ok=True, message="Aucun artiste favori trouve dans Navidrome")
+
+    background_tasks.add_task(scheduler.import_navidrome_favorite_artists, names)
+    return TestConnectionResult(
+        ok=True,
+        message=f"Import lance pour {len(names)} artiste(s) favori(s) - ca peut prendre plusieurs minutes",
+    )
 
 
 @router.post("/{artist_id}/scan", response_model=TestConnectionResult)

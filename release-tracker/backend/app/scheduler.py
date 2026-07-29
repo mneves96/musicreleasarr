@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session
 
 from .db import SessionLocal
 from .enrichment import enrich_artist
-from .matching import normalize_text
-from .models import Artist, DownloadStatus, OwnershipStatus, Release, ReleaseType, Settings
+from .matching import best_match, normalize_text
+from .models import ALL_RELEASE_TYPES, Artist, DownloadStatus, OwnershipStatus, Release, ReleaseType, Settings
 from .services import coverart, deezer, metube, musicbrainz, navidrome, notify, ytmusic
+
+FAVORITE_MATCH_THRESHOLD = 0.85
 
 logger = logging.getLogger("dedieufy.scheduler")
 
@@ -223,9 +225,63 @@ def _trigger_download(db: Session, settings: Settings, artist: Artist, release: 
 def scan_artist(db: Session, artist: Artist) -> None:
     """Scan cible sur un seul artiste : utilise a la fois quand on suit un nouvel
     artiste et par le bouton "Actualiser" de la page artiste."""
+    if not (artist.deezer_id and artist.image_url and artist.ytmusic_browse_id and artist.country):
+        try:
+            settings = get_settings(db)
+            enrich_artist(artist, settings.lastfm_api_key)
+            db.commit()
+        except Exception:
+            logger.exception("Echec de l'enrichissement pour %s", artist.name)
+
     _discover_for_artist(db, artist)
     scan_ownership(db, only_queued=False, artist_id=artist.id)
     process_pending(db, artist_id=artist.id)
+
+
+def import_navidrome_favorite_artists(names: list[str]) -> None:
+    """Tache de fond (voir routers/artists.py:import_favorites) : pour chaque nom
+    d'artiste favori Navidrome, cherche la correspondance MusicBrainz, le suit
+    avec les reglages par defaut (notifications oui, telechargement auto non) et
+    lance un scan complet. Les echecs individuels n'interrompent pas le lot."""
+    with SessionLocal() as db:
+        settings = get_settings(db)
+        for name in names:
+            try:
+                _import_favorite_artist(db, name, settings)
+            except Exception:
+                logger.exception("Echec de l'import du favori Navidrome '%s'", name)
+
+
+def _import_favorite_artist(db: Session, name: str, settings: Settings) -> None:
+    results = musicbrainz.search_artists(name, limit=5)
+    if not results:
+        logger.info("Aucun resultat MusicBrainz pour le favori Navidrome '%s'", name)
+        return
+
+    idx = best_match(name, [r["name"] for r in results], threshold=FAVORITE_MATCH_THRESHOLD)
+    if idx is None:
+        logger.info("Aucune correspondance suffisamment fiable pour le favori Navidrome '%s'", name)
+        return
+    mb_artist = results[idx]
+
+    artist = db.query(Artist).filter(Artist.musicbrainz_id == mb_artist["id"]).first()
+    already_followed = artist is not None and artist.is_followed
+
+    if artist is None:
+        artist = Artist(name=mb_artist["name"], musicbrainz_id=mb_artist["id"])
+        enrich_artist(artist, settings.lastfm_api_key)
+        db.add(artist)
+        db.commit()
+        db.refresh(artist)
+
+    if not already_followed:
+        artist.is_followed = True
+        artist.notify_enabled = True
+        artist.auto_download = False
+        artist.followed_release_types = list(ALL_RELEASE_TYPES)
+        db.commit()
+
+    scan_artist(db, artist)
 
 
 def run_full_cycle() -> None:
