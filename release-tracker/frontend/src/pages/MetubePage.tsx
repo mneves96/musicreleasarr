@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { api, type MetubeHistory, type MetubeItem } from '../api'
 import MetubeItemRow from '../components/MetubeItemRow'
 
-const POLL_MS = 1500
+const ACTIVE_POLL_MS = 1000
+const IDLE_POLL_MS = 8000
 
 const AUDIO_FORMATS = ['mp3', 'm4a', 'opus', 'wav', 'flac']
 const AUDIO_QUALITIES = ['best', '320', '192', '128']
@@ -10,18 +11,38 @@ const VIDEO_FORMATS = ['any', 'mp4', 'webm']
 const VIDEO_QUALITIES = ['best', '2160', '1440', '1080', '720', '480', '360']
 
 type DownloadType = 'video' | 'audio' | 'captions' | 'thumbnail'
+type Bucket = 'queue' | 'pending' | 'done'
 
-function Section({ title, items, children }: { title: string; items: MetubeItem[]; children: ReactNode }) {
+function Section({
+  title,
+  items,
+  collapsed,
+  onToggle,
+  actions,
+  children,
+}: {
+  title: string
+  items: MetubeItem[]
+  collapsed: boolean
+  onToggle: () => void
+  actions?: ReactNode
+  children: ReactNode
+}) {
   return (
     <div className="mb-6">
-      <h2 className="font-medium mb-2">
-        {title} ({items.length})
-      </h2>
-      {items.length === 0 ? (
-        <p className="text-sm text-neutral-500">Rien ici.</p>
-      ) : (
-        <div className="flex flex-col gap-1.5">{children}</div>
-      )}
+      <div className="flex items-center justify-between mb-2">
+        <button onClick={onToggle} className="flex items-center gap-2 font-medium hover:text-neutral-300">
+          <span className="text-neutral-500 text-xs">{collapsed ? '▸' : '▾'}</span>
+          {title} ({items.length})
+        </button>
+        {!collapsed && actions}
+      </div>
+      {!collapsed &&
+        (items.length === 0 ? (
+          <p className="text-sm text-neutral-500">Rien ici.</p>
+        ) : (
+          <div className="flex flex-col gap-1.5">{children}</div>
+        ))}
     </div>
   )
 }
@@ -31,6 +52,9 @@ export default function MetubePage() {
   const [history, setHistory] = useState<MetubeHistory | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [notConfigured, setNotConfigured] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const [collapsed, setCollapsed] = useState<Record<Bucket, boolean>>({ queue: false, pending: false, done: false })
 
   const [url, setUrl] = useState('')
   const [downloadType, setDownloadType] = useState<DownloadType>('audio')
@@ -43,7 +67,8 @@ export default function MetubePage() {
 
   const pollRef = useRef<number | null>(null)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setRefreshing(true)
     try {
       const h = await api.metubeHistory()
       setHistory(h)
@@ -56,13 +81,30 @@ export default function MetubePage() {
       } else {
         setLoadError(msg)
       }
+    } finally {
+      if (showSpinner) setRefreshing(false)
     }
   }, [])
 
+  // Rafraichissement plus frequent quand l'onglet est actif/visible, plus espace
+  // sinon (pas besoin de marteler l'API pendant que la page est en arriere-plan).
   useEffect(() => {
+    function schedule() {
+      if (pollRef.current) window.clearInterval(pollRef.current)
+      const delay = document.visibilityState === 'visible' ? ACTIVE_POLL_MS : IDLE_POLL_MS
+      pollRef.current = window.setInterval(refresh, delay)
+    }
+
+    function onVisibilityChange() {
+      schedule()
+      if (document.visibilityState === 'visible') refresh()
+    }
+
     refresh()
-    pollRef.current = window.setInterval(refresh, POLL_MS)
+    schedule()
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       if (pollRef.current) window.clearInterval(pollRef.current)
     }
   }, [refresh])
@@ -70,6 +112,10 @@ export default function MetubePage() {
   useEffect(() => {
     api.getSettings().then((s) => setPublicUrl(s.metube_public_url))
   }, [])
+
+  function toggleSection(bucket: Bucket) {
+    setCollapsed((c) => ({ ...c, [bucket]: !c[bucket] }))
+  }
 
   function onTypeChange(type: DownloadType) {
     setDownloadType(type)
@@ -110,9 +156,34 @@ export default function MetubePage() {
     }
   }
 
-  async function deleteItem(id: string, where: 'queue' | 'done') {
-    await api.metubeDelete([id], where)
-    refresh()
+  // Mise a jour optimiste (l'element disparait immediatement) : sans ca, l'appui sur
+  // la croix pouvait sembler "ne rien faire" jusqu'au prochain sondage, et un sondage
+  // deja en vol pouvait meme faire reapparaitre l'element juste supprime.
+  function removeLocally(bucket: Bucket, id: string) {
+    setHistory((h) => (h ? { ...h, [bucket]: h[bucket].filter((i) => i.id !== id) } : h))
+  }
+
+  async function deleteItem(bucket: Bucket, id: string) {
+    removeLocally(bucket, id)
+    try {
+      await api.metubeDelete([id], bucket === 'done' ? 'done' : 'queue')
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur de suppression')
+      refresh()
+    }
+  }
+
+  async function clearDone(filter: 'finished' | 'error' | 'all') {
+    if (!history) return
+    const ids = history.done.filter((i) => filter === 'all' || i.status === filter).map((i) => i.id)
+    if (ids.length === 0) return
+    setHistory((h) => (h ? { ...h, done: h.done.filter((i) => !ids.includes(i.id)) } : h))
+    try {
+      await api.metubeDelete(ids, 'done')
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur')
+      refresh()
+    }
   }
 
   async function retryItem(id: string) {
@@ -130,7 +201,7 @@ export default function MetubePage() {
       <div className="text-neutral-400">
         <p>URL MeTube non configuree.</p>
         <p className="mt-2">
-          Renseigne-la dans <span className="text-neutral-300">Reglages</span> (section MeTube) pour geror tes
+          Renseigne-la dans <span className="text-neutral-300">Reglages</span> (section MeTube) pour gerer tes
           telechargements ici.
         </p>
       </div>
@@ -143,6 +214,13 @@ export default function MetubePage() {
         <h1 className="text-xl font-semibold">MeTube</h1>
         <div className="flex items-center gap-3">
           {loadError && <span className="text-xs text-red-400">{loadError}</span>}
+          <button
+            onClick={() => refresh(true)}
+            disabled={refreshing}
+            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+          >
+            {refreshing ? 'Actualisation...' : '↻ Actualiser'}
+          </button>
           {publicUrl && (
             <a
               href={publicUrl}
@@ -151,7 +229,7 @@ export default function MetubePage() {
               className="text-xs text-neutral-400 hover:text-white"
               title="Fonctionnalites avancees (cookies, abonnements...) non reprises ici"
             >
-              Ouvrir l'interface MeTube complete ↗
+              Interface complete ↗
             </a>
           )}
         </div>
@@ -246,29 +324,66 @@ export default function MetubePage() {
 
       {history && (
         <>
-          <Section title="En cours" items={history.queue}>
+          <Section
+            title="En cours"
+            items={history.queue}
+            collapsed={collapsed.queue}
+            onToggle={() => toggleSection('queue')}
+          >
             {history.queue.map((item) => (
-              <MetubeItemRow key={item.id} item={item} onDelete={() => deleteItem(item.id, 'queue')} />
+              <MetubeItemRow key={item.id} item={item} onDelete={() => deleteItem('queue', item.id)} />
             ))}
           </Section>
 
-          <Section title="En attente" items={history.pending}>
+          <Section
+            title="En attente"
+            items={history.pending}
+            collapsed={collapsed.pending}
+            onToggle={() => toggleSection('pending')}
+          >
             {history.pending.map((item) => (
               <MetubeItemRow
                 key={item.id}
                 item={item}
-                onDelete={() => deleteItem(item.id, 'queue')}
+                onDelete={() => deleteItem('pending', item.id)}
                 onStart={() => startItem(item.id)}
               />
             ))}
           </Section>
 
-          <Section title="Termine" items={history.done}>
+          <Section
+            title="Termine"
+            items={history.done}
+            collapsed={collapsed.done}
+            onToggle={() => toggleSection('done')}
+            actions={
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => clearDone('finished')}
+                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700"
+                >
+                  Effacer les reussis
+                </button>
+                <button
+                  onClick={() => clearDone('error')}
+                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700"
+                >
+                  Effacer les echecs
+                </button>
+                <button
+                  onClick={() => clearDone('all')}
+                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-red-900/50"
+                >
+                  Tout effacer
+                </button>
+              </div>
+            }
+          >
             {history.done.map((item) => (
               <MetubeItemRow
                 key={item.id}
                 item={item}
-                onDelete={() => deleteItem(item.id, 'done')}
+                onDelete={() => deleteItem('done', item.id)}
                 onRetry={item.status === 'error' ? () => retryItem(item.id) : undefined}
               />
             ))}
