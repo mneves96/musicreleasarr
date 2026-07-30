@@ -85,7 +85,7 @@ export default function SettingsPage() {
           <ResultLine result={results.metube ?? null} />
         </div>
         <Field
-          label="URL publique de MeTube (accessible depuis ton navigateur, pour l'onglet integre - ex: http://192.168.1.128:8081)"
+          label="URL publique de MeTube (optionnel, accessible depuis ton navigateur - permet d'ouvrir l'interface MeTube complete pour les fonctionnalites avancees non reprises ici, ex: http://192.168.1.128:8081)"
           value={settings.metube_public_url ?? ''}
           onChange={(v) => set('metube_public_url', v)}
         />

@@ -86,6 +86,42 @@ export interface TestConnectionResult {
   message: string
 }
 
+export type MetubeStatus = 'pending' | 'preparing' | 'downloading' | 'finished' | 'error' | 'scheduled'
+
+export interface MetubeItem {
+  id: string
+  title: string | null
+  url: string
+  status: MetubeStatus
+  percent: number | null
+  speed: number | null
+  eta: number | null
+  size: number | null
+  msg: string | null
+  error: string | null
+  filename: string | null
+  quality: string | null
+  format: string | null
+  download_type: string | null
+  folder: string | null
+}
+
+export interface MetubeHistory {
+  queue: MetubeItem[]
+  pending: MetubeItem[]
+  done: MetubeItem[]
+}
+
+export interface MetubeAddPayload {
+  url: string
+  download_type: 'video' | 'audio' | 'captions' | 'thumbnail'
+  quality: string
+  format?: string
+  folder?: string
+  custom_name_prefix?: string
+  auto_start?: boolean
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -149,6 +185,17 @@ export const api = {
   testEmail: () => request<TestConnectionResult>('/settings/test-email', { method: 'POST' }),
   testPushbullet: () => request<TestConnectionResult>('/settings/test-pushbullet', { method: 'POST' }),
   runScanNow: () => request<TestConnectionResult>('/settings/run-scan', { method: 'POST' }),
+
+  metubeHistory: () => request<MetubeHistory>('/metube/history'),
+  metubePresets: () => request<{ presets: string[] }>('/metube/presets'),
+  metubeAdd: (payload: MetubeAddPayload) =>
+    request<{ status: string; msg?: string }>('/metube/add', { method: 'POST', body: JSON.stringify(payload) }),
+  metubeDelete: (ids: string[], where: 'queue' | 'done') =>
+    request<{ status: string }>('/metube/delete', { method: 'POST', body: JSON.stringify({ ids, where }) }),
+  metubeStart: (ids: string[]) =>
+    request<{ status: string }>('/metube/start', { method: 'POST', body: JSON.stringify({ ids }) }),
+  metubeRetry: (id: string) =>
+    request<{ status: string; msg?: string }>('/metube/retry', { method: 'POST', body: JSON.stringify({ id }) }),
 }
 
 export const RELEASE_TYPE_LABELS: Record<ReleaseType, string> = {
