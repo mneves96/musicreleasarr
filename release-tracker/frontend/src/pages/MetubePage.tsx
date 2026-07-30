@@ -163,10 +163,16 @@ export default function MetubePage() {
     setHistory((h) => (h ? { ...h, [bucket]: h[bucket].filter((i) => i.id !== id) } : h))
   }
 
-  async function deleteItem(bucket: Bucket, id: string) {
-    removeLocally(bucket, id)
+  // IMPORTANT : l'API MeTube identifie les telechargements par leur URL en interne
+  // (PersistentQueue est indexee par info.url), pas par le champ "id" expose dans
+  // /history (qui est l'id YouTube de la video/playlist). Envoyer "id" a la place de
+  // l'URL fait echouer silencieusement delete/retry/start : MeTube ne trouve rien a
+  // cette cle, ne fait rien, et renvoie quand meme {"status": "ok"} - d'ou l'element
+  // qui "revenait" au sondage suivant alors que rien n'avait vraiment ete supprime.
+  async function deleteItem(bucket: Bucket, item: MetubeItem) {
+    removeLocally(bucket, item.id)
     try {
-      await api.metubeDelete([id], bucket === 'done' ? 'done' : 'queue')
+      await api.metubeDelete([item.url], bucket === 'done' ? 'done' : 'queue')
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Erreur de suppression')
       refresh()
@@ -175,24 +181,25 @@ export default function MetubePage() {
 
   async function clearDone(filter: 'finished' | 'error' | 'all') {
     if (!history) return
-    const ids = history.done.filter((i) => filter === 'all' || i.status === filter).map((i) => i.id)
-    if (ids.length === 0) return
-    setHistory((h) => (h ? { ...h, done: h.done.filter((i) => !ids.includes(i.id)) } : h))
+    const items = history.done.filter((i) => filter === 'all' || i.status === filter)
+    if (items.length === 0) return
+    const localIds = items.map((i) => i.id)
+    setHistory((h) => (h ? { ...h, done: h.done.filter((i) => !localIds.includes(i.id)) } : h))
     try {
-      await api.metubeDelete(ids, 'done')
+      await api.metubeDelete(items.map((i) => i.url), 'done')
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Erreur')
       refresh()
     }
   }
 
-  async function retryItem(id: string) {
-    await api.metubeRetry(id)
+  async function retryItem(item: MetubeItem) {
+    await api.metubeRetry(item.url)
     refresh()
   }
 
-  async function startItem(id: string) {
-    await api.metubeStart([id])
+  async function startItem(item: MetubeItem) {
+    await api.metubeStart([item.url])
     refresh()
   }
 
@@ -331,7 +338,7 @@ export default function MetubePage() {
             onToggle={() => toggleSection('queue')}
           >
             {history.queue.map((item) => (
-              <MetubeItemRow key={item.id} item={item} onDelete={() => deleteItem('queue', item.id)} />
+              <MetubeItemRow key={item.id} item={item} onDelete={() => deleteItem('queue', item)} />
             ))}
           </Section>
 
@@ -345,8 +352,8 @@ export default function MetubePage() {
               <MetubeItemRow
                 key={item.id}
                 item={item}
-                onDelete={() => deleteItem('pending', item.id)}
-                onStart={() => startItem(item.id)}
+                onDelete={() => deleteItem('pending', item)}
+                onStart={() => startItem(item)}
               />
             ))}
           </Section>
@@ -383,8 +390,8 @@ export default function MetubePage() {
               <MetubeItemRow
                 key={item.id}
                 item={item}
-                onDelete={() => deleteItem('done', item.id)}
-                onRetry={item.status === 'error' ? () => retryItem(item.id) : undefined}
+                onDelete={() => deleteItem('done', item)}
+                onRetry={item.status === 'error' ? () => retryItem(item) : undefined}
               />
             ))}
           </Section>
