@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -7,6 +9,8 @@ from ..models import ALL_RELEASE_TYPES, Artist
 from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
 from ..services import musicbrainz, navidrome
 from .. import scheduler
+
+logger = logging.getLogger("dedieufy.artists")
 
 router = APIRouter(prefix="/api/artists", tags=["artists"])
 
@@ -21,7 +25,13 @@ def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
     artist = db.query(Artist).filter(Artist.musicbrainz_id == payload.musicbrainz_id).first()
 
     if artist is None:
-        mb_artist = musicbrainz.get_artist(payload.musicbrainz_id)
+        try:
+            mb_artist = musicbrainz.get_artist(payload.musicbrainz_id)
+        except Exception as exc:
+            # MusicBrainz est rate-limite/parfois lent : mieux vaut un 502 clair et
+            # invitant a reessayer qu'un 500 brut qui laisse croire a un bug.
+            raise HTTPException(502, f"MusicBrainz indisponible, reessaie dans un instant : {exc}") from exc
+
         artist = Artist(name=mb_artist["name"], musicbrainz_id=payload.musicbrainz_id)
         settings = scheduler.get_settings(db)
         enrich_artist(artist, settings.lastfm_api_key, mb_artist=mb_artist)
@@ -36,8 +46,15 @@ def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(artist)
 
-    scheduler.scan_artist(db, artist)
-    db.refresh(artist)
+    try:
+        scheduler.scan_artist(db, artist)
+        db.refresh(artist)
+    except Exception:
+        # L'artiste est deja suivi avec succes a ce stade (commit ci-dessus) : le
+        # scan initial peut echouer (reseau MusicBrainz/YouTube Music flaky) sans que
+        # ca doive faire echouer la requete. Il sera retente par le cron ou "Actualiser".
+        logger.exception("Scan initial echoue pour %s, sera retente automatiquement", artist.name)
+
     return artist
 
 

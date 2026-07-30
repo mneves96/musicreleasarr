@@ -66,8 +66,15 @@ export default function MetubePage() {
   const [addMessage, setAddMessage] = useState<string | null>(null)
 
   const pollRef = useRef<number | null>(null)
+  // Empeche les requetes qui se chevauchent : a 1s d'intervalle, si le backend (qui
+  // relaie vers MeTube, potentiellement charge par un telechargement en cours) met
+  // plus d'une seconde a repondre, une reponse plus lente pouvait ecraser une reponse
+  // plus recente et donner une impression de "sautillement"/instabilite.
+  const inFlightRef = useRef(false)
 
   const refresh = useCallback(async (showSpinner = false) => {
+    if (inFlightRef.current) return
+    inFlightRef.current = true
     if (showSpinner) setRefreshing(true)
     try {
       const h = await api.metubeHistory()
@@ -82,6 +89,7 @@ export default function MetubePage() {
         setLoadError(msg)
       }
     } finally {
+      inFlightRef.current = false
       if (showSpinner) setRefreshing(false)
     }
   }, [])
@@ -195,6 +203,14 @@ export default function MetubePage() {
 
   async function retryItem(item: MetubeItem) {
     await api.metubeRetry(item.url)
+    refresh()
+  }
+
+  async function retryAllErrors() {
+    if (!history) return
+    const errorItems = history.done.filter((i) => i.status === 'error')
+    if (errorItems.length === 0) return
+    await Promise.all(errorItems.map((i) => api.metubeRetry(i.url)))
     refresh()
   }
 
@@ -365,6 +381,12 @@ export default function MetubePage() {
             onToggle={() => toggleSection('done')}
             actions={
               <div className="flex gap-1.5">
+                <button
+                  onClick={retryAllErrors}
+                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700"
+                >
+                  Reessayer les echecs
+                </button>
                 <button
                   onClick={() => clearDone('finished')}
                   className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700"
