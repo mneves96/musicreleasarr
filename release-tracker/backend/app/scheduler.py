@@ -200,19 +200,24 @@ def _trigger_download(db: Session, settings: Settings, artist: Artist, release: 
         logger.info("MeTube non configure, telechargement de %s ignore", release.title)
         return
     try:
+        track_ids: list[str] = []
         if not release.youtube_music_url:
             browse_id = ytmusic.search_release_browse_id(artist.name, release.title)
             if not browse_id:
                 logger.warning("Aucun resultat YouTube Music pour %s - %s", artist.name, release.title)
                 return
             details = ytmusic.get_release_details(browse_id)
-            release.youtube_music_url = details["playlist_url"]
+            if details["playlist_url"]:
+                release.youtube_music_url = details["playlist_url"]
+            else:
+                track_ids = [t["video_id"] for t in details["tracks"]]
 
-        if not release.youtube_music_url:
+        if not release.youtube_music_url and not track_ids:
+            logger.warning("Aucune piste trouvee sur YouTube Music pour %s - %s", artist.name, release.title)
             return
 
-        ok, message = metube.queue_download(
-            settings.metube_url, release.youtube_music_url, folder=normalize_text(artist.name)
+        ok, message = metube.queue_release(
+            settings.metube_url, normalize_text(artist.name), release.youtube_music_url, track_ids
         )
         release.download_status = DownloadStatus.queued if ok else DownloadStatus.failed
         if not ok:

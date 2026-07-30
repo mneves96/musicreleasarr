@@ -34,14 +34,18 @@ def _get_release_or_404(release_id: int, db: Session) -> Release:
     return release
 
 
-def _ensure_youtube_link(release: Release) -> None:
+def _resolve_youtube_details(release: Release) -> dict:
+    """Retourne {"playlist_url", "tracks"} ; met a jour release.youtube_music_url
+    si un lien de playlist a ete trouve (sans jamais l'ecraser par None)."""
     if release.youtube_music_url:
-        return
+        return {"playlist_url": release.youtube_music_url, "tracks": []}
     browse_id = ytmusic.search_release_browse_id(release.artist.name, release.title)
     if not browse_id:
         raise HTTPException(422, "Aucun resultat YouTube Music trouve pour cette release")
     details = ytmusic.get_release_details(browse_id)
-    release.youtube_music_url = details["playlist_url"]
+    if details["playlist_url"]:
+        release.youtube_music_url = details["playlist_url"]
+    return details
 
 
 @router.post("/{release_id}/download", response_model=TestConnectionResult)
@@ -51,9 +55,12 @@ def download_release(release_id: int, db: Session = Depends(get_db)):
     if not settings.metube_url:
         raise HTTPException(422, "URL MeTube non configuree dans les reglages")
 
-    _ensure_youtube_link(release)
-    ok, message = metube.queue_download(
-        settings.metube_url, release.youtube_music_url, folder=normalize_text(release.artist.name)
+    details = _resolve_youtube_details(release)
+    ok, message = metube.queue_release(
+        settings.metube_url,
+        normalize_text(release.artist.name),
+        details["playlist_url"],
+        [t["video_id"] for t in details["tracks"]],
     )
     release.download_status = DownloadStatus.queued if ok else DownloadStatus.failed
     db.commit()
@@ -67,7 +74,7 @@ def list_tracks(release_id: int, db: Session = Depends(get_db)):
     if not browse_id:
         raise HTTPException(422, "Aucun resultat YouTube Music trouve pour cette release")
     details = ytmusic.get_release_details(browse_id)
-    if not release.youtube_music_url:
+    if not release.youtube_music_url and details["playlist_url"]:
         release.youtube_music_url = details["playlist_url"]
         db.commit()
     return details["tracks"]
