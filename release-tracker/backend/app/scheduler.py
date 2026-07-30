@@ -207,7 +207,7 @@ def _trigger_download(db: Session, settings: Settings, artist: Artist, release: 
         return
     try:
         if not release.youtube_music_url:
-            browse_id = ytmusic.search_release_browse_id(artist.name, release.title)
+            browse_id = ytmusic.resolve_release_browse_id(artist.name, release.title, artist.ytmusic_browse_id)
             if not browse_id:
                 logger.warning("Aucun resultat YouTube Music pour %s - %s", artist.name, release.title)
                 return

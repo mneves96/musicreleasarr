@@ -40,7 +40,9 @@ def _resolve_release_download_url(release: Release) -> str:
     evitant la plupart des clips/versions live."""
     if release.youtube_music_url:
         return release.youtube_music_url
-    browse_id = ytmusic.search_release_browse_id(release.artist.name, release.title)
+    browse_id = ytmusic.resolve_release_browse_id(
+        release.artist.name, release.title, release.artist.ytmusic_browse_id
+    )
     if not browse_id:
         raise HTTPException(422, "Aucun resultat YouTube Music trouve pour cette release")
     url = ytmusic.album_url(browse_id)
@@ -67,7 +69,9 @@ def download_release(release_id: int, db: Session = Depends(get_db)):
 @router.get("/{release_id}/tracks", response_model=list[TrackOut])
 def list_tracks(release_id: int, db: Session = Depends(get_db)):
     release = _get_release_or_404(release_id, db)
-    browse_id = ytmusic.search_release_browse_id(release.artist.name, release.title)
+    browse_id = ytmusic.resolve_release_browse_id(
+        release.artist.name, release.title, release.artist.ytmusic_browse_id
+    )
     if not browse_id:
         raise HTTPException(422, "Aucun resultat YouTube Music trouve pour cette release")
     details = ytmusic.get_release_details(browse_id)
