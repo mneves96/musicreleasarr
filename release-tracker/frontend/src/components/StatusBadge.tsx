@@ -26,9 +26,17 @@ const DOWNLOAD_LABELS: Record<DownloadStatus, string> = {
   failed: 'Echec du telechargement',
 }
 
-function Badge({ className, children }: { className: string; children: string }) {
+function Badge({
+  className,
+  children,
+  title,
+}: {
+  className: string
+  children: string
+  title?: string
+}) {
   return (
-    <span className={`inline-block text-xs px-2 py-0.5 rounded-full border ${className}`}>
+    <span className={`inline-block text-xs px-2 py-0.5 rounded-full border ${className}`} title={title}>
       {children}
     </span>
   )
@@ -38,7 +46,25 @@ export function OwnershipBadge({ status }: { status: OwnershipStatus }) {
   return <Badge className={OWNERSHIP_STYLES[status]}>{OWNERSHIP_LABELS[status]}</Badge>
 }
 
-export function DownloadBadge({ status }: { status: DownloadStatus }) {
+export function DownloadBadge({
+  status,
+  progress,
+  error,
+}: {
+  status: DownloadStatus
+  progress?: number | null
+  error?: string | null
+}) {
   if (status === 'not_requested') return null
-  return <Badge className={DOWNLOAD_STYLES[status]}>{DOWNLOAD_LABELS[status]}</Badge>
+
+  let label: string = DOWNLOAD_LABELS[status]
+  if (status === 'queued' && typeof progress === 'number') {
+    label = `Telechargement en cours (${progress}%)`
+  }
+
+  return (
+    <Badge className={DOWNLOAD_STYLES[status]} title={status === 'failed' ? error ?? undefined : undefined}>
+      {label}
+    </Badge>
+  )
 }

@@ -78,7 +78,11 @@ export default function ReleaseRow({
           </div>
         </div>
         <OwnershipBadge status={release.ownership_status} />
-        <DownloadBadge status={release.download_status} />
+        <DownloadBadge
+          status={release.download_status}
+          progress={release.download_progress}
+          error={release.download_error}
+        />
         {release.ownership_status === 'missing' && release.download_status !== 'queued' && (
           <button
             onClick={download}
@@ -98,6 +102,9 @@ export default function ReleaseRow({
         </button>
       </div>
       {message && <div className="text-xs text-neutral-400 mt-1 ml-16">{message}</div>}
+      {!message && release.download_status === 'failed' && release.download_error && (
+        <div className="text-xs text-red-400 mt-1 ml-16">{release.download_error}</div>
+      )}
       {tracks && (
         <ul className="mt-2 ml-16 flex flex-col gap-1">
           {tracks.map((t) => (

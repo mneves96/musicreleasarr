@@ -15,12 +15,20 @@ export default function ArtistPage() {
   const [typeFilter, setTypeFilter] = useState<ReleaseType | 'all'>('all')
 
   const load = useCallback(() => {
-    api.getArtist(artistId).then(setArtist)
+    return api.getArtist(artistId).then(setArtist)
   }, [artistId])
 
   useEffect(() => {
     load()
   }, [load])
+
+  // Tant qu'un telechargement est en cours, on rafraichit periodiquement pour
+  // voir la progression avancer (le backend interroge MeTube toutes les 2 min).
+  useEffect(() => {
+    if (!artist?.releases.some((r) => r.download_status === 'queued')) return
+    const interval = window.setInterval(load, 15000)
+    return () => window.clearInterval(interval)
+  }, [artist, load])
 
   if (!artist) return <p className="text-neutral-400">Chargement...</p>
 

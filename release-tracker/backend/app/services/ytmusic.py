@@ -33,10 +33,22 @@ def search_release_browse_id(artist_name: str, release_title: str, threshold: fl
     return best_id if best_score >= threshold else None
 
 
+def album_url(browse_id: str) -> str:
+    """Lien "page album" YouTube Music (ex: https://music.youtube.com/browse/MPREb_xxx).
+
+    C'est ce lien-la (pas un lien de playlist "audioPlaylistId", qui n'existe pas
+    pour toutes les releases) qui, teste manuellement dans MeTube, telecharge
+    l'album complet en evitant la plupart des clips/versions live : yt-dlp sait
+    nativement l'extraire comme une playlist complete."""
+    return f"https://music.youtube.com/browse/{browse_id}"
+
+
 def get_release_details(browse_id: str) -> dict:
+    """Utilise pour lister les pistes (ecran artiste, telechargement manuel piste
+    par piste) - pas necessaire pour le telechargement de l'album complet, qui se
+    fait directement via album_url()."""
     yt = _client()
     album = yt.get_album(browse_id)
-    playlist_id = album.get("audioPlaylistId")
     tracks = [
         {
             "title": t.get("title"),
@@ -46,10 +58,7 @@ def get_release_details(browse_id: str) -> dict:
         for t in album.get("tracks", [])
         if t.get("videoId")
     ]
-    playlist_url = (
-        f"https://music.youtube.com/playlist?list={playlist_id}" if playlist_id else None
-    )
-    return {"playlist_url": playlist_url, "tracks": tracks}
+    return {"album_url": album_url(browse_id), "tracks": tracks}
 
 
 def search_artist_browse_id(name: str, threshold: float = 0.8) -> str | None:

@@ -47,6 +47,8 @@ export interface Release {
   youtube_music_url: string | null
   ownership_status: OwnershipStatus
   download_status: DownloadStatus
+  download_progress: number | null
+  download_error: string | null
   notified_at: string | null
 }
 

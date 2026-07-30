@@ -34,18 +34,18 @@ def _get_release_or_404(release_id: int, db: Session) -> Release:
     return release
 
 
-def _resolve_youtube_details(release: Release) -> dict:
-    """Retourne {"playlist_url", "tracks"} ; met a jour release.youtube_music_url
-    si un lien de playlist a ete trouve (sans jamais l'ecraser par None)."""
+def _resolve_release_download_url(release: Release) -> str:
+    """Lien "page album" YouTube Music a passer a MeTube (voir ytmusic.album_url) :
+    c'est celui qui, teste manuellement dans MeTube, telecharge l'album complet en
+    evitant la plupart des clips/versions live."""
     if release.youtube_music_url:
-        return {"playlist_url": release.youtube_music_url, "tracks": []}
+        return release.youtube_music_url
     browse_id = ytmusic.search_release_browse_id(release.artist.name, release.title)
     if not browse_id:
         raise HTTPException(422, "Aucun resultat YouTube Music trouve pour cette release")
-    details = ytmusic.get_release_details(browse_id)
-    if details["playlist_url"]:
-        release.youtube_music_url = details["playlist_url"]
-    return details
+    url = ytmusic.album_url(browse_id)
+    release.youtube_music_url = url
+    return url
 
 
 @router.post("/{release_id}/download", response_model=TestConnectionResult)
@@ -55,14 +55,11 @@ def download_release(release_id: int, db: Session = Depends(get_db)):
     if not settings.metube_url:
         raise HTTPException(422, "URL MeTube non configuree dans les reglages")
 
-    details = _resolve_youtube_details(release)
-    ok, message = metube.queue_release(
-        settings.metube_url,
-        normalize_text(release.artist.name),
-        details["playlist_url"],
-        [t["video_id"] for t in details["tracks"]],
-    )
+    url = _resolve_release_download_url(release)
+    ok, message = metube.queue_download(settings.metube_url, url, folder=normalize_text(release.artist.name))
     release.download_status = DownloadStatus.queued if ok else DownloadStatus.failed
+    release.download_progress = 0 if ok else None
+    release.download_error = None if ok else message
     db.commit()
     return TestConnectionResult(ok=ok, message=message)
 
@@ -74,8 +71,8 @@ def list_tracks(release_id: int, db: Session = Depends(get_db)):
     if not browse_id:
         raise HTTPException(422, "Aucun resultat YouTube Music trouve pour cette release")
     details = ytmusic.get_release_details(browse_id)
-    if not release.youtube_music_url and details["playlist_url"]:
-        release.youtube_music_url = details["playlist_url"]
+    if not release.youtube_music_url:
+        release.youtube_music_url = details["album_url"]
         db.commit()
     return details["tracks"]
 

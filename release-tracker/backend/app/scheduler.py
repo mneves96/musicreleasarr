@@ -20,6 +20,7 @@ logger = logging.getLogger("dedieufy.scheduler")
 _scheduler = BackgroundScheduler()
 FULL_CYCLE_JOB_ID = "full_discovery_cycle"
 RECHECK_JOB_ID = "recheck_queued_downloads"
+DOWNLOAD_STATUS_JOB_ID = "refresh_download_statuses"
 
 
 def get_settings(db: Session) -> Settings:
@@ -132,7 +133,12 @@ def scan_ownership(db: Session, only_queued: bool = False, artist_id: int | None
     if artist_id is not None:
         query = query.filter(Release.artist_id == artist_id)
     if only_queued:
-        query = query.filter(Release.download_status == DownloadStatus.queued)
+        # Inclut aussi "downloaded" (deja confirme cote MeTube via refresh_download_statuses)
+        # tant que Navidrome n'a pas encore indexe le fichier - sinon on ne le revererait jamais.
+        query = query.filter(
+            Release.download_status.in_([DownloadStatus.queued, DownloadStatus.downloaded]),
+            Release.ownership_status != OwnershipStatus.owned,
+        )
     else:
         query = query.filter(Release.ownership_status == OwnershipStatus.unknown)
 
@@ -200,31 +206,75 @@ def _trigger_download(db: Session, settings: Settings, artist: Artist, release: 
         logger.info("MeTube non configure, telechargement de %s ignore", release.title)
         return
     try:
-        track_ids: list[str] = []
         if not release.youtube_music_url:
             browse_id = ytmusic.search_release_browse_id(artist.name, release.title)
             if not browse_id:
                 logger.warning("Aucun resultat YouTube Music pour %s - %s", artist.name, release.title)
                 return
-            details = ytmusic.get_release_details(browse_id)
-            if details["playlist_url"]:
-                release.youtube_music_url = details["playlist_url"]
-            else:
-                track_ids = [t["video_id"] for t in details["tracks"]]
+            release.youtube_music_url = ytmusic.album_url(browse_id)
 
-        if not release.youtube_music_url and not track_ids:
-            logger.warning("Aucune piste trouvee sur YouTube Music pour %s - %s", artist.name, release.title)
-            return
-
-        ok, message = metube.queue_release(
-            settings.metube_url, normalize_text(artist.name), release.youtube_music_url, track_ids
+        ok, message = metube.queue_download(
+            settings.metube_url, release.youtube_music_url, folder=normalize_text(artist.name)
         )
         release.download_status = DownloadStatus.queued if ok else DownloadStatus.failed
+        release.download_progress = 0 if ok else None
+        release.download_error = None if ok else message
         if not ok:
             logger.warning("Echec MeTube pour %s - %s : %s", artist.name, release.title, message)
     except Exception:
         logger.exception("Echec du declenchement de telechargement pour %s - %s", artist.name, release.title)
         release.download_status = DownloadStatus.failed
+
+
+def refresh_download_statuses(db: Session) -> None:
+    """Interroge MeTube pour savoir ou en sont les telechargements "queued" :
+    MeTube telecharge en arriere-plan, /add ne fait qu'accepter la demande, donc
+    sans ca le statut restait bloque sur "queued" indefiniment meme en cas
+    d'echec cote MeTube (video indisponible, region-locked, etc.)."""
+    settings = get_settings(db)
+    if not settings.metube_url:
+        return
+
+    releases = (
+        db.query(Release)
+        .filter(Release.download_status == DownloadStatus.queued)
+        .filter(Release.youtube_music_url.isnot(None))
+        .all()
+    )
+    if not releases:
+        return
+
+    try:
+        history = metube.get_history(settings.metube_url)
+    except Exception:
+        logger.exception("Impossible de recuperer l'historique MeTube")
+        return
+
+    by_url: dict[str, dict] = {}
+    for bucket in ("done", "queue", "pending"):
+        for item in history.get(bucket) or []:
+            if item.get("url"):
+                by_url[item["url"]] = item
+
+    for release in releases:
+        info = by_url.get(release.youtube_music_url)
+        if not info:
+            continue
+
+        status = info.get("status")
+        if status == "error":
+            release.download_status = DownloadStatus.failed
+            release.download_error = info.get("msg") or info.get("error") or "Echec du telechargement MeTube"
+            release.download_progress = None
+        elif status == "finished":
+            release.download_status = DownloadStatus.downloaded
+            release.download_progress = 100
+            release.download_error = None
+        else:
+            percent = info.get("percent")
+            if isinstance(percent, (int, float)):
+                release.download_progress = int(percent)
+    db.commit()
 
 
 def scan_artist(db: Session, artist: Artist) -> None:
@@ -302,6 +352,11 @@ def run_recheck_queued() -> None:
         scan_ownership(db, only_queued=True)
 
 
+def run_refresh_download_statuses() -> None:
+    with SessionLocal() as db:
+        refresh_download_statuses(db)
+
+
 def reschedule() -> None:
     with SessionLocal() as db:
         settings = get_settings(db)
@@ -326,6 +381,14 @@ def start_scheduler() -> None:
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=1800,
+    )
+    _scheduler.add_job(
+        run_refresh_download_statuses,
+        trigger=IntervalTrigger(minutes=2),
+        id=DOWNLOAD_STATUS_JOB_ID,
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=120,
     )
     if not _scheduler.running:
         _scheduler.start()
