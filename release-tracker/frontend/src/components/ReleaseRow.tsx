@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, RELEASE_TYPE_LABELS, type Release, type Track } from '../api'
 import { DownloadBadge, OwnershipBadge } from './StatusBadge'
+import ServiceLink from './ServiceLink'
+import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from './ServiceIcons'
 
 export default function ReleaseRow({
   release,
@@ -75,6 +77,22 @@ export default function ReleaseRow({
             {showArtist && ' - '}
             {RELEASE_TYPE_LABELS[release.release_type]}
             {release.release_date && ` - ${release.release_date}`}
+          </div>
+          <div className="flex gap-1 mt-1">
+            <ServiceLink
+              compact
+              href={`https://musicbrainz.org/release-group/${release.musicbrainz_id}`}
+              label="MusicBrainz"
+              icon={<MusicBrainzIcon />}
+            />
+            <ServiceLink
+              compact
+              href={release.deezer_id ? `https://www.deezer.com/album/${release.deezer_id}` : null}
+              label="Deezer"
+              icon={<DeezerIcon />}
+            />
+            <ServiceLink compact href={release.youtube_music_url} label="YouTube Music" icon={<YoutubeMusicIcon />} />
+            <ServiceLink compact href={release.lastfm_url} label="Last.fm" icon={<LastfmIcon />} />
           </div>
         </div>
         <OwnershipBadge status={release.ownership_status} />

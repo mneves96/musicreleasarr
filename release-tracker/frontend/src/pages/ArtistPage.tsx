@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { ALL_RELEASE_TYPES, api, RELEASE_TYPE_LABELS, type ArtistWithReleases, type ReleaseType } from '../api'
 import ReleaseRow from '../components/ReleaseRow'
+import ServiceLink from '../components/ServiceLink'
+import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from '../components/ServiceIcons'
 
 const FILTER_TYPES: (ReleaseType | 'all')[] = ['all', 'album', 'ep', 'single', 'compilation', 'other']
 
@@ -82,35 +84,19 @@ export default function ArtistPage() {
             </button>
             {scanMessage && <span className="text-xs text-neutral-400">{scanMessage}</span>}
           </div>
-          <div className="flex gap-3 text-sm mt-1">
-            {artist.lastfm_url && (
-              <a href={artist.lastfm_url} target="_blank" rel="noreferrer" className="text-neutral-400 hover:text-white">
-                Last.fm
-              </a>
-            )}
-            <a
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <ServiceLink
               href={`https://musicbrainz.org/artist/${artist.musicbrainz_id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-neutral-400 hover:text-white"
-            >
-              MusicBrainz
-            </a>
-            {artist.deezer_id && (
-              <a
-                href={`https://www.deezer.com/artist/${artist.deezer_id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-neutral-400 hover:text-white"
-              >
-                Deezer
-              </a>
-            )}
-            {artist.ytmusic_url && (
-              <a href={artist.ytmusic_url} target="_blank" rel="noreferrer" className="text-neutral-400 hover:text-white">
-                YouTube Music
-              </a>
-            )}
+              label="MusicBrainz"
+              icon={<MusicBrainzIcon />}
+            />
+            <ServiceLink
+              href={artist.deezer_id ? `https://www.deezer.com/artist/${artist.deezer_id}` : null}
+              label="Deezer"
+              icon={<DeezerIcon />}
+            />
+            <ServiceLink href={artist.ytmusic_url} label="YouTube Music" icon={<YoutubeMusicIcon />} />
+            <ServiceLink href={artist.lastfm_url} label="Last.fm" icon={<LastfmIcon />} />
           </div>
         </div>
       </div>
