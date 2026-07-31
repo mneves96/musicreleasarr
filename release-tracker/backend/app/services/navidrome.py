@@ -45,7 +45,9 @@ def ping(base_url: str, username: str, password: str) -> tuple[bool, str]:
         return False, f"Impossible de joindre Navidrome : {exc}"
 
 
-def album_exists(base_url: str, username: str, password: str, artist_name: str, album_title: str) -> bool:
+def _find_matching_album(
+    base_url: str, username: str, password: str, artist_name: str, album_title: str
+) -> dict | None:
     resp = httpx.get(
         f"{base_url.rstrip('/')}/rest/search3.view",
         params={
@@ -65,8 +67,34 @@ def album_exists(base_url: str, username: str, password: str, artist_name: str, 
         title_score = similarity(album_title, album.get("name", ""))
         artist_score = similarity(artist_name, album.get("artist", ""))
         if title_score >= TITLE_THRESHOLD and artist_score >= ARTIST_THRESHOLD:
-            return True
-    return False
+            return album
+    return None
+
+
+def album_exists(base_url: str, username: str, password: str, artist_name: str, album_title: str) -> bool:
+    return _find_matching_album(base_url, username, password, artist_name, album_title) is not None
+
+
+def get_owned_track_titles(
+    base_url: str, username: str, password: str, artist_name: str, album_title: str
+) -> list[str] | None:
+    """Titres des pistes reellement presentes dans Navidrome pour l'album
+    correspondant, pour comparer piste par piste (pas juste au niveau album).
+    None si aucun album correspondant n'a ete trouve (a distinguer d'une liste
+    vide, qui signifierait un album trouve mais sans pistes indexees)."""
+    album = _find_matching_album(base_url, username, password, artist_name, album_title)
+    if album is None:
+        return None
+
+    resp = httpx.get(
+        f"{base_url.rstrip('/')}/rest/getAlbum.view",
+        params={**_auth_params(username, password), "id": album["id"]},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    body = resp.json().get("subsonic-response", {})
+    songs = body.get("album", {}).get("song", [])
+    return [s.get("title", "") for s in songs if s.get("title")]
 
 
 def get_starred_artists(base_url: str, username: str, password: str) -> list[str]:

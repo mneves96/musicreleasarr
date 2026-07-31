@@ -284,6 +284,33 @@ def refresh_download_statuses(db: Session) -> None:
     db.commit()
 
 
+def _backfill_youtube_links(db: Session, artist: Artist) -> None:
+    """Repare les releases deja telechargees (ou en cours/en echec) auxquelles il
+    manque le lien YouTube Music - un ancien mecanisme de repli piste par piste
+    telechargeait bien la release sans jamais sauvegarder ce lien, laissant le
+    bouton YouTube Music grise malgre un telechargement reussi."""
+    releases = (
+        db.query(Release)
+        .filter(
+            Release.artist_id == artist.id,
+            Release.youtube_music_url.is_(None),
+            Release.download_status != DownloadStatus.not_requested,
+        )
+        .all()
+    )
+    for release in releases:
+        try:
+            browse_id = ytmusic.resolve_release_browse_id(
+                artist.name, release.title, artist.ytmusic_browse_id
+            )
+            if browse_id:
+                release.youtube_music_url = ytmusic.album_url(browse_id)
+        except Exception:
+            logger.warning("Repli lien YouTube Music echoue pour %s - %s", artist.name, release.title)
+    if releases:
+        db.commit()
+
+
 def scan_artist(db: Session, artist: Artist) -> None:
     """Scan cible sur un seul artiste : utilise a la fois quand on suit un nouvel
     artiste et par le bouton "Actualiser" de la page artiste."""
@@ -298,6 +325,7 @@ def scan_artist(db: Session, artist: Artist) -> None:
     _discover_for_artist(db, artist)
     scan_ownership(db, only_queued=False, artist_id=artist.id)
     process_pending(db, artist_id=artist.id)
+    _backfill_youtube_links(db, artist)
 
 
 def import_navidrome_favorite_artists(names: list[str]) -> None:

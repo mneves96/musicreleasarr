@@ -60,6 +60,7 @@ export interface Track {
   title: string
   video_id: string
   duration: string | null
+  owned: boolean | null
 }
 
 export interface Settings {
@@ -149,6 +150,9 @@ export const api = {
   }) => request<Artist>('/artists', { method: 'POST', body: JSON.stringify(payload) }),
 
   getArtist: (id: number) => request<ArtistWithReleases>(`/artists/${id}`),
+
+  previewArtist: (musicbrainz_id: string) =>
+    request<Artist>('/artists/preview', { method: 'POST', body: JSON.stringify({ musicbrainz_id }) }),
 
   updateArtist: (id: number, payload: Partial<Pick<Artist, 'is_followed' | 'notify_enabled' | 'auto_download' | 'followed_release_types'>>) =>
     request<Artist>(`/artists/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),

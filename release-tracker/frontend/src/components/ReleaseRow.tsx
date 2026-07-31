@@ -18,6 +18,7 @@ export default function ReleaseRow({
   const [message, setMessage] = useState<string | null>(null)
   const [tracks, setTracks] = useState<Track[] | null>(null)
   const [tracksLoading, setTracksLoading] = useState(false)
+  const [missingBusy, setMissingBusy] = useState(false)
 
   async function download() {
     setBusy(true)
@@ -57,6 +58,25 @@ export default function ReleaseRow({
       setMessage(err instanceof Error ? err.message : 'Erreur')
     }
   }
+
+  async function downloadMissingTracks() {
+    if (!tracks) return
+    const missing = tracks.filter((t) => t.owned === false)
+    if (missing.length === 0) return
+    setMissingBusy(true)
+    setMessage(null)
+    try {
+      await Promise.all(missing.map((t) => api.downloadTrack(release.id, t.video_id)))
+      setMessage(`${missing.length} piste(s) manquante(s) mise(s) en file d'attente`)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setMissingBusy(false)
+    }
+  }
+
+  const missingTrackCount = tracks?.filter((t) => t.owned === false).length ?? 0
+  const downloadLabel = release.ownership_status === 'owned' ? 'Retelecharger' : 'Telecharger'
 
   return (
     <div className="py-2 border-b border-neutral-800 last:border-0">
@@ -101,13 +121,13 @@ export default function ReleaseRow({
           progress={release.download_progress}
           error={release.download_error}
         />
-        {release.ownership_status === 'missing' && release.download_status !== 'queued' && (
+        {release.download_status !== 'queued' && (
           <button
             onClick={download}
             disabled={busy}
-            className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+            className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
           >
-            {busy ? '...' : 'Telecharger'}
+            {busy ? '...' : downloadLabel}
           </button>
         )}
         <button
@@ -124,21 +144,42 @@ export default function ReleaseRow({
         <div className="text-xs text-red-400 mt-1 ml-16">{release.download_error}</div>
       )}
       {tracks && (
-        <ul className="mt-2 ml-16 flex flex-col gap-1">
-          {tracks.map((t) => (
-            <li key={t.video_id} className="flex items-center justify-between text-sm text-neutral-300">
-              <span className="truncate">
-                {t.title} {t.duration && <span className="text-neutral-500">({t.duration})</span>}
-              </span>
-              <button
-                onClick={() => downloadTrack(t.video_id)}
-                className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 whitespace-nowrap ml-2"
-              >
-                Telecharger
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-2 ml-16">
+          {missingTrackCount > 0 && (
+            <button
+              onClick={downloadMissingTracks}
+              disabled={missingBusy}
+              className="text-xs px-2 py-1 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 mb-2"
+            >
+              {missingBusy ? '...' : `Telecharger les ${missingTrackCount} piste(s) manquante(s)`}
+            </button>
+          )}
+          <ul className="flex flex-col gap-1">
+            {tracks.map((t) => (
+              <li key={t.video_id} className="flex items-center justify-between text-sm text-neutral-300 gap-2">
+                <span className="truncate flex-1">
+                  {t.title} {t.duration && <span className="text-neutral-500">({t.duration})</span>}
+                </span>
+                {t.owned === true && (
+                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-900/50 text-green-300 whitespace-nowrap">
+                    Possedee
+                  </span>
+                )}
+                {t.owned === false && (
+                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-900/50 text-amber-300 whitespace-nowrap">
+                    Manquante
+                  </span>
+                )}
+                <button
+                  onClick={() => downloadTrack(t.video_id)}
+                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 whitespace-nowrap"
+                >
+                  {t.owned === true ? 'Retelecharger' : 'Telecharger'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   )

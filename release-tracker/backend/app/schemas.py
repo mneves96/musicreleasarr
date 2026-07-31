@@ -81,6 +81,7 @@ class TrackOut(BaseModel):
     title: str
     video_id: str
     duration: str | None = None
+    owned: bool | None = None
 
 
 class SettingsOut(BaseModel):

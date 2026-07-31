@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..matching import normalize_text
+from ..matching import normalize_text, similarity
 from ..models import DownloadStatus, Release
 from ..schemas import ReleaseOut, TestConnectionResult, TrackOut
 from ..scheduler import get_settings
-from ..services import metube, ytmusic
+from ..services import metube, navidrome, ytmusic
+
+TRACK_TITLE_THRESHOLD = 0.85
 
 router = APIRouter(prefix="/api/releases", tags=["releases"])
 
@@ -78,7 +80,29 @@ def list_tracks(release_id: int, db: Session = Depends(get_db)):
     if not release.youtube_music_url:
         release.youtube_music_url = details["album_url"]
         db.commit()
-    return details["tracks"]
+
+    # Statut par piste (pas juste au niveau de la release) : le match album-level
+    # peut etre un faux positif partiel (edition differente, pistes bonus...), donc
+    # on compare chaque piste individuellement au contenu reel de Navidrome.
+    owned_titles: list[str] | None = None
+    settings = get_settings(db)
+    if settings.navidrome_url and settings.navidrome_username and settings.navidrome_password:
+        try:
+            owned_titles = navidrome.get_owned_track_titles(
+                settings.navidrome_url,
+                settings.navidrome_username,
+                settings.navidrome_password,
+                release.artist.name,
+                release.title,
+            )
+        except Exception:
+            owned_titles = None
+
+    tracks = details["tracks"]
+    if owned_titles is not None:
+        for track in tracks:
+            track["owned"] = any(similarity(track["title"], t) >= TRACK_TITLE_THRESHOLD for t in owned_titles)
+    return tracks
 
 
 @router.post("/{release_id}/tracks/{video_id}/download", response_model=TestConnectionResult)

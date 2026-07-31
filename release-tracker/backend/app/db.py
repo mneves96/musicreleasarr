@@ -1,13 +1,29 @@
 import os
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, "app.db")
 
-engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+# timeout=30 : le scheduler ecrit en arriere-plan toutes les 2 minutes (et plus souvent
+# lors d'un scan) pendant qu'une requete web peut vouloir ecrire au meme moment. Le
+# mode journal par defaut de SQLite serialise les ecritures ; sans un timeout genereux,
+# une collision donnait "database is locked" -> 500 brut sur des endpoints comme
+# "suivre un artiste". Le mode WAL (ci-dessous) reduit aussi fortement ces collisions
+# en permettant aux lectures de ne jamais bloquer sur une ecriture en cours.
+engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False, "timeout": 30})
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragmas(dbapi_connection, _record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
+    cursor.close()
+
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

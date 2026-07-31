@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -20,22 +21,55 @@ def list_followed(db: Session = Depends(get_db)):
     return db.query(Artist).filter(Artist.is_followed.is_(True)).order_by(Artist.name).all()
 
 
+def _get_or_create_artist(db: Session, musicbrainz_id: str) -> Artist:
+    artist = db.query(Artist).filter(Artist.musicbrainz_id == musicbrainz_id).first()
+    if artist is not None:
+        return artist
+
+    try:
+        mb_artist = musicbrainz.get_artist(musicbrainz_id)
+    except Exception as exc:
+        # MusicBrainz est rate-limite/parfois lent : mieux vaut un 502 clair et
+        # invitant a reessayer qu'un 500 brut qui laisse croire a un bug.
+        raise HTTPException(502, f"MusicBrainz indisponible, reessaie dans un instant : {exc}") from exc
+
+    artist = Artist(name=mb_artist["name"], musicbrainz_id=musicbrainz_id)
+    settings = scheduler.get_settings(db)
+    enrich_artist(artist, settings.lastfm_api_key, mb_artist=mb_artist)
+    db.add(artist)
+    db.commit()
+    db.refresh(artist)
+    return artist
+
+
+def _scan_best_effort(db: Session, artist: Artist) -> None:
+    try:
+        scheduler.scan_artist(db, artist)
+        db.refresh(artist)
+    except Exception:
+        # L'artiste existe deja avec succes en base a ce stade : un echec de scan
+        # (reseau MusicBrainz/YouTube Music flaky) ne doit pas faire echouer la
+        # requete. Il sera retente par le cron ou le bouton "Actualiser".
+        logger.exception("Scan echoue pour %s, sera retente automatiquement", artist.name)
+
+
+class PreviewIn(BaseModel):
+    musicbrainz_id: str
+
+
+@router.post("/preview", response_model=ArtistOut)
+def preview_artist(payload: PreviewIn, db: Session = Depends(get_db)):
+    """Cree/recupere la fiche d'un artiste et lance un scan, sans le faire suivre -
+    permet d'ouvrir la page d'un artiste trouve par la recherche pour consulter sa
+    discographie avant de decider de le suivre."""
+    artist = _get_or_create_artist(db, payload.musicbrainz_id)
+    _scan_best_effort(db, artist)
+    return artist
+
+
 @router.post("", response_model=ArtistOut)
 def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
-    artist = db.query(Artist).filter(Artist.musicbrainz_id == payload.musicbrainz_id).first()
-
-    if artist is None:
-        try:
-            mb_artist = musicbrainz.get_artist(payload.musicbrainz_id)
-        except Exception as exc:
-            # MusicBrainz est rate-limite/parfois lent : mieux vaut un 502 clair et
-            # invitant a reessayer qu'un 500 brut qui laisse croire a un bug.
-            raise HTTPException(502, f"MusicBrainz indisponible, reessaie dans un instant : {exc}") from exc
-
-        artist = Artist(name=mb_artist["name"], musicbrainz_id=payload.musicbrainz_id)
-        settings = scheduler.get_settings(db)
-        enrich_artist(artist, settings.lastfm_api_key, mb_artist=mb_artist)
-        db.add(artist)
+    artist = _get_or_create_artist(db, payload.musicbrainz_id)
 
     artist.is_followed = True
     artist.notify_enabled = payload.notify_enabled
@@ -46,15 +80,7 @@ def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(artist)
 
-    try:
-        scheduler.scan_artist(db, artist)
-        db.refresh(artist)
-    except Exception:
-        # L'artiste est deja suivi avec succes a ce stade (commit ci-dessus) : le
-        # scan initial peut echouer (reseau MusicBrainz/YouTube Music flaky) sans que
-        # ca doive faire echouer la requete. Il sera retente par le cron ou "Actualiser".
-        logger.exception("Scan initial echoue pour %s, sera retente automatiquement", artist.name)
-
+    _scan_best_effort(db, artist)
     return artist
 
 
