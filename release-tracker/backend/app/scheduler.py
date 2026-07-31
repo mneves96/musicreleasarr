@@ -1,6 +1,6 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import date, datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -183,9 +183,16 @@ def process_pending(db: Session, artist_id: int | None = None) -> None:
             continue
         _trigger_download(db, settings, artist, release)
 
+    # Notifier des la sortie reelle, pas des la decouverte : MusicBrainz liste souvent
+    # une release des son annonce, parfois des mois avant, avec une release_date future.
+    # On attend que cette date soit atteinte pour notifier - et on ne conditionne plus
+    # ca au scan de possession Navidrome (une release peut n'avoir jamais ete notifiee
+    # si Navidrome n'etait pas configure, puisque ownership_status restait "unknown"
+    # indefiniment et bloquait l'eligibilite a la notification).
+    today = date.today()
     notify_query = db.query(Release).filter(
-        Release.ownership_status != OwnershipStatus.unknown,
         Release.notified_at.is_(None),
+        (Release.release_date.is_(None)) | (Release.release_date <= today),
     )
     if artist_id is not None:
         notify_query = notify_query.filter(Release.artist_id == artist_id)

@@ -19,6 +19,8 @@ def build_message(artist: Artist, release: Release) -> tuple[str, str]:
         lines.append("Deja presente dans ta bibliotheque Navidrome.")
     elif release.download_status.value == "queued":
         lines.append("Absente de ta bibliotheque : telechargement lance automatiquement via MeTube.")
+    elif release.ownership_status.value == "unknown":
+        lines.append("Presence dans ta bibliotheque pas encore verifiee.")
     else:
         lines.append("Absente de ta bibliotheque.")
     if release.youtube_music_url:
