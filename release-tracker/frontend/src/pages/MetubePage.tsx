@@ -202,21 +202,51 @@ export default function MetubePage() {
   }
 
   async function retryItem(item: MetubeItem) {
-    await api.metubeRetry(item.url)
-    refresh()
+    setLoadError(null)
+    try {
+      const result = await api.metubeRetry(item.url)
+      // MeTube repond 200 meme en cas de refus (ex: "Only failed downloads can be
+      // retried") - sans cette verification, un refus passait totalement inapercu.
+      if (result.status === 'error') {
+        setLoadError(result.msg || 'MeTube a refuse de relancer ce telechargement')
+      }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur lors de la relance')
+    } finally {
+      refresh()
+    }
   }
 
   async function retryAllErrors() {
     if (!history) return
     const errorItems = history.done.filter((i) => i.status === 'error')
     if (errorItems.length === 0) return
-    await Promise.all(errorItems.map((i) => api.metubeRetry(i.url)))
-    refresh()
+    setLoadError(null)
+    try {
+      const results = await Promise.all(errorItems.map((i) => api.metubeRetry(i.url)))
+      const failures = results.filter((r) => r.status === 'error')
+      if (failures.length > 0) {
+        setLoadError(`${failures.length} relance(s) refusee(s) par MeTube`)
+      }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur lors de la relance')
+    } finally {
+      refresh()
+    }
   }
 
   async function startItem(item: MetubeItem) {
-    await api.metubeStart([item.url])
-    refresh()
+    setLoadError(null)
+    try {
+      const result = await api.metubeStart([item.url])
+      if (result.status === 'error') {
+        setLoadError('MeTube a refuse de demarrer ce telechargement')
+      }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur lors du demarrage')
+    } finally {
+      refresh()
+    }
   }
 
   if (notConfigured) {
