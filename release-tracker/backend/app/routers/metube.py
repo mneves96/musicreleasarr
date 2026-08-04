@@ -91,15 +91,6 @@ def start(payload: StartIn, db: Session = Depends(get_db)):
     return _proxy("POST", db, "/start", payload.model_dump())
 
 
-class RetryIn(BaseModel):
-    id: str
-
-
-@router.post("/retry")
-def retry(payload: RetryIn, db: Session = Depends(get_db)):
-    return _proxy("POST", db, "/retry", payload.model_dump())
-
-
 @router.post("/cancel-add")
 def cancel_add(db: Session = Depends(get_db)):
     return _proxy("POST", db, "/cancel-add", {})

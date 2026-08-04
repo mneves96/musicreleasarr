@@ -201,13 +201,31 @@ export default function MetubePage() {
     }
   }
 
+  // POST /retry n'existe pas (ou plus) sur toutes les versions de MeTube (405 chez
+  // certains utilisateurs) : on evite d'en dependre en reimplementant la relance
+  // nous-memes avec les deux endpoints deja confirmes fonctionnels (/add et
+  // /delete), exactement ce qu'un utilisateur ferait a la main dans l'UI MeTube.
+  async function retryOne(item: MetubeItem): Promise<{ ok: boolean; msg?: string }> {
+    const result = await api.metubeAdd({
+      url: item.url,
+      download_type: (item.download_type as 'video' | 'audio' | 'captions' | 'thumbnail') || 'audio',
+      quality: item.quality || 'best',
+      format: item.format || undefined,
+      folder: item.folder || undefined,
+      auto_start: true,
+    })
+    if (result.status === 'error') {
+      return { ok: false, msg: result.msg }
+    }
+    await api.metubeDelete([item.url], 'done') // retire l'ancienne entree en echec, sinon doublon
+    return { ok: true }
+  }
+
   async function retryItem(item: MetubeItem) {
     setLoadError(null)
     try {
-      const result = await api.metubeRetry(item.url)
-      // MeTube repond 200 meme en cas de refus (ex: "Only failed downloads can be
-      // retried") - sans cette verification, un refus passait totalement inapercu.
-      if (result.status === 'error') {
+      const result = await retryOne(item)
+      if (!result.ok) {
         setLoadError(result.msg || 'MeTube a refuse de relancer ce telechargement')
       }
     } catch (err) {
@@ -223,8 +241,8 @@ export default function MetubePage() {
     if (errorItems.length === 0) return
     setLoadError(null)
     try {
-      const results = await Promise.all(errorItems.map((i) => api.metubeRetry(i.url)))
-      const failures = results.filter((r) => r.status === 'error')
+      const results = await Promise.all(errorItems.map((i) => retryOne(i)))
+      const failures = results.filter((r) => !r.ok)
       if (failures.length > 0) {
         setLoadError(`${failures.length} relance(s) refusee(s) par MeTube`)
       }

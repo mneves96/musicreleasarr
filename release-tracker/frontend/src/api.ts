@@ -198,8 +198,6 @@ export const api = {
     request<{ status: string }>('/metube/delete', { method: 'POST', body: JSON.stringify({ ids, where }) }),
   metubeStart: (ids: string[]) =>
     request<{ status: string }>('/metube/start', { method: 'POST', body: JSON.stringify({ ids }) }),
-  metubeRetry: (id: string) =>
-    request<{ status: string; msg?: string }>('/metube/retry', { method: 'POST', body: JSON.stringify({ id }) }),
 }
 
 export const RELEASE_TYPE_LABELS: Record<ReleaseType, string> = {
