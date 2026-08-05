@@ -1,5 +1,4 @@
 import enum
-import os
 from datetime import date, datetime
 
 from sqlalchemy import (
@@ -175,6 +174,11 @@ class TaggingItem(Base):
     # Chemin absolu cote conteneur "releases" : sert de cle de deduplication au scan.
     source_path: Mapped[str] = mapped_column(String, unique=True)
     original_filename: Mapped[str] = mapped_column(String)
+    # Dossier de PREMIER niveau sous tagging_downloads_path (ex: "the prodigy"),
+    # fige a la creation par scan_downloads_root - pas recalcule a la volee, pour
+    # rester correct meme si le fichier est range plus profondement (ex:
+    # Artiste/Album/piste.mp3) que ce que reverrait un simple basename(dirname()).
+    source_folder: Mapped[str] = mapped_column(String, default="")
 
     status: Mapped[TaggingStatus] = mapped_column(Enum(TaggingStatus), default=TaggingStatus.needs_review)
 
@@ -200,10 +204,6 @@ class TaggingItem(Base):
     @property
     def release_title(self) -> str | None:
         return self.release.title if self.release else None
-
-    @property
-    def source_folder(self) -> str:
-        return os.path.basename(os.path.dirname(self.source_path))
 
 
 class Settings(Base):

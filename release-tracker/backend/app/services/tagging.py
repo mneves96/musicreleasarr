@@ -54,13 +54,25 @@ def _clean_filename(filename: str) -> str:
     return stem.strip()
 
 
-def _iter_audio_files(folder: str) -> list[str]:
-    return sorted(
-        os.path.join(folder, entry)
-        for entry in os.listdir(folder)
-        if os.path.splitext(entry)[1].lower() in AUDIO_EXTENSIONS
-        and os.path.isfile(os.path.join(folder, entry))
-    )
+def _iter_audio_files_by_top_folder(root: str) -> dict[str, list[str]]:
+    """Regroupe tous les fichiers audio sous `root` par dossier de PREMIER niveau,
+    quelle que soit la profondeur reelle (root/Artiste/piste.mp3 et
+    root/Artiste/Album/piste.mp3 sont tous deux rattaches au groupe "Artiste") -
+    MeTube ne cree qu'un seul niveau de dossier par artiste, mais un rangement
+    manuel plus profond (ex: Artiste/Album/) doit rester detecte integralement."""
+    grouped: dict[str, list[str]] = {}
+    for entry in sorted(os.listdir(root)):
+        top_path = os.path.join(root, entry)
+        if not os.path.isdir(top_path):
+            continue
+        files: list[str] = []
+        for dirpath, _dirnames, filenames in os.walk(top_path):
+            for filename in filenames:
+                if os.path.splitext(filename)[1].lower() in AUDIO_EXTENSIONS:
+                    files.append(os.path.join(dirpath, filename))
+        if files:
+            grouped[entry] = sorted(files)
+    return grouped
 
 
 def sanitize_component(name: str) -> str:
@@ -102,19 +114,19 @@ def _greedy_match(
 
 def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
     """Detecte tout fichier audio nouveau sous le dossier de telechargements,
-    dossier par dossier - comme Picard qui prend tout ce qu'il trouve, sans
-    condition sur l'origine du telechargement ni sur le statut d'une release
-    cote app."""
+    aussi profondement imbrique soit-il, groupe par dossier de premier niveau -
+    comme Picard qui prend tout ce qu'il trouve, sans condition sur l'origine
+    du telechargement ni sur le statut d'une release cote app."""
     root = settings.tagging_downloads_path
     if not root or not os.path.isdir(root):
         return []
 
     try:
-        subfolders = sorted(entry for entry in os.listdir(root) if os.path.isdir(os.path.join(root, entry)))
+        files_by_folder = _iter_audio_files_by_top_folder(root)
     except OSError:
         logger.exception("Impossible de lister %s", root)
         return []
-    if not subfolders:
+    if not files_by_folder:
         return []
 
     already_tracked = {path for (path,) in db.query(TaggingItem.source_path).all()}
@@ -123,12 +135,8 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
     }
 
     created: list[TaggingItem] = []
-    for folder_name in subfolders:
-        folder = os.path.join(root, folder_name)
-        try:
-            new_files = [p for p in _iter_audio_files(folder) if p not in already_tracked]
-        except OSError:
-            continue
+    for folder_name, all_files in files_by_folder.items():
+        new_files = [p for p in all_files if p not in already_tracked]
         if not new_files:
             continue
 
@@ -146,7 +154,9 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
         matches = _greedy_match(labeled, candidates) if candidates else {}
 
         for path in new_files:
-            item = TaggingItem(source_path=path, original_filename=os.path.basename(path))
+            item = TaggingItem(
+                source_path=path, original_filename=os.path.basename(path), source_folder=folder_name
+            )
             match = matches.get(path)
             if match is not None:
                 (matched_release, track), score = match

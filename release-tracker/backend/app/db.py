@@ -75,11 +75,34 @@ def _add_missing_columns():
                     )
 
 
+def _backfill_tagging_source_folder():
+    """TaggingItem.source_folder est desormais fige a la creation (voir
+    services/tagging.py:scan_downloads_root), pour rester correct meme si le
+    fichier est range plus profondement que ce que reverrait un simple
+    basename(dirname()) (ex: Artiste/Album/piste.mp3). Le generique
+    _add_missing_columns() ci-dessus ne peut le remplir qu'avec le default
+    statique "" (pas de valeur calculable par ligne) : ce backfill dedie
+    complete les lignes creees avant ce changement avec basename(dirname()),
+    qui est exact pour elles puisqu'elles viennent toutes de l'ancien scan
+    limite a un seul niveau de dossier."""
+    inspector = inspect(engine)
+    if "tagging_items" not in inspector.get_table_names():
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text('SELECT id, source_path FROM tagging_items WHERE source_folder IS NULL OR source_folder = \'\'')
+        ).fetchall()
+        for row_id, source_path in rows:
+            folder = os.path.basename(os.path.dirname(source_path))
+            conn.execute(text("UPDATE tagging_items SET source_folder = :folder WHERE id = :id"), {"folder": folder, "id": row_id})
+
+
 def init_db():
     from . import models  # noqa: F401  (ensure models are registered)
 
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
+    _backfill_tagging_source_folder()
 
     from .models import Settings
 
