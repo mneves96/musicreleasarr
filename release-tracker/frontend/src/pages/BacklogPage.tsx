@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
 import { api, type TaggingItem, type TrackChoice } from '../api'
 import { TaggingBadge } from '../components/StatusBadge'
 import Spinner, { LoadingBlock } from '../components/Spinner'
@@ -19,23 +19,144 @@ function editFromItem(item: TaggingItem): Edit {
   }
 }
 
-function BacklogRow({
+function trackKey(track: TrackChoice): number {
+  return track.disc_number * 10000 + track.position
+}
+
+// Assignation initiale piste <- fichier a partir des suggestions du scan automatique
+// (voir services/tagging.py:scan_artist) : meme principe que le pre-clustering de
+// Picard, mais purement indicatif - rien n'est confirme tant que l'utilisateur n'a
+// pas valide (glisser-deposer ou bouton Confirmer).
+function initialAssignment(items: TaggingItem[]): Record<number, number> {
+  const assignment: Record<number, number> = {}
+  const used = new Set<number>()
+  const sorted = [...items]
+    .filter((i) => i.status === 'needs_review' && i.suggested_track_number != null)
+    .sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0))
+  for (const item of sorted) {
+    const key = (item.suggested_disc_number ?? 1) * 10000 + (item.suggested_track_number ?? 0)
+    if (used.has(key)) continue
+    assignment[key] = item.id
+    used.add(key)
+  }
+  return assignment
+}
+
+function FileChip({
   item,
-  choices,
+  onDiscard,
+  draggable = true,
+}: {
+  item: TaggingItem
+  onDiscard: () => void
+  draggable?: boolean
+}) {
+  return (
+    <div
+      draggable={draggable}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', String(item.id))
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+      className={`flex items-center justify-between gap-2 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm ${
+        draggable ? 'cursor-grab active:cursor-grabbing' : ''
+      }`}
+      title={item.original_filename}
+    >
+      <span className="truncate flex-1">{item.original_filename}</span>
+      {item.match_score != null && (
+        <span className="text-[10px] text-neutral-500 whitespace-nowrap">{Math.round(item.match_score * 100)}%</span>
+      )}
+      <button onClick={onDiscard} className="text-neutral-500 hover:text-red-400 text-xs px-1" title="Ignorer ce fichier">
+        ✕
+      </button>
+    </div>
+  )
+}
+
+function TrackSlot({
+  track,
+  assignedItem,
+  isDragOver,
+  busy,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onUnassign,
+  onConfirm,
+}: {
+  track: TrackChoice
+  assignedItem: TaggingItem | undefined
+  isDragOver: boolean
+  busy: boolean
+  onDragOver: (e: DragEvent<HTMLDivElement>) => void
+  onDragLeave: () => void
+  onDrop: (e: DragEvent<HTMLDivElement>) => void
+  onUnassign: () => void
+  onConfirm: () => void
+}) {
+  const label = `${track.disc_number > 1 ? `${track.disc_number}-` : ''}${String(track.position).padStart(2, '0')}. ${track.title}`
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={`rounded-md border px-2 py-1.5 text-sm flex items-center gap-2 ${
+        isDragOver
+          ? 'border-purple-500 bg-purple-950/30'
+          : assignedItem
+            ? 'border-green-800 bg-green-950/20'
+            : 'border-dashed border-neutral-700 bg-neutral-950/40'
+      }`}
+    >
+      <span className="flex-1 min-w-0">
+        <span className="text-neutral-200 truncate block">{label}</span>
+        {assignedItem ? (
+          <span className="text-xs text-green-400 truncate block" title={assignedItem.original_filename}>
+            ← {assignedItem.original_filename}
+          </span>
+        ) : (
+          <span className="text-xs text-neutral-600">Glisse un fichier ici...</span>
+        )}
+      </span>
+      {assignedItem && (
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+            title="Taguer et ranger cette piste"
+          >
+            {busy && <Spinner className="w-3 h-3" />}
+            Confirmer
+          </button>
+          <button
+            onClick={onUnassign}
+            disabled={busy}
+            className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+            title="Detacher ce fichier"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FallbackRow({
+  item,
   edit,
   onEditChange,
   onConfirm,
   onDiscard,
-  onRescan,
   busy,
 }: {
   item: TaggingItem
-  choices: TrackChoice[] | undefined
   edit: Edit
   onEditChange: (edit: Edit) => void
   onConfirm: () => void
   onDiscard: () => void
-  onRescan: () => void
   busy: boolean
 }) {
   return (
@@ -46,104 +167,67 @@ function BacklogRow({
         </span>
         <TaggingBadge status={item.status} error={item.error_message} />
       </div>
+      <p className="text-xs text-neutral-500">
+        Tracklist MusicBrainz indisponible pour cet album - saisis les informations a la main.
+      </p>
+      <div className="flex gap-2">
+        <input
+          value={edit.trackTitle}
+          onChange={(e) => onEditChange({ ...edit, trackTitle: e.target.value })}
+          placeholder="Titre de la piste"
+          className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+        />
+        <input
+          value={edit.trackNumber}
+          onChange={(e) => onEditChange({ ...edit, trackNumber: e.target.value })}
+          placeholder="N°"
+          type="number"
+          className="w-16 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+        />
+        <input
+          value={edit.discNumber}
+          onChange={(e) => onEditChange({ ...edit, discNumber: e.target.value })}
+          placeholder="Disque"
+          type="number"
+          className="w-20 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onConfirm}
+          disabled={busy || !edit.trackTitle.trim()}
+          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+        >
+          {busy && <Spinner className="w-3 h-3" />}
+          Confirmer (taguer + ranger)
+        </button>
+        <button
+          onClick={onDiscard}
+          disabled={busy}
+          className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
+        >
+          Ignorer
+        </button>
+      </div>
+    </div>
+  )
+}
 
-      {item.status === 'error' ? (
-        <>
-          <p className="text-xs text-red-400">{item.error_message}</p>
-          <div className="flex gap-2">
-            <button
-              onClick={onRescan}
-              disabled={busy}
-              className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
-            >
-              Reessayer
-            </button>
-            <button
-              onClick={onDiscard}
-              disabled={busy}
-              className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
-            >
-              Ignorer
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          {item.match_score != null ? (
-            <p className="text-xs text-neutral-500">Correspondance proposee : {Math.round(item.match_score * 100)}%</p>
-          ) : (
-            <p className="text-xs text-neutral-500">Aucune proposition automatique - choisis une piste ou saisis-la a la main.</p>
-          )}
-
-          {choices && choices.length > 0 && (
-            <select
-              className="bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-              value=""
-              onChange={(e) => {
-                const track = choices[Number(e.target.value)]
-                if (track) {
-                  onEditChange({
-                    trackTitle: track.title,
-                    trackNumber: String(track.position),
-                    discNumber: String(track.disc_number),
-                  })
-                }
-              }}
-            >
-              <option value="" disabled>
-                Choisir une piste dans la tracklist MusicBrainz...
-              </option>
-              {choices.map((track, idx) => (
-                <option key={idx} value={idx}>
-                  {track.disc_number > 1 ? `${track.disc_number}-` : ''}
-                  {String(track.position).padStart(2, '0')}. {track.title}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <div className="flex gap-2">
-            <input
-              value={edit.trackTitle}
-              onChange={(e) => onEditChange({ ...edit, trackTitle: e.target.value })}
-              placeholder="Titre de la piste"
-              className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-            />
-            <input
-              value={edit.trackNumber}
-              onChange={(e) => onEditChange({ ...edit, trackNumber: e.target.value })}
-              placeholder="N°"
-              type="number"
-              className="w-16 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-            />
-            <input
-              value={edit.discNumber}
-              onChange={(e) => onEditChange({ ...edit, discNumber: e.target.value })}
-              placeholder="Disque"
-              type="number"
-              className="w-20 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={onConfirm}
-              disabled={busy || !edit.trackTitle.trim()}
-              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
-            >
-              {busy && <Spinner className="w-3 h-3" />}
-              Confirmer (taguer + ranger)
-            </button>
-            <button
-              onClick={onDiscard}
-              disabled={busy}
-              className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
-            >
-              Ignorer
-            </button>
-          </div>
-        </>
-      )}
+function ErrorRow({ item, onRescan, onDiscard, busy }: { item: TaggingItem; onRescan: () => void; onDiscard: () => void; busy: boolean }) {
+  return (
+    <div className="bg-neutral-900 border border-red-900/60 rounded-lg p-3 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-sm text-neutral-300 truncate">{item.original_filename}</div>
+        <div className="text-xs text-red-400">{item.error_message}</div>
+      </div>
+      <div className="flex gap-2 shrink-0">
+        <button onClick={onRescan} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50">
+          Reessayer
+        </button>
+        <button onClick={onDiscard} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50">
+          Ignorer
+        </button>
+      </div>
     </div>
   )
 }
@@ -153,8 +237,11 @@ export default function BacklogPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [edits, setEdits] = useState<Record<number, Edit>>({})
-  const [tracklists, setTracklists] = useState<Record<number, TrackChoice[]>>({})
+  const [tracklists, setTracklists] = useState<Record<number, TrackChoice[] | null>>({})
+  const [assignments, setAssignments] = useState<Record<number, Record<number, number>>>({})
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set())
+  const [busyReleaseIds, setBusyReleaseIds] = useState<Set<number>>(new Set())
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null)
 
   const refresh = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true)
@@ -182,9 +269,9 @@ export default function BacklogPage() {
     return () => window.clearInterval(interval)
   }, [refresh])
 
-  // Charge la tracklist MusicBrainz une seule fois par release : plusieurs fichiers
-  // du backlog partagent souvent le meme dossier source (MeTube telecharge tout un
-  // artiste dans un seul dossier, voir services/tagging.py).
+  // Charge la tracklist MusicBrainz une seule fois par release (plusieurs fichiers du
+  // backlog partagent souvent le meme dossier source - voir services/tagging.py), puis
+  // initialise le pre-clustering (assignation suggeree) une fois la tracklist connue.
   useEffect(() => {
     if (!items) return
     const missing = [...new Set(items.filter((i) => i.status === 'needs_review').map((i) => i.release_id))].filter(
@@ -196,12 +283,18 @@ export default function BacklogPage() {
       if (!item) return
       try {
         const choices = await api.tagging.tracklist(item.id)
-        setTracklists((prev) => ({ ...prev, [releaseId]: choices }))
+        setTracklists((prev) => ({ ...prev, [releaseId]: choices.length > 0 ? choices : null }))
+        if (choices.length > 0) {
+          const releaseItems = items.filter((i) => i.release_id === releaseId)
+          setAssignments((prev) => ({ ...prev, [releaseId]: prev[releaseId] ?? initialAssignment(releaseItems) }))
+        }
       } catch {
-        setTracklists((prev) => ({ ...prev, [releaseId]: [] }))
+        setTracklists((prev) => ({ ...prev, [releaseId]: null }))
       }
     })
   }, [items, tracklists])
+
+  const itemsById = useMemo(() => new Map((items ?? []).map((i) => [i.id, i])), [items])
 
   function setBusy(id: number, busy: boolean) {
     setBusyIds((prev) => {
@@ -212,18 +305,46 @@ export default function BacklogPage() {
     })
   }
 
-  async function confirmItem(item: TaggingItem) {
-    const edit = edits[item.id]
-    if (!edit?.trackTitle.trim()) return
+  function setReleaseBusy(id: number, busy: boolean) {
+    setBusyReleaseIds((prev) => {
+      const next = new Set(prev)
+      if (busy) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  function assign(releaseId: number, key: number, itemId: number) {
+    setAssignments((prev) => {
+      const current = { ...(prev[releaseId] ?? {}) }
+      // Un fichier ne peut occuper qu'une seule piste a la fois.
+      for (const k of Object.keys(current)) {
+        if (current[Number(k)] === itemId) delete current[Number(k)]
+      }
+      current[key] = itemId
+      return { ...prev, [releaseId]: current }
+    })
+  }
+
+  function unassign(releaseId: number, key: number) {
+    setAssignments((prev) => {
+      const current = { ...(prev[releaseId] ?? {}) }
+      delete current[key]
+      return { ...prev, [releaseId]: current }
+    })
+  }
+
+  async function confirmPair(item: TaggingItem, track: TrackChoice, releaseId: number, key: number) {
     setBusy(item.id, true)
     try {
       const updated = await api.tagging.confirm(item.id, {
-        track_title: edit.trackTitle.trim(),
-        track_number: edit.trackNumber ? Number(edit.trackNumber) : null,
-        disc_number: edit.discNumber ? Number(edit.discNumber) : null,
+        track_title: track.title,
+        track_number: track.position,
+        disc_number: track.disc_number,
       })
       if (updated.status === 'done') {
         setItems((prev) => (prev ? prev.filter((i) => i.id !== item.id) : prev))
+        unassign(releaseId, key)
       } else {
         setItems((prev) => (prev ? prev.map((i) => (i.id === item.id ? updated : i)) : prev))
       }
@@ -234,9 +355,64 @@ export default function BacklogPage() {
     }
   }
 
-  async function discardItem(item: TaggingItem) {
+  async function confirmAlbum(releaseId: number, tracklist: TrackChoice[]) {
+    const assignment = assignments[releaseId] ?? {}
+    const pairs = tracklist
+      .map((track) => ({ track, itemId: assignment[trackKey(track)] }))
+      .filter((p): p is { track: TrackChoice; itemId: number } => p.itemId != null)
+    if (pairs.length === 0) return
+    setReleaseBusy(releaseId, true)
+    try {
+      const results = await Promise.all(
+        pairs.map(async ({ track, itemId }) => {
+          const item = itemsById.get(itemId)
+          if (!item) return null
+          try {
+            return await api.tagging.confirm(itemId, {
+              track_title: track.title,
+              track_number: track.position,
+              disc_number: track.disc_number,
+            })
+          } catch {
+            return null
+          }
+        }),
+      )
+      const doneIds = new Set(results.filter((r) => r?.status === 'done').map((r) => r!.id))
+      if (doneIds.size > 0) {
+        setItems((prev) => (prev ? prev.filter((i) => !doneIds.has(i.id)) : prev))
+        setAssignments((prev) => {
+          const current = { ...(prev[releaseId] ?? {}) }
+          for (const k of Object.keys(current)) {
+            if (doneIds.has(current[Number(k)])) delete current[Number(k)]
+          }
+          return { ...prev, [releaseId]: current }
+        })
+      }
+      const failedResults = results.filter((r) => r && r.status !== 'done')
+      if (failedResults.length > 0) {
+        setItems((prev) =>
+          prev ? prev.map((i) => failedResults.find((r) => r!.id === i.id) ?? i) : prev,
+        )
+        setLoadError(`${failedResults.length} piste(s) n'ont pas pu etre rangees (voir les erreurs ci-dessous)`)
+      }
+    } finally {
+      setReleaseBusy(releaseId, false)
+    }
+  }
+
+  async function discardItem(item: TaggingItem, releaseId?: number) {
     setBusy(item.id, true)
     setItems((prev) => (prev ? prev.filter((i) => i.id !== item.id) : prev))
+    if (releaseId != null) {
+      setAssignments((prev) => {
+        const current = { ...(prev[releaseId] ?? {}) }
+        for (const k of Object.keys(current)) {
+          if (current[Number(k)] === item.id) delete current[Number(k)]
+        }
+        return { ...prev, [releaseId]: current }
+      })
+    }
     try {
       await api.tagging.discard(item.id)
     } catch (err) {
@@ -255,6 +431,28 @@ export default function BacklogPage() {
       setEdits((prev) => ({ ...prev, [item.id]: editFromItem(updated) }))
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setBusy(item.id, false)
+    }
+  }
+
+  async function confirmManual(item: TaggingItem) {
+    const edit = edits[item.id]
+    if (!edit?.trackTitle.trim()) return
+    setBusy(item.id, true)
+    try {
+      const updated = await api.tagging.confirm(item.id, {
+        track_title: edit.trackTitle.trim(),
+        track_number: edit.trackNumber ? Number(edit.trackNumber) : null,
+        disc_number: edit.discNumber ? Number(edit.discNumber) : null,
+      })
+      if (updated.status === 'done') {
+        setItems((prev) => (prev ? prev.filter((i) => i.id !== item.id) : prev))
+      } else {
+        setItems((prev) => (prev ? prev.map((i) => (i.id === item.id ? updated : i)) : prev))
+      }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur lors de la confirmation')
     } finally {
       setBusy(item.id, false)
     }
@@ -286,35 +484,118 @@ export default function BacklogPage() {
       </div>
 
       <p className="text-sm text-neutral-400 mb-4">
-        Fichiers telecharges via MeTube en attente de correction des tags et de rangement. Rien n'est ecrit sur le
-        disque tant que tu n'as pas confirme la correspondance.
+        Fichiers telecharges via MeTube en attente de correction des tags et de rangement. Glisse un fichier sur la
+        piste correspondante (comme dans Picard), puis confirme - rien n'est ecrit sur le disque avant ca.
       </p>
 
       {items.length === 0 ? (
         <p className="text-sm text-neutral-500">Rien a traiter pour le moment.</p>
       ) : (
-        [...grouped.entries()].map(([releaseId, groupItems]) => (
-          <div key={releaseId} className="mb-6">
-            <h2 className="font-medium mb-2 text-neutral-300">
-              {groupItems[0].artist_name} - {groupItems[0].release_title}
-            </h2>
-            <div className="flex flex-col gap-2">
-              {groupItems.map((item) => (
-                <BacklogRow
-                  key={item.id}
-                  item={item}
-                  choices={tracklists[item.release_id]}
-                  edit={edits[item.id] ?? editFromItem(item)}
-                  onEditChange={(edit) => setEdits((prev) => ({ ...prev, [item.id]: edit }))}
-                  onConfirm={() => confirmItem(item)}
-                  onDiscard={() => discardItem(item)}
-                  onRescan={() => rescanItem(item)}
-                  busy={busyIds.has(item.id)}
-                />
-              ))}
+        [...grouped.entries()].map(([releaseId, groupItems]) => {
+          const tracklist = tracklists[releaseId]
+          const assignment = assignments[releaseId] ?? {}
+          const pending = groupItems.filter((i) => i.status === 'needs_review')
+          const errors = groupItems.filter((i) => i.status === 'error')
+          const assignedCount = Object.keys(assignment).length
+
+          return (
+            <div key={releaseId} className="mb-8">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="font-medium text-neutral-300">
+                  {groupItems[0].artist_name} - {groupItems[0].release_title}
+                </h2>
+                {tracklist && tracklist.length > 0 && assignedCount > 0 && (
+                  <button
+                    onClick={() => confirmAlbum(releaseId, tracklist)}
+                    disabled={busyReleaseIds.has(releaseId)}
+                    className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+                  >
+                    {busyReleaseIds.has(releaseId) && <Spinner className="w-3 h-3" />}
+                    Confirmer l'album ({assignedCount} piste{assignedCount > 1 ? 's' : ''})
+                  </button>
+                )}
+              </div>
+
+              {tracklist === undefined && <p className="text-xs text-neutral-500">Chargement de la tracklist...</p>}
+
+              {tracklist && tracklist.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-xs text-neutral-500 mb-1">Fichiers ({pending.filter((i) => !Object.values(assignment).includes(i.id)).length})</div>
+                    {pending
+                      .filter((i) => !Object.values(assignment).includes(i.id))
+                      .map((item) => (
+                        <FileChip key={item.id} item={item} onDiscard={() => discardItem(item, releaseId)} />
+                      ))}
+                    {pending.filter((i) => !Object.values(assignment).includes(i.id)).length === 0 && (
+                      <p className="text-xs text-neutral-600 italic">Tous les fichiers sont assignes.</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-xs text-neutral-500 mb-1">Pistes ({tracklist.length})</div>
+                    {[...tracklist]
+                      .sort((a, b) => a.disc_number - b.disc_number || a.position - b.position)
+                      .map((track) => {
+                        const key = trackKey(track)
+                        const assignedItem = assignment[key] != null ? itemsById.get(assignment[key]) : undefined
+                        const dragKey = `${releaseId}:${key}`
+                        return (
+                          <TrackSlot
+                            key={key}
+                            track={track}
+                            assignedItem={assignedItem}
+                            isDragOver={dragOverKey === dragKey}
+                            busy={assignedItem ? busyIds.has(assignedItem.id) : false}
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              setDragOverKey(dragKey)
+                            }}
+                            onDragLeave={() => setDragOverKey((k) => (k === dragKey ? null : k))}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              setDragOverKey(null)
+                              const itemId = Number(e.dataTransfer.getData('text/plain'))
+                              if (itemId) assign(releaseId, key, itemId)
+                            }}
+                            onUnassign={() => unassign(releaseId, key)}
+                            onConfirm={() => assignedItem && confirmPair(assignedItem, track, releaseId, key)}
+                          />
+                        )
+                      })}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {pending.map((item) => (
+                    <FallbackRow
+                      key={item.id}
+                      item={item}
+                      edit={edits[item.id] ?? editFromItem(item)}
+                      onEditChange={(edit) => setEdits((prev) => ({ ...prev, [item.id]: edit }))}
+                      onConfirm={() => confirmManual(item)}
+                      onDiscard={() => discardItem(item)}
+                      busy={busyIds.has(item.id)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {errors.length > 0 && (
+                <div className="flex flex-col gap-2 mt-3">
+                  {errors.map((item) => (
+                    <ErrorRow
+                      key={item.id}
+                      item={item}
+                      onRescan={() => rescanItem(item)}
+                      onDiscard={() => discardItem(item, releaseId)}
+                      busy={busyIds.has(item.id)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))
+          )
+        })
       )}
     </div>
   )

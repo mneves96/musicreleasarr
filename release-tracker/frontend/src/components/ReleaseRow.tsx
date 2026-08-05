@@ -120,11 +120,7 @@ export default function ReleaseRow({
           </div>
         </div>
         <OwnershipBadge status={release.ownership_status} />
-        <DownloadBadge
-          status={release.download_status}
-          progress={release.download_progress}
-          error={release.download_error}
-        />
+        <DownloadBadge status={release.download_status} error={release.download_error} />
         {release.download_status !== 'queued' && (
           <button
             onClick={download}

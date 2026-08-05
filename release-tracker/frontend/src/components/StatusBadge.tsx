@@ -46,25 +46,12 @@ export function OwnershipBadge({ status }: { status: OwnershipStatus }) {
   return <Badge className={OWNERSHIP_STYLES[status]}>{OWNERSHIP_LABELS[status]}</Badge>
 }
 
-export function DownloadBadge({
-  status,
-  progress,
-  error,
-}: {
-  status: DownloadStatus
-  progress?: number | null
-  error?: string | null
-}) {
+export function DownloadBadge({ status, error }: { status: DownloadStatus; error?: string | null }) {
   if (status === 'not_requested') return null
-
-  let label: string = DOWNLOAD_LABELS[status]
-  if (status === 'queued' && typeof progress === 'number') {
-    label = `Telechargement en cours (${progress}%)`
-  }
 
   return (
     <Badge className={DOWNLOAD_STYLES[status]} title={status === 'failed' ? error ?? undefined : undefined}>
-      {label}
+      {DOWNLOAD_LABELS[status]}
     </Badge>
   )
 }

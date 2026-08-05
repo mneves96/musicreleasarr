@@ -313,7 +313,7 @@ function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigat
         {message && <div className="text-xs text-neutral-400 mt-1">{message}</div>}
       </div>
       <OwnershipBadge status={release.ownership_status} />
-      <DownloadBadge status={release.download_status} progress={release.download_progress} error={release.download_error} />
+      <DownloadBadge status={release.download_status} error={release.download_error} />
       {release.download_status !== 'queued' && (
         <button
           onClick={download}

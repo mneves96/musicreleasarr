@@ -62,7 +62,6 @@ def download_release(release_id: int, db: Session = Depends(get_db)):
     url = _resolve_release_download_url(release)
     ok, message = metube.queue_download(settings.metube_url, url, folder=normalize_text(release.artist.name))
     release.download_status = DownloadStatus.queued if ok else DownloadStatus.failed
-    release.download_progress = 0 if ok else None
     release.download_error = None if ok else message
     db.commit()
     return TestConnectionResult(ok=ok, message=message)

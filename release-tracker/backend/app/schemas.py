@@ -41,7 +41,6 @@ class ReleaseOut(BaseModel):
     youtube_music_url: str | None
     ownership_status: OwnershipStatus
     download_status: DownloadStatus
-    download_progress: int | None
     download_error: str | None
     notified_at: datetime | None
 

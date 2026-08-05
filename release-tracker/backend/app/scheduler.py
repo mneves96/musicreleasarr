@@ -225,7 +225,6 @@ def _trigger_download(db: Session, settings: Settings, artist: Artist, release: 
             settings.metube_url, release.youtube_music_url, folder=normalize_text(artist.name)
         )
         release.download_status = DownloadStatus.queued if ok else DownloadStatus.failed
-        release.download_progress = 0 if ok else None
         release.download_error = None if ok else message
         if not ok:
             logger.warning("Echec MeTube pour %s - %s : %s", artist.name, release.title, message)
@@ -269,15 +268,11 @@ def refresh_download_statuses(db: Session) -> None:
             if info.get("status") == "error":
                 release.download_status = DownloadStatus.failed
                 release.download_error = info.get("msg") or info.get("error") or "Echec du telechargement MeTube"
-                release.download_progress = None
             else:
                 release.download_status = DownloadStatus.downloaded
-                release.download_progress = 100
                 release.download_error = None
         elif url in queue_by_url:
-            percent = queue_by_url[url].get("percent")
-            if isinstance(percent, (int, float)):
-                release.download_progress = int(percent)
+            pass  # toujours en cours cote MeTube, rien a changer
         elif url in pending_urls:
             pass  # toujours en attente de demarrage cote MeTube, rien a changer
         else:
@@ -288,11 +283,10 @@ def refresh_download_statuses(db: Session) -> None:
             # plus exactement a l'URL "album" envoyee a l'origine). Laisser le
             # statut bloque sur "queued" empechait toute nouvelle tentative (le
             # bouton Telecharger reste cache tant que le statut est "queued") -
-            # on bascule donc en echec explicite plutot qu'un 0% permanent et
-            # muet ; le statut de possession reel (via Navidrome) reste inchange
+            # on bascule donc en echec explicite plutot que de rester bloque en
+            # silence ; le statut de possession reel (via Navidrome) reste inchange
             # et prevaudra visuellement si le fichier est en realite bien present.
             release.download_status = DownloadStatus.failed
-            release.download_progress = None
             release.download_error = (
                 "Introuvable dans l'historique MeTube (supprime manuellement ou MeTube redemarre) - "
                 "relance le telechargement si la release n'est pas dans ta bibliotheque."
