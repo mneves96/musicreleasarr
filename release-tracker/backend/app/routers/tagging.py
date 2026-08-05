@@ -96,7 +96,7 @@ def confirm(item_id: int, payload: TaggingConfirmIn, db: Session = Depends(get_d
     _require_release(item)
     settings = get_settings(db)
     return tagging.apply_tag_and_move(
-        db, settings, item, payload.track_title, payload.track_number, payload.disc_number
+        db, settings, item, payload.track_title, payload.track_number, payload.disc_number, payload.recording_id
     )
 
 

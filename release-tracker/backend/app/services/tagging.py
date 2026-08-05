@@ -266,8 +266,34 @@ def get_tracklist_choices(release: Release) -> list[dict]:
         return []
 
 
-def _write_tags(source_path: str, item: TaggingItem, track_title: str, track_number: int | None, disc_number: int | None) -> None:
-    from mutagen.id3 import APIC, ID3, ID3NoHeaderError, TALB, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX
+def _fetch_lyrics(artist_name: str, track_title: str, album_title: str) -> str | None:
+    """Paroles brutes via lrclib.net - gratuit, sans cle API a configurer. Best
+    effort : indisponibilite ou absence de resultat n'empeche jamais le tagging."""
+    try:
+        resp = httpx.get(
+            "https://lrclib.net/api/get",
+            params={"artist_name": artist_name, "track_name": track_title, "album_name": album_title},
+            timeout=10,
+            headers={"User-Agent": "MusicReleasarr/1.0 ( self-hosted )"},
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json().get("plainLyrics") or None
+    except Exception:
+        logger.warning("Paroles indisponibles (lrclib) pour %s - %s", artist_name, track_title)
+        return None
+
+
+def _write_tags(
+    source_path: str,
+    item: TaggingItem,
+    track_title: str,
+    track_number: int | None,
+    disc_number: int | None,
+    recording_id: str | None,
+) -> None:
+    from mutagen.id3 import APIC, ID3, ID3NoHeaderError, TALB, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX, UFID, USLT
 
     release = item.release
     artist = release.artist
@@ -298,10 +324,22 @@ def _write_tags(source_path: str, item: TaggingItem, track_title: str, track_num
         tags.delall("TDRC")
         tags.add(TDRC(encoding=3, text=str(release.release_date.year)))
 
+    # Identifiants MusicBrainz complets (comme Picard) : facilite le matching cote
+    # Navidrome/autres lecteurs et evite les doublons d'album lies a des tags
+    # incoherents entre pistes.
     tags.delall("TXXX:MusicBrainz Album Id")
     tags.add(TXXX(encoding=3, desc="MusicBrainz Album Id", text=release.musicbrainz_id))
+    tags.delall("TXXX:MusicBrainz Release Group Id")
+    tags.add(TXXX(encoding=3, desc="MusicBrainz Release Group Id", text=release.musicbrainz_id))
     tags.delall("TXXX:MusicBrainz Artist Id")
     tags.add(TXXX(encoding=3, desc="MusicBrainz Artist Id", text=artist.musicbrainz_id))
+    tags.delall("TXXX:MusicBrainz Album Artist Id")
+    tags.add(TXXX(encoding=3, desc="MusicBrainz Album Artist Id", text=artist.musicbrainz_id))
+    tags.delall("TXXX:MusicBrainz Album Type")
+    tags.add(TXXX(encoding=3, desc="MusicBrainz Album Type", text=release.release_type.value))
+    if recording_id:
+        tags.delall("UFID:http://musicbrainz.org")
+        tags.add(UFID(owner="http://musicbrainz.org", data=recording_id.encode("ascii")))
 
     if release.cover_url:
         try:
@@ -312,7 +350,33 @@ def _write_tags(source_path: str, item: TaggingItem, track_title: str, track_num
         except Exception:
             logger.warning("Impossible de recuperer la cover pour le tag APIC (%s)", release.cover_url)
 
+    lyrics = _fetch_lyrics(artist.name, track_title, release.title)
+    if lyrics:
+        tags.delall("USLT")
+        # lang="und" (indetermine, ISO 639-2) plutot que de supposer "eng" - la
+        # bibliotheque peut tres bien contenir des artistes non anglophones.
+        tags.add(USLT(encoding=3, lang="und", desc="", text=lyrics))
+
     tags.save(source_path, v2_version=3)
+
+
+def _cleanup_empty_dirs(path: str, stop_at: str) -> None:
+    """Supprime `path` et ses dossiers parents devenus vides, en remontant
+    jusqu'a (sans le supprimer) `stop_at` - evite de laisser une arborescence
+    de dossiers vides dans le dossier de telechargements une fois toutes ses
+    pistes deplacees vers la bibliotheque. Best effort : n'importe quelle
+    erreur (permissions, dossier deja recree entre-temps...) arrete juste le
+    nettoyage sans faire echouer la confirmation."""
+    stop_at = os.path.normpath(stop_at)
+    current = os.path.normpath(path)
+    while current != stop_at and current.startswith(stop_at + os.sep):
+        try:
+            if os.listdir(current):
+                break
+            os.rmdir(current)
+        except OSError:
+            break
+        current = os.path.dirname(current)
 
 
 def apply_tag_and_move(
@@ -322,6 +386,7 @@ def apply_tag_and_move(
     track_title: str,
     track_number: int | None,
     disc_number: int | None,
+    recording_id: str | None = None,
 ) -> TaggingItem:
     """Ecrit les tags ID3 et deplace le fichier vers <bibliotheque>/<Artiste>/<Album>/
     - seule fonction de ce module qui ecrit sur le disque, appelee uniquement
@@ -353,8 +418,9 @@ def apply_tag_and_move(
         db.commit()
         return item
 
+    source_dir = os.path.dirname(item.source_path)
     try:
-        _write_tags(item.source_path, item, track_title, track_number, disc_number)
+        _write_tags(item.source_path, item, track_title, track_number, disc_number, recording_id)
         os.makedirs(target_dir, exist_ok=True)
         shutil.move(item.source_path, target_path)
     except Exception as exc:
@@ -363,6 +429,8 @@ def apply_tag_and_move(
         item.error_message = str(exc)
         db.commit()
         return item
+
+    _cleanup_empty_dirs(source_dir, settings.tagging_downloads_path)
 
     item.status = TaggingStatus.done
     item.target_path = target_path

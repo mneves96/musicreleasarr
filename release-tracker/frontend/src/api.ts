@@ -109,6 +109,7 @@ export interface TaggingConfirmPayload {
   track_title: string
   track_number?: number | null
   disc_number?: number | null
+  recording_id?: string | null
 }
 
 export interface ReleaseGroupChoice {

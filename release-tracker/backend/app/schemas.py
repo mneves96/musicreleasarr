@@ -124,6 +124,7 @@ class TaggingConfirmIn(BaseModel):
     track_title: str
     track_number: int | None = None
     disc_number: int | None = None
+    recording_id: str | None = None
 
 
 class ReleaseGroupChoice(BaseModel):
