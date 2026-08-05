@@ -1,6 +1,9 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { DownloadingIcon } from './Spinner'
+
+const METUBE_POLL_MS = 6000
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-2 rounded-md text-sm font-medium ${
@@ -11,6 +14,28 @@ export default function Layout() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [query, setQuery] = useState(params.get('q') ?? '')
+  const [downloading, setDownloading] = useState(false)
+
+  // Sonde MeTube depuis le layout (pas seulement depuis la page MeTube elle-meme)
+  // pour pouvoir signaler un telechargement en cours meme quand l'utilisateur est
+  // sur une autre page - ignore silencieusement les erreurs (MeTube pas configure).
+  useEffect(() => {
+    let cancelled = false
+    async function poll() {
+      try {
+        const history = await api.metubeHistory()
+        if (!cancelled) setDownloading(history.queue.length > 0)
+      } catch {
+        if (!cancelled) setDownloading(false)
+      }
+    }
+    poll()
+    const interval = window.setInterval(poll, METUBE_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [])
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -38,7 +63,10 @@ export default function Layout() {
               Calendrier
             </NavLink>
             <NavLink to="/metube" className={navLinkClass}>
-              MeTube
+              <span className="inline-flex items-center gap-1.5">
+                MeTube
+                {downloading && <DownloadingIcon />}
+              </span>
             </NavLink>
             <NavLink to="/settings" className={navLinkClass}>
               Reglages

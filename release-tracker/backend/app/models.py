@@ -65,7 +65,10 @@ class Artist(Base):
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_followed: Mapped[bool] = mapped_column(Boolean, default=False)
-    notify_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # False par defaut : un artiste juste previsualise (pas encore suivi) ne doit
+    # pas apparaitre avec les notifications deja activees. Suivre un artiste passe
+    # explicitement par cette valeur (voir routers/artists.py:follow_artist).
+    notify_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     auto_download: Mapped[bool] = mapped_column(Boolean, default=False)
     followed_release_types: Mapped[list[str]] = mapped_column(JSON, default=list)
 
