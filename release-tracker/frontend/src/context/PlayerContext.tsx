@@ -13,6 +13,9 @@ interface YTPlayerInstance {
   stopVideo: () => void
   loadVideoById: (videoId: string) => void
   setVolume: (volume: number) => void
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void
+  getCurrentTime: () => number
+  getDuration: () => number
 }
 
 interface YTPlayerStateEvent {
@@ -43,11 +46,14 @@ interface PlayerContextValue {
   currentIndex: number
   isPlaying: boolean
   volume: number
+  currentTime: number
+  duration: number
   playQueue: (tracks: QueueTrack[], startIndex: number) => void
   togglePlayPause: () => void
   next: () => void
   previous: () => void
   setVolume: (v: number) => void
+  seekTo: (seconds: number) => void
   close: () => void
 }
 
@@ -85,6 +91,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolumeState] = useState(80)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<YTPlayerInstance | null>(null)
@@ -108,8 +116,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return
     }
     setCurrentIndex(nextIndex)
+    setCurrentTime(0)
+    setDuration(0)
     playerRef.current?.loadVideoById(q[nextIndex].video_id)
   }, [])
+
+  // Le player YouTube ne pousse pas d'evenement de progression : on interroge
+  // getCurrentTime()/getDuration() a intervalle regulier tant qu'une file est active.
+  useEffect(() => {
+    if (queue.length === 0) return
+    const interval = window.setInterval(() => {
+      const player = playerRef.current
+      if (!player || !readyRef.current) return
+      setCurrentTime(player.getCurrentTime())
+      setDuration(player.getDuration())
+    }, 500)
+    return () => window.clearInterval(interval)
+  }, [queue.length])
 
   useEffect(() => {
     let cancelled = false
@@ -142,6 +165,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (tracks.length === 0) return
     setQueue(tracks)
     setCurrentIndex(startIndex)
+    setCurrentTime(0)
+    setDuration(0)
     const start = () => {
       playerRef.current?.loadVideoById(tracks[startIndex].video_id)
       playerRef.current?.playVideo()
@@ -175,16 +200,37 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     playerRef.current?.setVolume(v)
   }, [])
 
+  const seekTo = useCallback((seconds: number) => {
+    playerRef.current?.seekTo(seconds, true)
+    setCurrentTime(seconds)
+  }, [])
+
   const close = useCallback(() => {
     playerRef.current?.stopVideo()
     setQueue([])
     setCurrentIndex(0)
     setIsPlaying(false)
+    setCurrentTime(0)
+    setDuration(0)
   }, [])
 
   const value = useMemo<PlayerContextValue>(
-    () => ({ queue, currentIndex, isPlaying, volume, playQueue, togglePlayPause, next, previous, setVolume, close }),
-    [queue, currentIndex, isPlaying, volume, playQueue, togglePlayPause, next, previous, setVolume, close],
+    () => ({
+      queue,
+      currentIndex,
+      isPlaying,
+      volume,
+      currentTime,
+      duration,
+      playQueue,
+      togglePlayPause,
+      next,
+      previous,
+      setVolume,
+      seekTo,
+      close,
+    }),
+    [queue, currentIndex, isPlaying, volume, currentTime, duration, playQueue, togglePlayPause, next, previous, setVolume, seekTo, close],
   )
 
   return (

@@ -46,8 +46,28 @@ function CloseIcon() {
   )
 }
 
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 export default function PlayerBar() {
-  const { queue, currentIndex, isPlaying, volume, togglePlayPause, next, previous, setVolume, close } = usePlayer()
+  const {
+    queue,
+    currentIndex,
+    isPlaying,
+    volume,
+    currentTime,
+    duration,
+    togglePlayPause,
+    next,
+    previous,
+    setVolume,
+    seekTo,
+    close,
+  } = usePlayer()
 
   if (queue.length === 0) return null
 
@@ -55,7 +75,21 @@ export default function PlayerBar() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 z-20">
-      <div className="max-w-5xl mx-auto flex items-center gap-4 px-4 py-2.5">
+      <div className="max-w-5xl mx-auto flex items-center gap-2 px-4 pt-1.5 text-[10px] text-neutral-500 tabular-nums">
+        <span className="w-9 text-right shrink-0">{formatTime(currentTime)}</span>
+        <input
+          type="range"
+          min={0}
+          max={duration || 0}
+          step={1}
+          value={Math.min(currentTime, duration || 0)}
+          onChange={(e) => seekTo(Number(e.target.value))}
+          className="flex-1 accent-purple-600 h-1"
+          title="Avancer/reculer dans la piste"
+        />
+        <span className="w-9 shrink-0">{formatTime(duration)}</span>
+      </div>
+      <div className="max-w-5xl mx-auto flex items-center gap-4 px-4 pb-2.5 pt-1">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{track.title}</div>
           <div className="text-xs text-neutral-400 truncate">

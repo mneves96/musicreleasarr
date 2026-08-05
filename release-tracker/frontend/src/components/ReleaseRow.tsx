@@ -5,6 +5,15 @@ import { DownloadBadge, OwnershipBadge } from './StatusBadge'
 import ServiceLink from './ServiceLink'
 import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from './ServiceIcons'
 import { usePlayer, type QueueTrack } from '../context/PlayerContext'
+import Spinner from './Spinner'
+
+function PlayGlyph({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M7 5v14l12-7z" />
+    </svg>
+  )
+}
 
 export default function ReleaseRow({
   release,
@@ -118,11 +127,35 @@ export default function ReleaseRow({
   return (
     <div className="py-2 border-b border-neutral-800 last:border-0">
       <div className="flex items-center gap-3">
-        {release.cover_url ? (
-          <img src={release.cover_url} alt="" className="w-12 h-12 rounded object-cover bg-neutral-800" />
-        ) : (
-          <div className="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-lg">🎧</div>
-        )}
+        <button
+          onClick={() => play(0)}
+          disabled={playLoading}
+          className="group/cover relative w-12 h-12 rounded overflow-hidden shrink-0 bg-neutral-800"
+          title="Ecouter cette release avant de telecharger"
+        >
+          {release.cover_url ? (
+            <>
+              <img src={release.cover_url} alt="" className="w-full h-full object-cover" />
+              <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/cover:bg-black/50 transition-colors">
+                <PlayGlyph className="w-5 h-5 text-white opacity-0 group-hover/cover:opacity-100 transition-opacity" />
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="absolute inset-0 flex items-center justify-center text-lg group-hover/cover:opacity-0 transition-opacity">
+                🎧
+              </span>
+              <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/cover:opacity-100 transition-opacity">
+                <PlayGlyph className="w-5 h-5 text-white" />
+              </span>
+            </>
+          )}
+          {playLoading && (
+            <span className="absolute inset-0 flex items-center justify-center bg-black/60">
+              <Spinner className="w-4 h-4 text-white" />
+            </span>
+          )}
+        </button>
         <div className="flex-1 min-w-0">
           <div className="font-medium truncate">{release.title}</div>
           <div className="text-sm text-neutral-400 truncate">
@@ -154,14 +187,6 @@ export default function ReleaseRow({
         </div>
         <OwnershipBadge status={release.ownership_status} />
         <DownloadBadge status={release.download_status} error={release.download_error} />
-        <button
-          onClick={() => play(0)}
-          disabled={playLoading}
-          className="text-xs px-2 py-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-50"
-          title="Ecouter cette release avant de telecharger"
-        >
-          {playLoading ? '...' : '▶'}
-        </button>
         {release.download_status !== 'queued' && (
           <button
             onClick={download}
@@ -200,7 +225,7 @@ export default function ReleaseRow({
               <li key={t.video_id} className="flex items-center justify-between text-sm text-neutral-300 gap-2">
                 <button
                   onClick={() => play(idx)}
-                  className="text-neutral-500 hover:text-white shrink-0"
+                  className="flex items-center justify-center w-5 h-5 rounded-full border border-neutral-600 text-neutral-400 text-[10px] hover:text-white hover:border-neutral-400 shrink-0"
                   title="Ecouter cette piste"
                 >
                   ▶
