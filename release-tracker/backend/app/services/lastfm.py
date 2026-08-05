@@ -1,8 +1,10 @@
 """Client Last.fm : utilise en fallback pour l'image et le lien de l'artiste
 (lecture seule, cle API seule suffit - reutilisable depuis celle deja
-configuree pour Navidrome), et pour les recommandations personnalisees
-(user.getRecommendedArtists), qui necessitent en plus une connexion complete
-au compte Last.fm de l'utilisateur.
+configuree pour Navidrome), et pour les recommandations personnalisees, qui
+necessitent en plus une connexion complete au compte Last.fm de
+l'utilisateur (voir get_recommended_artists : reconstruites a partir de
+user.getTopArtists + artist.getSimilar, Last.fm ayant retire la methode
+dediee user.getRecommendedArtists de son API).
 
 Le flux de connexion suit le schema "desktop application" de Last.fm (pas
 besoin d'URL de callback publique, adapte a une app self-hosted derriere
@@ -109,14 +111,65 @@ def get_session(api_key: str, api_secret: str, token: str) -> dict:
     return data["session"]
 
 
-def get_recommended_artists(api_key: str, api_secret: str, session_key: str, limit: int = 50) -> list[dict]:
-    """Recommandations personnalisees (methode authentifiee, necessite une
-    session utilisateur complete - contrairement au reste de ce module qui ne
-    demande qu'une cle API). Chaque entree a potentiellement un "mbid" (peut
-    etre vide pour un artiste peu connu - voir routers/artists.py qui retente
-    une resolution MusicBrainz par nom dans ce cas)."""
+def get_top_artists(api_key: str, api_secret: str, session_key: str, period: str = "overall", limit: int = 10) -> list[dict]:
     data = _signed_get(
-        {"method": "user.getRecommendedArtists", "api_key": api_key, "sk": session_key, "limit": str(limit)},
+        {"method": "user.getTopArtists", "api_key": api_key, "sk": session_key, "period": period, "limit": str(limit)},
         api_secret,
     )
-    return data.get("recommendations", {}).get("artist", [])
+    return data.get("topartists", {}).get("artist", [])
+
+
+def get_similar_artists(name: str, api_key: str, limit: int = 15) -> list[dict]:
+    """Publique (cle API seule, pas de session) - contrairement a
+    user.getRecommendedArtists (voir get_recommended_artists)."""
+    resp = httpx.get(
+        BASE_URL,
+        params={"method": "artist.getsimilar", "artist": name, "api_key": api_key, "limit": str(limit), "format": "json"},
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        return []
+    data = resp.json()
+    return data.get("similarartists", {}).get("artist", [])
+
+
+def get_recommended_artists(api_key: str, api_secret: str, session_key: str, limit: int = 50) -> list[dict]:
+    """Last.fm a retire user.getRecommendedArtists de son API (confirme par un
+    400 Bad Request en production, methode authentifiee historiquement
+    utilisee ici) - reconstruit une recommandation personnalisee equivalente a
+    partir de ce qui fonctionne encore : les artistes les plus ecoutes de
+    l'utilisateur (user.getTopArtists, authentifie) puis, pour chacun, ses
+    artistes similaires (artist.getSimilar, public). Les scores de similarite
+    sont cumules par artiste candidat (recommande par plusieurs artistes
+    ecoutes = mieux classe), et les artistes deja dans le top de l'utilisateur
+    sont exclus. Chaque entree a potentiellement un "mbid" vide (artiste peu
+    connu - voir routers/artists.py qui retente une resolution MusicBrainz par
+    nom dans ce cas)."""
+    top_artists = get_top_artists(api_key, api_secret, session_key, limit=10)
+    top_names_lower = {a["name"].lower() for a in top_artists if a.get("name")}
+
+    aggregated: dict[str, dict] = {}
+    for artist in top_artists:
+        name = artist.get("name")
+        if not name:
+            continue
+        try:
+            similar = get_similar_artists(name, api_key, limit=15)
+        except Exception:
+            continue
+        for candidate in similar:
+            cand_name = candidate.get("name")
+            if not cand_name or cand_name.lower() in top_names_lower:
+                continue
+            try:
+                match_score = float(candidate.get("match") or 0)
+            except (TypeError, ValueError):
+                match_score = 0.0
+            entry = aggregated.setdefault(
+                cand_name.lower(),
+                {"name": cand_name, "mbid": candidate.get("mbid"), "image": candidate.get("image"), "score": 0.0},
+            )
+            entry["score"] += match_score
+
+    ranked = sorted(aggregated.values(), key=lambda e: e["score"], reverse=True)
+    return ranked[:limit]
