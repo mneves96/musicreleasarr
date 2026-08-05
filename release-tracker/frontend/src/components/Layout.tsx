@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { DownloadingIcon } from './Spinner'
+import PlayerBar from './PlayerBar'
+import { usePlayer } from '../context/PlayerContext'
 
 const METUBE_POLL_MS = 6000
 const BACKLOG_POLL_MS = 20000
@@ -17,6 +19,7 @@ export default function Layout() {
   const [query, setQuery] = useState(params.get('q') ?? '')
   const [downloading, setDownloading] = useState(false)
   const [backlogCount, setBacklogCount] = useState(0)
+  const { queue } = usePlayer()
 
   // Sonde MeTube depuis le layout (pas seulement depuis la page MeTube elle-meme)
   // pour pouvoir signaler un telechargement en cours meme quand l'utilisateur est
@@ -121,9 +124,10 @@ export default function Layout() {
           </button>
         </div>
       </header>
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
+      <main className={`flex-1 max-w-5xl mx-auto w-full px-4 py-6 ${queue.length > 0 ? 'pb-24' : ''}`}>
         <Outlet />
       </main>
+      <PlayerBar />
     </div>
   )
 }

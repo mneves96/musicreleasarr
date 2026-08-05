@@ -4,6 +4,7 @@ import { api, RELEASE_TYPE_LABELS, type Release, type Track } from '../api'
 import { DownloadBadge, OwnershipBadge } from './StatusBadge'
 import ServiceLink from './ServiceLink'
 import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from './ServiceIcons'
+import { usePlayer, type QueueTrack } from '../context/PlayerContext'
 
 export default function ReleaseRow({
   release,
@@ -21,6 +22,38 @@ export default function ReleaseRow({
   const [tracks, setTracks] = useState<Track[] | null>(null)
   const [tracksLoading, setTracksLoading] = useState(false)
   const [missingBusy, setMissingBusy] = useState(false)
+  const [playLoading, setPlayLoading] = useState(false)
+  const { playQueue } = usePlayer()
+
+  function toQueue(trackList: Track[]): QueueTrack[] {
+    return trackList.map((t) => ({
+      video_id: t.video_id,
+      title: t.title,
+      artist_name: release.artist_name,
+      album_title: release.title,
+    }))
+  }
+
+  // Ecoute avant de telecharger : reutilise la tracklist deja chargee si le
+  // detail est deplie, sinon va la chercher pour cette seule ecoute.
+  async function play(startIndex: number) {
+    if (tracks) {
+      playQueue(toQueue(tracks), startIndex)
+      return
+    }
+    setPlayLoading(true)
+    setMessage(null)
+    try {
+      const result = await api.listTracks(release.id)
+      setTracks(result)
+      onTracksLoaded?.(release.id, result)
+      playQueue(toQueue(result), startIndex)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Impossible de recuperer les pistes')
+    } finally {
+      setPlayLoading(false)
+    }
+  }
 
   async function download() {
     setBusy(true)
@@ -121,6 +154,14 @@ export default function ReleaseRow({
         </div>
         <OwnershipBadge status={release.ownership_status} />
         <DownloadBadge status={release.download_status} error={release.download_error} />
+        <button
+          onClick={() => play(0)}
+          disabled={playLoading}
+          className="text-xs px-2 py-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-50"
+          title="Ecouter cette release avant de telecharger"
+        >
+          {playLoading ? '...' : '▶'}
+        </button>
         {release.download_status !== 'queued' && (
           <button
             onClick={download}
@@ -155,8 +196,15 @@ export default function ReleaseRow({
             </button>
           )}
           <ul className="flex flex-col gap-1">
-            {tracks.map((t) => (
+            {tracks.map((t, idx) => (
               <li key={t.video_id} className="flex items-center justify-between text-sm text-neutral-300 gap-2">
+                <button
+                  onClick={() => play(idx)}
+                  className="text-neutral-500 hover:text-white shrink-0"
+                  title="Ecouter cette piste"
+                >
+                  ▶
+                </button>
                 <span className="truncate flex-1">
                   {t.title} {t.duration && <span className="text-neutral-500">({t.duration})</span>}
                 </span>
