@@ -290,6 +290,7 @@ export const api = {
 
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),
+    scanNow: () => request<TestConnectionResult>('/tagging/scan', { method: 'POST' }),
     tracklist: (itemId: number) => request<TrackChoice[]>(`/tagging/${itemId}/tracklist`),
     confirm: (itemId: number, payload: TaggingConfirmPayload) =>
       request<TaggingItem>(`/tagging/${itemId}/confirm`, { method: 'POST', body: JSON.stringify(payload) }),

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Release, TaggingItem, TaggingStatus
 from ..scheduler import get_settings
-from ..schemas import ReleaseGroupChoice, TaggingConfirmIn, TaggingIdentifyIn, TaggingItemOut, TrackChoice
+from ..schemas import ReleaseGroupChoice, TaggingConfirmIn, TaggingIdentifyIn, TaggingItemOut, TestConnectionResult, TrackChoice
 from ..services import tagging
 from .artists import _get_or_create_artist
 
@@ -38,6 +38,16 @@ def list_backlog(db: Session = Depends(get_db)):
         .order_by(TaggingItem.created_at.asc())
         .all()
     )
+
+
+@router.post("/scan", response_model=TestConnectionResult)
+def scan_now(db: Session = Depends(get_db)):
+    """Declenche immediatement le scan du dossier de telechargements (au lieu
+    d'attendre le job planifie toutes les 5 min) - utile pour verifier tout de
+    suite qu'un fichier fraichement depose est bien detecte."""
+    settings = get_settings(db)
+    created = tagging.scan_downloads_root(db, settings)
+    return TestConnectionResult(ok=True, message=f"{len(created)} nouveau(x) fichier(s) detecte(s)")
 
 
 @router.get("/identify/release-groups", response_model=list[ReleaseGroupChoice])

@@ -459,6 +459,10 @@ def start_scheduler() -> None:
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=300,
+        # Lance un premier scan tout de suite au demarrage plutot que d'attendre
+        # 5 min : sinon un redemarrage/redeploiement laisse le backlog vide en
+        # apparence jusqu'a la premiere execution planifiee.
+        next_run_time=datetime.utcnow(),
     )
     if not _scheduler.running:
         _scheduler.start()

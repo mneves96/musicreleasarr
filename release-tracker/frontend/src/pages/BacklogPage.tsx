@@ -433,6 +433,8 @@ export default function BacklogPage() {
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set())
   const [busyReleaseIds, setBusyReleaseIds] = useState<Set<number>>(new Set())
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
 
   const refresh = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true)
@@ -459,6 +461,20 @@ export default function BacklogPage() {
     const interval = window.setInterval(() => refresh(), POLL_MS)
     return () => window.clearInterval(interval)
   }, [refresh])
+
+  async function scanNow() {
+    setScanning(true)
+    setScanMessage(null)
+    try {
+      const result = await api.tagging.scanNow()
+      setScanMessage(result.message)
+      await refresh()
+    } catch (err) {
+      setScanMessage(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setScanning(false)
+    }
+  }
 
   // Charge la tracklist MusicBrainz une seule fois par release (plusieurs fichiers du
   // backlog partagent souvent le meme dossier source - voir services/tagging.py), puis
@@ -672,6 +688,15 @@ export default function BacklogPage() {
         <h1 className="text-xl font-semibold">Backlog</h1>
         <div className="flex items-center gap-3">
           {loadError && <span className="text-xs text-red-400">{loadError}</span>}
+          {scanMessage && <span className="text-xs text-neutral-400">{scanMessage}</span>}
+          <button
+            onClick={scanNow}
+            disabled={scanning}
+            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+            title="Scanne immediatement le dossier de telechargements, sans attendre le job planifie (5 min)"
+          >
+            {scanning ? 'Scan...' : 'Scanner maintenant'}
+          </button>
           <button
             onClick={() => refresh(true)}
             disabled={refreshing}
