@@ -143,14 +143,16 @@ function SecuritySection() {
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [results, setResults] = useState<Record<string, TestConnectionResult>>({})
 
   useEffect(() => {
-    api.getSettings().then(setSettings)
+    api.getSettings().then(setSettings).catch((err) => setLoadError(err instanceof Error ? err.message : 'Erreur'))
   }, [])
 
+  if (loadError) return <p className="text-sm text-red-400">Impossible de charger les reglages : {loadError}</p>
   if (!settings) return <LoadingBlock />
 
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {

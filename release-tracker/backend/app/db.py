@@ -41,8 +41,12 @@ def get_db():
 
 def _add_missing_columns():
     """Migration minimale : ajoute les colonnes manquantes sur les tables deja
-    existantes (create_all ne le fait pas). Suffisant tant qu'on ne fait
-    qu'ajouter des colonnes nullables, pas de vraie migration de schema."""
+    existantes (create_all ne le fait pas). ALTER TABLE ADD COLUMN ne backfill
+    jamais les lignes existantes avec le default cote Python (default= ne joue
+    que sur les futurs INSERT via l'ORM) : une colonne non-nullable ajoutee
+    ainsi se retrouve a NULL sur les installations existantes, ce qui casse
+    ensuite la validation Pydantic des schemas *Out qui la declarent non-optionnelle
+    - d'ou le backfill explicite ci-dessous pour les colonnes ayant un default scalaire."""
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
 
@@ -56,6 +60,11 @@ def _add_missing_columns():
             col_type = col.type.compile(engine.dialect)
             with engine.begin() as conn:
                 conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}'))
+                if col.default is not None and getattr(col.default, "is_scalar", False):
+                    conn.execute(
+                        text(f'UPDATE "{table.name}" SET "{col.name}" = :val WHERE "{col.name}" IS NULL'),
+                        {"val": col.default.arg},
+                    )
 
 
 def init_db():
