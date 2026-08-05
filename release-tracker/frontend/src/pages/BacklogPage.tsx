@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
-import { api, type TaggingItem, type TrackChoice } from '../api'
+import {
+  api,
+  RELEASE_TYPE_LABELS,
+  type ArtistSearchResult,
+  type ReleaseGroupChoice,
+  type TaggingItem,
+  type TrackChoice,
+} from '../api'
 import { TaggingBadge } from '../components/StatusBadge'
 import Spinner, { LoadingBlock } from '../components/Spinner'
 
@@ -209,6 +216,190 @@ function FallbackRow({
           Ignorer
         </button>
       </div>
+    </div>
+  )
+}
+
+type IdentifyStep = 'search' | 'artists' | 'releases'
+
+// Panneau de recherche MusicBrainz pour rattacher un dossier "non identifie" a un
+// artiste/album - l'equivalent du "Lookup" de Picard sur un cluster de fichiers
+// qu'il n'a pas reussi a associer automatiquement a ta bibliotheque.
+function IdentifyPanel({ sourceFolder, onIdentified }: { sourceFolder: string; onIdentified: () => void }) {
+  const [query, setQuery] = useState(sourceFolder)
+  const [step, setStep] = useState<IdentifyStep>('search')
+  const [artists, setArtists] = useState<ArtistSearchResult[]>([])
+  const [selectedArtist, setSelectedArtist] = useState<ArtistSearchResult | null>(null)
+  const [releaseGroups, setReleaseGroups] = useState<ReleaseGroupChoice[]>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function searchArtists() {
+    if (!query.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const page = await api.searchArtists(query.trim())
+      setArtists(page.results)
+      setStep('artists')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function pickArtist(artist: ArtistSearchResult) {
+    setSelectedArtist(artist)
+    setBusy(true)
+    setError(null)
+    try {
+      const groups = await api.tagging.releaseGroups(artist.musicbrainz_id)
+      setReleaseGroups(groups)
+      setStep('releases')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function pickRelease(rg: ReleaseGroupChoice) {
+    if (!selectedArtist) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api.tagging.identify({
+        source_folder: sourceFolder,
+        artist_musicbrainz_id: selectedArtist.musicbrainz_id,
+        artist_name: selectedArtist.name,
+        release_group_musicbrainz_id: rg.musicbrainz_id,
+        release_title: rg.title,
+        release_type: rg.release_type,
+        release_date: rg.release_date,
+      })
+      onIdentified()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3 flex flex-col gap-2 mt-2">
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      {step === 'search' && (
+        <div className="flex gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && searchArtists()}
+            placeholder="Nom de l'artiste"
+            className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+            autoFocus
+          />
+          <button
+            onClick={searchArtists}
+            disabled={busy || !query.trim()}
+            className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+          >
+            {busy ? '...' : 'Rechercher'}
+          </button>
+        </div>
+      )}
+
+      {step === 'artists' && (
+        <div className="flex flex-col gap-1">
+          <button onClick={() => setStep('search')} className="text-xs text-neutral-500 hover:text-white self-start">
+            ← Nouvelle recherche
+          </button>
+          {busy && <p className="text-xs text-neutral-500">Chargement...</p>}
+          {!busy && artists.length === 0 && <p className="text-xs text-neutral-500">Aucun resultat.</p>}
+          {artists.map((a) => (
+            <button
+              key={a.musicbrainz_id}
+              onClick={() => pickArtist(a)}
+              disabled={busy}
+              className="text-left text-sm px-2 py-1.5 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {a.name} {a.disambiguation && <span className="text-neutral-500">({a.disambiguation})</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {step === 'releases' && (
+        <div className="flex flex-col gap-1">
+          <button onClick={() => setStep('artists')} className="text-xs text-neutral-500 hover:text-white self-start">
+            ← Autre artiste
+          </button>
+          {busy && <p className="text-xs text-neutral-500">Chargement...</p>}
+          {!busy && releaseGroups.length === 0 && <p className="text-xs text-neutral-500">Aucune release trouvee.</p>}
+          {releaseGroups.map((rg) => (
+            <button
+              key={rg.musicbrainz_id}
+              onClick={() => pickRelease(rg)}
+              disabled={busy}
+              className="text-left text-sm px-2 py-1.5 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 flex items-center justify-between gap-2"
+            >
+              <span className="truncate">{rg.title}</span>
+              <span className="text-xs text-neutral-500 whitespace-nowrap">
+                {RELEASE_TYPE_LABELS[rg.release_type]}
+                {rg.release_date ? ` - ${rg.release_date.slice(0, 4)}` : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UnclusteredFolder({
+  sourceFolder,
+  items,
+  onDiscard,
+  onIdentified,
+}: {
+  sourceFolder: string
+  items: TaggingItem[]
+  onDiscard: (item: TaggingItem) => void
+  onIdentified: () => void
+}) {
+  const [identifying, setIdentifying] = useState(false)
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-medium text-neutral-300">
+          Dossier non identifie : {sourceFolder}{' '}
+          <span className="text-neutral-500 text-sm">
+            ({items.length} fichier{items.length > 1 ? 's' : ''})
+          </span>
+        </h2>
+        <button
+          onClick={() => setIdentifying((v) => !v)}
+          className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700"
+        >
+          {identifying ? 'Annuler' : 'Identifier...'}
+        </button>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {items.map((item) => (
+          <FileChip key={item.id} item={item} onDiscard={() => onDiscard(item)} draggable={false} />
+        ))}
+      </div>
+      {identifying && (
+        <IdentifyPanel
+          sourceFolder={sourceFolder}
+          onIdentified={() => {
+            setIdentifying(false)
+            onIdentified()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -461,7 +652,14 @@ export default function BacklogPage() {
   if (items === null) return <LoadingBlock />
 
   const grouped = new Map<number, TaggingItem[]>()
+  const unclustered = new Map<string, TaggingItem[]>()
   for (const item of items) {
+    if (item.release_id == null) {
+      const list = unclustered.get(item.source_folder) ?? []
+      list.push(item)
+      unclustered.set(item.source_folder, list)
+      continue
+    }
     const list = grouped.get(item.release_id) ?? []
     list.push(item)
     grouped.set(item.release_id, list)
@@ -484,14 +682,25 @@ export default function BacklogPage() {
       </div>
 
       <p className="text-sm text-neutral-400 mb-4">
-        Fichiers telecharges via MeTube en attente de correction des tags et de rangement. Glisse un fichier sur la
-        piste correspondante (comme dans Picard), puis confirme - rien n'est ecrit sur le disque avant ca.
+        Fichiers telecharges en attente de correction des tags et de rangement. Glisse un fichier sur la piste
+        correspondante (comme dans Picard), ou identifie un dossier inconnu via une recherche MusicBrainz - rien
+        n'est ecrit sur le disque avant confirmation.
       </p>
 
       {items.length === 0 ? (
         <p className="text-sm text-neutral-500">Rien a traiter pour le moment.</p>
       ) : (
-        [...grouped.entries()].map(([releaseId, groupItems]) => {
+        <>
+          {[...unclustered.entries()].map(([sourceFolder, folderItems]) => (
+            <UnclusteredFolder
+              key={sourceFolder}
+              sourceFolder={sourceFolder}
+              items={folderItems}
+              onDiscard={(item) => discardItem(item)}
+              onIdentified={() => refresh()}
+            />
+          ))}
+          {[...grouped.entries()].map(([releaseId, groupItems]) => {
           const tracklist = tracklists[releaseId]
           const assignment = assignments[releaseId] ?? {}
           const pending = groupItems.filter((i) => i.status === 'needs_review')
@@ -595,7 +804,8 @@ export default function BacklogPage() {
               )}
             </div>
           )
-        })
+        })}
+        </>
       )}
     </div>
   )

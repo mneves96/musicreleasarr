@@ -1,5 +1,4 @@
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
@@ -296,43 +295,15 @@ def refresh_download_statuses(db: Session) -> None:
 
 
 def scan_tagging_backlog(db: Session) -> None:
-    """Detecte les nouveaux fichiers audio deposes par MeTube pour les artistes
-    ayant au moins une release "downloaded", et cree les entrees de backlog
-    correspondantes avec une proposition de correspondance - n'ecrit ni ne
-    deplace jamais de fichier (voir services/tagging.py).
-
-    Se base sur les dossiers reellement presents sur le disque, pas sur
-    Release.download_status : un fichier depose via l'onglet MeTube directement
-    (plutot que via le bouton "Telecharger" d'une release, qui est ce qui met
-    download_status a jour) ne serait sinon jamais detecte, alors que MeTube
-    range de toute facon tout par artiste (voir services/tagging.py:scan_artist)."""
+    """Detecte tout fichier audio nouveau sous le dossier de telechargements -
+    comme Picard, sans condition sur l'origine du telechargement ni sur le
+    statut d'une release cote app (voir services/tagging.py:scan_downloads_root).
+    N'ecrit ni ne deplace jamais de fichier."""
     settings = get_settings(db)
-    downloads_root = settings.tagging_downloads_path
-    if not downloads_root or not os.path.isdir(downloads_root):
-        return
-
     try:
-        subfolders = {
-            entry for entry in os.listdir(downloads_root) if os.path.isdir(os.path.join(downloads_root, entry))
-        }
-    except OSError:
-        logger.exception("Impossible de lister %s", downloads_root)
-        return
-    if not subfolders:
-        return
-
-    artists_by_folder_name = {
-        normalize_text(a.name): a for a in db.query(Artist).filter(Artist.is_followed.is_(True))
-    }
-
-    for folder_name in subfolders:
-        artist = artists_by_folder_name.get(folder_name)
-        if artist is None:
-            continue
-        try:
-            tagging.scan_artist(db, settings, artist)
-        except Exception:
-            logger.exception("Echec du scan de redressage metadata pour %s", artist.name)
+        tagging.scan_downloads_root(db, settings)
+    except Exception:
+        logger.exception("Echec du scan de redressage metadata")
 
 
 def _backfill_youtube_links(db: Session, artist: Artist) -> None:

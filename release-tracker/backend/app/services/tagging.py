@@ -1,26 +1,28 @@
-"""Pipeline "redressage metadata + rangement" post-telechargement MeTube.
+"""Pipeline "redressage metadata + rangement" post-telechargement, façon Picard.
 
-MeTube depose ses telechargements dans un seul dossier par ARTISTE (voir
-services/metube.py + scheduler.py:224 : folder=normalize_text(artist.name)),
-pas par release - plusieurs albums d'un meme artiste peuvent donc partager le
-meme dossier source. scan_artist() traite ainsi tout le dossier d'un artiste
-d'un coup, en repartissant les fichiers detectes entre les tracklists
-MusicBrainz de toutes ses releases pas encore "owned" (correspondance
-gloutonne par similarite de titre).
+Comme Picard, scan_downloads_root() parcourt l'integralite du dossier de
+telechargements - pas seulement les artistes suivis par l'app - et cree une
+entree de backlog pour chaque fichier audio trouve. Un dossier dont le nom
+correspond a un artiste suivi (voir services/metube.py : MeTube range par
+ARTISTE, folder=normalize_text(artist.name), pas par release) est directement
+rapproche de ses releases pas encore "owned" ; les autres fichiers restent
+"non identifies" (release_id=None) jusqu'a une recherche MusicBrainz manuelle
+(identify_folder(), l'equivalent du "Lookup" de Picard sur un cluster).
 
 Volontairement, aucune fonction ici n'ecrit de tag ni ne deplace de fichier
 sans qu'un TaggingItem soit explicitement confirme via l'API (routers/tagging.py) :
 un retour d'experience utilisateur indique qu'un tagging 100% automatique
 produisait des doublons d'album (tags incoherents entre pistes d'un meme
-album). scan_artist()/rescan_item() ne font donc que proposer une
-correspondance ; seul apply_tag_and_move() ecrit sur le disque, et uniquement
-a la demande explicite de l'utilisateur.
+album). scan_downloads_root()/identify_folder()/rescan_item() ne font donc que
+proposer une correspondance ; seul apply_tag_and_move() ecrit sur le disque, et
+uniquement a la demande explicite de l'utilisateur.
 """
 
 import logging
 import os
 import re
 import shutil
+from datetime import date
 
 import httpx
 from sqlalchemy.orm import Session
@@ -41,6 +43,8 @@ _NOISE_RE = re.compile(
 )
 _TOPIC_SUFFIX_RE = re.compile(r"\s*[-–]\s*topic$", re.IGNORECASE)
 _INVALID_FS_CHARS_RE = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+
+Candidate = tuple[Release, dict]
 
 
 def _clean_filename(filename: str) -> str:
@@ -64,82 +68,157 @@ def sanitize_component(name: str) -> str:
     return cleaned or "Inconnu"
 
 
-def scan_artist(db: Session, settings: Settings, artist: Artist) -> list[TaggingItem]:
-    """Detecte les nouveaux fichiers audio du dossier de telechargement de cet
-    artiste et cree une entree de backlog par fichier, avec une proposition de
-    correspondance (piste + release) parmi ses releases pas encore "owned".
-
-    Delibrement pas filtre sur Release.download_status == downloaded : un
-    fichier peut avoir ete depose via l'onglet MeTube directement (sans passer
-    par le bouton "Telecharger" d'une release, qui est ce qui met a jour ce
-    champ) - voir aussi scheduler.py:scan_tagging_backlog qui appelle cette
-    fonction pour tout artiste dont le dossier existe reellement sur le disque,
-    peu importe l'origine du telechargement."""
-    folder = os.path.join(settings.tagging_downloads_path, normalize_text(artist.name))
-    if not os.path.isdir(folder):
-        return []
-
-    already_tracked = {
-        path
-        for (path,) in db.query(TaggingItem.source_path)
-        .join(Release, TaggingItem.release_id == Release.id)
-        .filter(Release.artist_id == artist.id)
-        .all()
-    }
-    new_files = [p for p in _iter_audio_files(folder) if p not in already_tracked]
-    if not new_files:
-        return []
-
-    releases = (
-        db.query(Release)
-        .filter(Release.artist_id == artist.id, Release.ownership_status != OwnershipStatus.owned)
-        .all()
-    )
-    if not releases:
-        return []
-
-    candidates: list[tuple[Release, dict]] = []
+def _candidates_for_releases(releases: list[Release], expected_track_count: int) -> list[Candidate]:
+    candidates: list[Candidate] = []
     for release in releases:
         try:
-            tracks = musicbrainz.get_release_tracks(release.musicbrainz_id, expected_track_count=len(new_files))
+            tracks = musicbrainz.get_release_tracks(release.musicbrainz_id, expected_track_count=expected_track_count)
         except Exception:
-            logger.exception("Tracklist MusicBrainz indisponible pour %s - %s", artist.name, release.title)
+            logger.exception("Tracklist MusicBrainz indisponible pour %s", release.title)
             continue
         candidates.extend((release, track) for track in tracks)
+    return candidates
 
-    created: list[TaggingItem] = []
-    for path in new_files:
-        cleaned = normalize_text(_clean_filename(os.path.basename(path)))
 
+def _greedy_match(
+    labeled: list[tuple[str, str]], candidates: list[Candidate]
+) -> dict[str, tuple[Candidate, float]]:
+    """Associe chaque (cle, libelle nettoye) au meilleur candidat (release,
+    piste) restant parmi `candidates`, en le retirant a chaque etape - une
+    piste ne peut etre proposee qu'a une seule cle a la fois."""
+    remaining = list(candidates)
+    result: dict[str, tuple[Candidate, float]] = {}
+    for key, label in labeled:
         best_pair, best_score = None, -1.0
-        for pair in candidates:
-            score = similarity(cleaned, pair[1]["title"])
+        for pair in remaining:
+            score = similarity(label, pair[1]["title"])
             if score > best_score:
                 best_pair, best_score = pair, score
-
-        target_release = best_pair[0] if best_pair else releases[0]
-        item = TaggingItem(
-            release_id=target_release.id,
-            source_path=path,
-            original_filename=os.path.basename(path),
-        )
         if best_pair is not None:
-            _, track = best_pair
-            item.suggested_track_title = track["title"]
-            item.suggested_track_number = track["position"]
-            item.suggested_disc_number = track["disc_number"]
-            item.match_score = round(best_score, 3)
-            candidates.remove(best_pair)
-        db.add(item)
-        created.append(item)
+            result[key] = (best_pair, best_score)
+            remaining.remove(best_pair)
+    return result
+
+
+def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
+    """Detecte tout fichier audio nouveau sous le dossier de telechargements,
+    dossier par dossier - comme Picard qui prend tout ce qu'il trouve, sans
+    condition sur l'origine du telechargement ni sur le statut d'une release
+    cote app."""
+    root = settings.tagging_downloads_path
+    if not root or not os.path.isdir(root):
+        return []
+
+    try:
+        subfolders = sorted(entry for entry in os.listdir(root) if os.path.isdir(os.path.join(root, entry)))
+    except OSError:
+        logger.exception("Impossible de lister %s", root)
+        return []
+    if not subfolders:
+        return []
+
+    already_tracked = {path for (path,) in db.query(TaggingItem.source_path).all()}
+    artists_by_folder_name = {
+        normalize_text(a.name): a for a in db.query(Artist).filter(Artist.is_followed.is_(True))
+    }
+
+    created: list[TaggingItem] = []
+    for folder_name in subfolders:
+        folder = os.path.join(root, folder_name)
+        try:
+            new_files = [p for p in _iter_audio_files(folder) if p not in already_tracked]
+        except OSError:
+            continue
+        if not new_files:
+            continue
+
+        artist = artists_by_folder_name.get(folder_name)
+        releases: list[Release] = []
+        if artist is not None:
+            releases = (
+                db.query(Release)
+                .filter(Release.artist_id == artist.id, Release.ownership_status != OwnershipStatus.owned)
+                .all()
+            )
+
+        candidates = _candidates_for_releases(releases, len(new_files)) if releases else []
+        labeled = [(path, normalize_text(_clean_filename(os.path.basename(path)))) for path in new_files]
+        matches = _greedy_match(labeled, candidates) if candidates else {}
+
+        for path in new_files:
+            item = TaggingItem(source_path=path, original_filename=os.path.basename(path))
+            match = matches.get(path)
+            if match is not None:
+                (matched_release, track), score = match
+                item.release_id = matched_release.id
+                item.suggested_track_title = track["title"]
+                item.suggested_track_number = track["position"]
+                item.suggested_disc_number = track["disc_number"]
+                item.match_score = round(score, 3)
+            db.add(item)
+            created.append(item)
 
     db.commit()
     return created
 
 
+def search_release_groups(artist_musicbrainz_id: str) -> list[dict]:
+    """Albums/EP/singles/compilations d'un artiste MusicBrainz, pour le
+    selecteur d'identification manuelle (POST /api/tagging/identify) - meme
+    filtrage que la decouverte automatique (scheduler._discover_for_artist)."""
+    release_groups = musicbrainz.get_release_groups(artist_musicbrainz_id)
+    items = []
+    for rg in release_groups:
+        release_type = musicbrainz.classify_release_type(rg)
+        if release_type is None:
+            continue
+        release_date, _precision = musicbrainz.parse_release_date(rg.get("first-release-date"))
+        items.append(
+            {
+                "musicbrainz_id": rg["id"],
+                "title": rg["title"],
+                "release_type": release_type,
+                "release_date": release_date,
+            }
+        )
+    items.sort(key=lambda r: r["release_date"] or date.min, reverse=True)
+    return items
+
+
+def identify_folder(db: Session, settings: Settings, source_folder: str, release: Release) -> list[TaggingItem]:
+    """Rattache les fichiers "non identifies" d'un dossier a la release choisie
+    manuellement (recherche + selection MusicBrainz, l'equivalent du "Lookup"
+    de Picard sur un cluster), et propose une correspondance piste par piste."""
+    folder = os.path.join(settings.tagging_downloads_path, source_folder)
+    items = (
+        db.query(TaggingItem)
+        .filter(TaggingItem.release_id.is_(None), TaggingItem.source_path.like(f"{folder}{os.sep}%"))
+        .all()
+    )
+    if not items:
+        return []
+
+    candidates = _candidates_for_releases([release], len(items))
+    labeled = [(str(item.id), normalize_text(_clean_filename(item.original_filename))) for item in items]
+    matches = _greedy_match(labeled, candidates) if candidates else {}
+
+    for item in items:
+        item.release_id = release.id
+        match = matches.get(str(item.id))
+        if match is not None:
+            (_matched_release, track), score = match
+            item.suggested_track_title = track["title"]
+            item.suggested_track_number = track["position"]
+            item.suggested_disc_number = track["disc_number"]
+            item.match_score = round(score, 3)
+
+    db.commit()
+    return items
+
+
 def rescan_item(db: Session, item: TaggingItem) -> TaggingItem:
-    """Recalcule la proposition de correspondance d'un item existant (ex: apres
-    correction manuelle, ou pour sortir un item de status=error)."""
+    """Recalcule la proposition de correspondance d'un item deja identifie (ex:
+    apres correction manuelle, ou pour sortir un item de status=error)."""
     release = item.release
     if not os.path.isfile(item.source_path):
         item.status = TaggingStatus.error

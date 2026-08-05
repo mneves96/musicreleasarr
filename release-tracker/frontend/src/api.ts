@@ -82,9 +82,10 @@ export type TaggingStatus = 'needs_review' | 'done' | 'error'
 
 export interface TaggingItem {
   id: number
-  release_id: number
-  artist_name: string
-  release_title: string
+  release_id: number | null
+  artist_name: string | null
+  release_title: string | null
+  source_folder: string
   source_path: string
   original_filename: string
   status: TaggingStatus
@@ -108,6 +109,23 @@ export interface TaggingConfirmPayload {
   track_title: string
   track_number?: number | null
   disc_number?: number | null
+}
+
+export interface ReleaseGroupChoice {
+  musicbrainz_id: string
+  title: string
+  release_type: ReleaseType
+  release_date: string | null
+}
+
+export interface TaggingIdentifyPayload {
+  source_folder: string
+  artist_musicbrainz_id: string
+  artist_name: string
+  release_group_musicbrainz_id: string
+  release_title: string
+  release_type: ReleaseType
+  release_date?: string | null
 }
 
 export interface Settings {
@@ -277,6 +295,10 @@ export const api = {
       request<TaggingItem>(`/tagging/${itemId}/confirm`, { method: 'POST', body: JSON.stringify(payload) }),
     rescan: (itemId: number) => request<TaggingItem>(`/tagging/${itemId}/rescan`, { method: 'POST' }),
     discard: (itemId: number) => request<{ status: string }>(`/tagging/${itemId}`, { method: 'DELETE' }),
+    releaseGroups: (artistMusicbrainzId: string) =>
+      request<ReleaseGroupChoice[]>(`/tagging/identify/release-groups?artist_musicbrainz_id=${encodeURIComponent(artistMusicbrainzId)}`),
+    identify: (payload: TaggingIdentifyPayload) =>
+      request<TaggingItem[]>('/tagging/identify', { method: 'POST', body: JSON.stringify(payload) }),
   },
 
   authStatus: () => request<AuthStatus>('/auth/status'),

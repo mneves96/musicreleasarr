@@ -1,4 +1,5 @@
 import enum
+import os
 from datetime import date, datetime
 
 from sqlalchemy import (
@@ -153,16 +154,23 @@ class Release(Base):
 
 
 class TaggingItem(Base):
-    """Backlog "a redresser" : un fichier audio depose par MeTube, en attente de
-    correction des tags et de rangement vers <Artiste>/<Album>. Rien n'est ecrit
-    ni deplace tant qu'un humain n'a pas confirme la correspondance proposee
-    (voir routers/tagging.py) - une premiere version 100% automatique produisait
-    des doublons d'album lies a des tags incoherents entre pistes."""
+    """Backlog "a redresser" : un fichier audio depose dans le dossier de
+    telechargement, en attente de correction des tags et de rangement vers
+    <Artiste>/<Album>. Rien n'est ecrit ni deplace tant qu'un humain n'a pas
+    confirme la correspondance proposee (voir routers/tagging.py) - une
+    premiere version 100% automatique produisait des doublons d'album lies a
+    des tags incoherents entre pistes.
+
+    release_id est nullable : un fichier dont le dossier ne correspond a aucun
+    artiste suivi (telechargement manuel, artiste pas encore suivi...) reste
+    "non identifie" - comme les clusters non identifies de Picard - jusqu'a ce
+    qu'un humain associe le dossier a une release via une recherche MusicBrainz
+    manuelle (POST /api/tagging/identify)."""
 
     __tablename__ = "tagging_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    release_id: Mapped[int] = mapped_column(ForeignKey("releases.id"), index=True)
+    release_id: Mapped[int | None] = mapped_column(ForeignKey("releases.id"), index=True, nullable=True)
 
     # Chemin absolu cote conteneur "releases" : sert de cle de deduplication au scan.
     source_path: Mapped[str] = mapped_column(String, unique=True)
@@ -183,15 +191,19 @@ class TaggingItem(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    release: Mapped["Release"] = relationship()
+    release: Mapped["Release | None"] = relationship()
 
     @property
-    def artist_name(self) -> str:
-        return self.release.artist.name
+    def artist_name(self) -> str | None:
+        return self.release.artist.name if self.release else None
 
     @property
-    def release_title(self) -> str:
-        return self.release.title
+    def release_title(self) -> str | None:
+        return self.release.title if self.release else None
+
+    @property
+    def source_folder(self) -> str:
+        return os.path.basename(os.path.dirname(self.source_path))
 
 
 class Settings(Base):

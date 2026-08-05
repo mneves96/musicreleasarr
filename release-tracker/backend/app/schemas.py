@@ -104,9 +104,10 @@ class TaggingItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    release_id: int
-    artist_name: str
-    release_title: str
+    release_id: int | None
+    artist_name: str | None
+    release_title: str | None
+    source_folder: str
     source_path: str
     original_filename: str
     status: TaggingStatus
@@ -123,6 +124,23 @@ class TaggingConfirmIn(BaseModel):
     track_title: str
     track_number: int | None = None
     disc_number: int | None = None
+
+
+class ReleaseGroupChoice(BaseModel):
+    musicbrainz_id: str
+    title: str
+    release_type: ReleaseType
+    release_date: date | None = None
+
+
+class TaggingIdentifyIn(BaseModel):
+    source_folder: str
+    artist_musicbrainz_id: str
+    artist_name: str
+    release_group_musicbrainz_id: str
+    release_title: str
+    release_type: ReleaseType
+    release_date: date | None = None
 
 
 class SettingsOut(BaseModel):
