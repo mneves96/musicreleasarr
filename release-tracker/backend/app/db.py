@@ -1,7 +1,10 @@
+import logging
 import os
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+logger = logging.getLogger("dedieufy.db")
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -75,6 +78,46 @@ def _add_missing_columns():
                     )
 
 
+def _relax_tagging_release_id_not_null():
+    """tagging_items.release_id a ete cree NOT NULL a l'origine (avant l'ajout
+    des fichiers "non identifies", ou release_id doit pouvoir etre NULL) :
+    Base.metadata.create_all ne touche jamais aux contraintes d'une table deja
+    existante quand le modele Python change, et SQLite n'a pas d'ALTER COLUMN
+    - seule une recreation de la table leve cette contrainte sur les
+    installations qui avaient deja la table avant ce changement (l'INSERT d'un
+    fichier "non identifie" y echouait avec IntegrityError). Recree la table a
+    l'identique (colonnes actuelles, quelles qu'elles soient) en rendant
+    uniquement release_id nullable, puis recopie les donnees - aucune perte."""
+    inspector = inspect(engine)
+    if "tagging_items" not in inspector.get_table_names():
+        return
+    columns = inspector.get_columns("tagging_items")
+    release_id_col = next((c for c in columns if c["name"] == "release_id"), None)
+    if release_id_col is None or release_id_col["nullable"]:
+        return  # deja nullable (nouvelle installation, ou deja migree)
+
+    logger.info("Migration : leve la contrainte NOT NULL sur tagging_items.release_id")
+    col_names = [c["name"] for c in columns]
+    col_defs = []
+    for col in columns:
+        type_str = col["type"].compile(engine.dialect)
+        parts = [f'"{col["name"]}"', type_str]
+        if col["name"] == "id":
+            parts.append("PRIMARY KEY")
+        elif col["name"] != "release_id" and not col["nullable"]:
+            parts.append("NOT NULL")
+        if col["name"] == "source_path":
+            parts.append("UNIQUE")
+        col_defs.append(" ".join(parts))
+
+    cols_csv = ", ".join(f'"{name}"' for name in col_names)
+    with engine.begin() as conn:
+        conn.execute(text(f'CREATE TABLE tagging_items_new ({", ".join(col_defs)})'))
+        conn.execute(text(f'INSERT INTO tagging_items_new ({cols_csv}) SELECT {cols_csv} FROM tagging_items'))
+        conn.execute(text("DROP TABLE tagging_items"))
+        conn.execute(text("ALTER TABLE tagging_items_new RENAME TO tagging_items"))
+
+
 def _backfill_tagging_source_folder():
     """TaggingItem.source_folder est desormais fige a la creation (voir
     services/tagging.py:scan_downloads_root), pour rester correct meme si le
@@ -105,6 +148,7 @@ def init_db():
     from . import models  # noqa: F401  (ensure models are registered)
 
     Base.metadata.create_all(bind=engine)
+    _relax_tagging_release_id_not_null()
     _add_missing_columns()
     _backfill_tagging_source_folder()
 
