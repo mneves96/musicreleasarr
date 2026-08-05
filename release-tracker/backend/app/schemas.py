@@ -11,6 +11,16 @@ class ArtistSearchResult(BaseModel):
     disambiguation: str | None = None
     image_url: str | None = None
     already_followed: bool = False
+    country: str | None = None
+    area_name: str | None = None
+    artist_type: str | None = None
+
+
+class ArtistSearchPage(BaseModel):
+    results: list[ArtistSearchResult]
+    total: int
+    offset: int
+    limit: int
 
 
 class ReleaseOut(BaseModel):

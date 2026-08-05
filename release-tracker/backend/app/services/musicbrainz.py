@@ -35,9 +35,38 @@ def _throttled_get(path: str, params: dict) -> dict:
     return resp.json()
 
 
-def search_artists(query: str, limit: int = 15) -> list[dict]:
-    data = _throttled_get("/artist", {"query": query, "limit": limit})
-    return data.get("artists", [])
+# Valeurs possibles du champ "type" MusicBrainz pour un artiste (utilisees telles
+# quelles dans la requete Lucene - pas d'espace, pas d'echappement necessaire).
+ARTIST_TYPES = ["Person", "Group", "Orchestra", "Choir", "Character", "Other"]
+
+
+def _build_search_query(name: str, country: str | None, artist_type: str | None, tag: str | None) -> str:
+    """Construit la requete Lucene envoyee a /artist. Le nom reste un terme libre
+    (pas de guillemets) pour laisser MusicBrainz matcher nom/alias/nom de tri au
+    sens large - le mettre entre guillemets forcerait une phrase exacte et
+    reduirait le rappel, l'inverse de ce qu'on cherche a ameliorer ici."""
+    clauses = [name] if name else []
+    if country:
+        clauses.append(f"country:{country}")
+    if artist_type:
+        clauses.append(f"type:{artist_type}")
+    if tag:
+        escaped = tag.replace("\\", "\\\\").replace('"', '\\"')
+        clauses.append(f'tag:"{escaped}"')
+    return " AND ".join(clauses)
+
+
+def search_artists(
+    query: str,
+    limit: int = 15,
+    offset: int = 0,
+    country: str | None = None,
+    artist_type: str | None = None,
+    tag: str | None = None,
+) -> tuple[list[dict], int]:
+    lucene_query = _build_search_query(query, country, artist_type, tag)
+    data = _throttled_get("/artist", {"query": lucene_query, "limit": limit, "offset": offset})
+    return data.get("artists", []), data.get("count", 0)
 
 
 def get_artist(artist_mbid: str) -> dict:

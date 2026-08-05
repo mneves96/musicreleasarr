@@ -8,6 +8,22 @@ export interface ArtistSearchResult {
   disambiguation: string | null
   image_url: string | null
   already_followed: boolean
+  country: string | null
+  area_name: string | null
+  artist_type: string | null
+}
+
+export interface ArtistSearchPage {
+  results: ArtistSearchResult[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export interface ArtistSearchFilters {
+  country?: string
+  type?: string
+  tag?: string
 }
 
 export interface Artist {
@@ -149,9 +165,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return resp.json() as Promise<T>
 }
 
+const SEARCH_PAGE_SIZE = 20
+
 export const api = {
-  searchArtists: (q: string) =>
-    request<ArtistSearchResult[]>(`/search/artists?q=${encodeURIComponent(q)}`),
+  searchArtists: (q: string, offset = 0, filters: ArtistSearchFilters = {}) => {
+    const params = new URLSearchParams({ q, offset: String(offset), limit: String(SEARCH_PAGE_SIZE) })
+    if (filters.country) params.set('country', filters.country)
+    if (filters.type) params.set('type', filters.type)
+    if (filters.tag) params.set('tag', filters.tag)
+    return request<ArtistSearchPage>(`/search/artists?${params.toString()}`)
+  },
 
   listFollowedArtists: () => request<Artist[]>('/artists'),
 

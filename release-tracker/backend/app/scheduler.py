@@ -343,7 +343,7 @@ def import_navidrome_favorite_artists(names: list[str]) -> None:
 
 
 def _import_favorite_artist(db: Session, name: str, settings: Settings) -> None:
-    results = musicbrainz.search_artists(name, limit=5)
+    results, _total = musicbrainz.search_artists(name, limit=5)
     if not results:
         logger.info("Aucun resultat MusicBrainz pour le favori Navidrome '%s'", name)
         return
