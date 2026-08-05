@@ -406,16 +406,17 @@ function UnclusteredFolder({
               onClick={autoMatch}
               disabled={matching}
               className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
-              title="Cherche si le nom du dossier correspond a un artiste suivi, et propose ses pistes manquantes"
+              title="Recherche MusicBrainz : verifie si le nom du dossier correspond a un artiste suivi, et propose ses pistes manquantes"
             >
-              {matching ? 'Recherche...' : 'Detecter automatiquement'}
+              {matching ? 'Recherche MusicBrainz...' : 'Chercher sur MusicBrainz (artiste suivi)'}
             </button>
           )}
           <button
             onClick={() => setIdentifying((v) => !v)}
             className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700"
+            title="Recherche MusicBrainz manuelle (n'importe quel artiste)"
           >
-            {identifying ? 'Annuler' : 'Identifier...'}
+            {identifying ? 'Annuler' : 'Chercher sur MusicBrainz...'}
           </button>
         </div>
       </div>
@@ -728,9 +729,9 @@ export default function BacklogPage() {
             onClick={scanNow}
             disabled={scanning}
             className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
-            title="Scanne immediatement le dossier de telechargements, sans attendre le job planifie (5 min)"
+            title="Relit le contenu du dossier de telechargements (aucun appel a MusicBrainz), sans attendre le job planifie (5 min)"
           >
-            {scanning ? 'Scan...' : 'Scanner maintenant'}
+            {scanning ? 'Actualisation...' : 'Actualiser les fichiers'}
           </button>
           <button
             onClick={() => refresh(true)}

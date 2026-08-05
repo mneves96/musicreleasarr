@@ -258,8 +258,15 @@ def auto_match_folder(db: Session, source_folder: str) -> list[TaggingItem]:
 def search_release_groups(artist_musicbrainz_id: str) -> list[dict]:
     """Albums/EP/singles/compilations d'un artiste MusicBrainz, pour le
     selecteur d'identification manuelle (POST /api/tagging/identify) - meme
-    filtrage que la decouverte automatique (scheduler._discover_for_artist)."""
-    release_groups = musicbrainz.get_release_groups(artist_musicbrainz_id)
+    filtrage que la decouverte automatique (scheduler._discover_for_artist).
+    MusicBrainz est parfois temporairement indisponible (503) : plutot qu'un
+    500 brut qui casse tout le panneau d'identification, on renvoie une liste
+    vide et le frontend affiche "aucune release trouvee"."""
+    try:
+        release_groups = musicbrainz.get_release_groups(artist_musicbrainz_id)
+    except Exception:
+        logger.exception("MusicBrainz indisponible pour lister les releases de %s", artist_musicbrainz_id)
+        return []
     items = []
     for rg in release_groups:
         release_type = musicbrainz.classify_release_type(rg)
