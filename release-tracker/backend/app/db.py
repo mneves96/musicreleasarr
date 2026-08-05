@@ -79,19 +79,23 @@ def _backfill_tagging_source_folder():
     """TaggingItem.source_folder est desormais fige a la creation (voir
     services/tagging.py:scan_downloads_root), pour rester correct meme si le
     fichier est range plus profondement que ce que reverrait un simple
-    basename(dirname()) (ex: Artiste/Album/piste.mp3). Le generique
-    _add_missing_columns() ci-dessus ne peut le remplir qu'avec le default
-    statique "" (pas de valeur calculable par ligne) : ce backfill dedie
+    basename(dirname()) (ex: Artiste/Album/piste.mp3). Ce backfill dedie
     complete les lignes creees avant ce changement avec basename(dirname()),
     qui est exact pour elles puisqu'elles viennent toutes de l'ancien scan
-    limite a un seul niveau de dossier."""
+    limite a un seul niveau de dossier.
+
+    Cible UNIQUEMENT NULL (jamais migree), pas "" : la chaine vide est une
+    valeur legitime depuis l'ajout des fichiers "en vrac" a la racine
+    (LOOSE_FILES_FOLDER = ""). Ce backfill tournant a CHAQUE demarrage du
+    conteneur, cibler aussi "" aurait ecrase ces lignes-la a chaque
+    redeploiement (voir models.py:TaggingItem.source_folder, qui n'a plus de
+    default cote Python pour que NULL reste NULL tant que ce backfill ne l'a
+    pas traite)."""
     inspector = inspect(engine)
     if "tagging_items" not in inspector.get_table_names():
         return
     with engine.begin() as conn:
-        rows = conn.execute(
-            text('SELECT id, source_path FROM tagging_items WHERE source_folder IS NULL OR source_folder = \'\'')
-        ).fetchall()
+        rows = conn.execute(text("SELECT id, source_path FROM tagging_items WHERE source_folder IS NULL")).fetchall()
         for row_id, source_path in rows:
             folder = os.path.basename(os.path.dirname(source_path))
             conn.execute(text("UPDATE tagging_items SET source_folder = :folder WHERE id = :id"), {"folder": folder, "id": row_id})

@@ -5,6 +5,8 @@ d'identifier manuellement un dossier qui ne correspond a aucun artiste suivi
 (recherche MusicBrainz, l'equivalent du "Lookup" de Picard). Rien n'est ecrit
 sur le disque sans un appel explicite a /confirm."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -22,6 +24,8 @@ from ..schemas import (
 )
 from ..services import tagging
 from .artists import _get_or_create_artist
+
+logger = logging.getLogger("dedieufy.tagging.router")
 
 router = APIRouter(prefix="/api/tagging", tags=["tagging"])
 
@@ -54,7 +58,12 @@ def scan_now(db: Session = Depends(get_db)):
     d'attendre le job planifie toutes les 5 min) - utile pour verifier tout de
     suite qu'un fichier fraichement depose est bien detecte."""
     settings = get_settings(db)
-    created = tagging.scan_downloads_root(db, settings)
+    try:
+        created = tagging.scan_downloads_root(db, settings)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Echec du scan du dossier de telechargements")
+        raise HTTPException(500, f"Echec du scan : {exc}") from exc
     total_backlog = (
         db.query(TaggingItem).filter(TaggingItem.status.in_([TaggingStatus.needs_review, TaggingStatus.error])).count()
     )

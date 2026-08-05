@@ -178,7 +178,11 @@ class TaggingItem(Base):
     # fige a la creation par scan_downloads_root - pas recalcule a la volee, pour
     # rester correct meme si le fichier est range plus profondement (ex:
     # Artiste/Album/piste.mp3) que ce que reverrait un simple basename(dirname()).
-    source_folder: Mapped[str] = mapped_column(String, default="")
+    # "" est une valeur legitime (fichiers "en vrac" a la racine, voir
+    # LOOSE_FILES_FOLDER) : delibrement PAS de default= ici, pour que
+    # db._backfill_tagging_source_folder() puisse distinguer une ligne jamais
+    # migree (NULL) d'un vrai groupe "en vrac" (""), voir ce module pour le detail.
+    source_folder: Mapped[str] = mapped_column(String)
 
     status: Mapped[TaggingStatus] = mapped_column(Enum(TaggingStatus), default=TaggingStatus.needs_review)
 
