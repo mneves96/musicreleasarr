@@ -359,9 +359,10 @@ def get_tracklist_choices(release: Release) -> list[dict]:
         return []
 
 
-def _fetch_lyrics(artist_name: str, track_title: str, album_title: str) -> str | None:
-    """Paroles brutes via lrclib.net - gratuit, sans cle API a configurer. Best
-    effort : indisponibilite ou absence de resultat n'empeche jamais le tagging."""
+def _fetch_lyrics(artist_name: str, track_title: str, album_title: str) -> tuple[str | None, str | None]:
+    """(paroles brutes, paroles synchronisees au format LRC) via lrclib.net -
+    gratuit, sans cle API a configurer. Best effort : indisponibilite ou
+    absence de resultat n'empeche jamais le tagging."""
     try:
         resp = httpx.get(
             "https://lrclib.net/api/get",
@@ -370,12 +371,33 @@ def _fetch_lyrics(artist_name: str, track_title: str, album_title: str) -> str |
             headers={"User-Agent": "MusicReleasarr/1.0 ( self-hosted )"},
         )
         if resp.status_code == 404:
-            return None
+            return None, None
         resp.raise_for_status()
-        return resp.json().get("plainLyrics") or None
+        data = resp.json()
+        return data.get("plainLyrics") or None, data.get("syncedLyrics") or None
     except Exception:
         logger.warning("Paroles indisponibles (lrclib) pour %s - %s", artist_name, track_title)
-        return None
+        return None, None
+
+
+_LRC_TAG_RE = re.compile(r"\[(\d{2}):(\d{2})(?:[.:](\d{1,3}))?\]")
+
+
+def _parse_lrc(lrc: str) -> list[tuple[str, int]]:
+    """Convertit un texte LRC ("[01:02.34]parole") en liste (parole, ms) pour
+    le tag ID3 SYLT - une ligne peut porter plusieurs timestamps (reprises)."""
+    entries: list[tuple[str, int]] = []
+    for line in lrc.splitlines():
+        timestamps = list(_LRC_TAG_RE.finditer(line))
+        if not timestamps:
+            continue
+        text = _LRC_TAG_RE.sub("", line).strip()
+        for m in timestamps:
+            minutes, seconds, frac = m.group(1), m.group(2), (m.group(3) or "0")
+            millis = int((frac + "00")[:3])
+            entries.append((text, int(minutes) * 60000 + int(seconds) * 1000 + millis))
+    entries.sort(key=lambda e: e[1])
+    return entries
 
 
 def _write_tags(
@@ -385,8 +407,10 @@ def _write_tags(
     track_number: int | None,
     disc_number: int | None,
     recording_id: str | None,
+    plain_lyrics: str | None,
+    synced_lyrics: str | None,
 ) -> None:
-    from mutagen.id3 import APIC, ID3, ID3NoHeaderError, TALB, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX, UFID, USLT
+    from mutagen.id3 import APIC, ID3, ID3NoHeaderError, SYLT, TALB, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX, UFID, USLT
 
     release = item.release
     artist = release.artist
@@ -443,12 +467,19 @@ def _write_tags(
         except Exception:
             logger.warning("Impossible de recuperer la cover pour le tag APIC (%s)", release.cover_url)
 
-    lyrics = _fetch_lyrics(artist.name, track_title, release.title)
-    if lyrics:
+    # lang="und" (indetermine, ISO 639-2) plutot que de supposer "eng" - la
+    # bibliotheque peut tres bien contenir des artistes non anglophones.
+    if plain_lyrics:
         tags.delall("USLT")
-        # lang="und" (indetermine, ISO 639-2) plutot que de supposer "eng" - la
-        # bibliotheque peut tres bien contenir des artistes non anglophones.
-        tags.add(USLT(encoding=3, lang="und", desc="", text=lyrics))
+        tags.add(USLT(encoding=3, lang="und", desc="", text=plain_lyrics))
+    if synced_lyrics:
+        entries = _parse_lrc(synced_lyrics)
+        if entries:
+            # format=2 (millisecondes), type=1 (paroles) : c'est ce qui permet
+            # aux lecteurs qui savent lire SYLT de faire defiler les paroles en
+            # rythme avec la musique, plutot qu'un simple bloc de texte statique.
+            tags.delall("SYLT")
+            tags.add(SYLT(encoding=3, lang="und", format=2, type=1, desc="", text=entries))
 
     tags.save(source_path, v2_version=3)
 
@@ -511,9 +542,11 @@ def apply_tag_and_move(
         db.commit()
         return item
 
+    plain_lyrics, synced_lyrics = _fetch_lyrics(artist.name, track_title, release.title)
+
     source_dir = os.path.dirname(item.source_path)
     try:
-        _write_tags(item.source_path, item, track_title, track_number, disc_number, recording_id)
+        _write_tags(item.source_path, item, track_title, track_number, disc_number, recording_id, plain_lyrics, synced_lyrics)
         os.makedirs(target_dir, exist_ok=True)
         shutil.move(item.source_path, target_path)
     except Exception as exc:
@@ -522,6 +555,17 @@ def apply_tag_and_move(
         item.error_message = str(exc)
         db.commit()
         return item
+
+    if synced_lyrics:
+        # Fichier .lrc a cote de la piste : c'est ce que Navidrome (et la
+        # plupart des lecteurs modernes) lit en priorite pour le defilement
+        # synchronise, le support de SYLT embarque etant tres inegal cote lecteurs.
+        lrc_path = os.path.splitext(target_path)[0] + ".lrc"
+        try:
+            with open(lrc_path, "w", encoding="utf-8") as f:
+                f.write(synced_lyrics)
+        except OSError:
+            logger.warning("Impossible d'ecrire le fichier .lrc pour %s", target_path)
 
     _cleanup_empty_dirs(source_dir, settings.tagging_downloads_path)
 

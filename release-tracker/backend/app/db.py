@@ -144,6 +144,25 @@ def _backfill_tagging_source_folder():
             conn.execute(text("UPDATE tagging_items SET source_folder = :folder WHERE id = :id"), {"folder": folder, "id": row_id})
 
 
+def _upgrade_cover_art_resolution():
+    """Les URLs de cover deja enregistrees pointaient vers la miniature
+    Cover Art Archive front-500 (voir services/coverart.py, corrige depuis vers
+    front-1200) - cette meme URL sert a embarquer la pochette dans les tags
+    audio (services/tagging.py), ou une miniature 500px degradait nettement le
+    rendu. Idempotent : plus aucune ligne ne finit par /front-500 apres la
+    premiere execution."""
+    inspector = inspect(engine)
+    if "releases" not in inspector.get_table_names():
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE releases SET cover_url = REPLACE(cover_url, '/front-500', '/front-1200') "
+                "WHERE cover_url LIKE '%/front-500'"
+            )
+        )
+
+
 def init_db():
     from . import models  # noqa: F401  (ensure models are registered)
 
@@ -151,6 +170,7 @@ def init_db():
     _relax_tagging_release_id_not_null()
     _add_missing_columns()
     _backfill_tagging_source_folder()
+    _upgrade_cover_art_resolution()
 
     from .models import Settings
 
