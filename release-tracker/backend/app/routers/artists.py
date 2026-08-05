@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from ..db import SessionLocal, get_db
 from ..enrichment import enrich_artist
+from ..matching import best_match
 from ..models import ALL_RELEASE_TYPES, Artist
-from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
-from ..services import musicbrainz, navidrome
+from ..schemas import ArtistOut, ArtistSearchResult, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
+from ..services import lastfm, musicbrainz, navidrome
 from .. import scheduler
 
 logger = logging.getLogger("dedieufy.artists")
@@ -110,6 +111,59 @@ def import_favorites(background_tasks: BackgroundTasks, db: Session = Depends(ge
         ok=True,
         message=f"Import lance pour {len(names)} artiste(s) favori(s) - ca peut prendre plusieurs minutes",
     )
+
+
+@router.get("/recommended", response_model=list[ArtistSearchResult])
+def recommended_artists(db: Session = Depends(get_db)):
+    """Recommandations personnalisees Last.fm (necessite une connexion complete,
+    voir routers/settings.py:lastfm-auth-*). Ne cree aucune ligne Artist en
+    base - meme principe que /api/search/artists, la creation n'a lieu que si
+    l'utilisateur suit/previsualise effectivement l'un des resultats.
+
+    IMPORTANT : cette route doit rester declaree AVANT /{artist_id} ci-dessous,
+    sinon Starlette la fait matcher comme artist_id="recommended" (404/422)."""
+    settings = scheduler.get_settings(db)
+    if not (settings.lastfm_api_key and settings.lastfm_api_secret and settings.lastfm_session_key):
+        raise HTTPException(422, "Connecte Last.fm dans Reglages pour voir des recommandations")
+
+    try:
+        raw = lastfm.get_recommended_artists(settings.lastfm_api_key, settings.lastfm_api_secret, settings.lastfm_session_key)
+    except Exception as exc:
+        raise HTTPException(502, f"Last.fm indisponible : {exc}") from exc
+
+    followed_ids = {a.musicbrainz_id for a in db.query(Artist).filter(Artist.is_followed.is_(True)).all()}
+
+    results: list[ArtistSearchResult] = []
+    for item in raw:
+        name = item.get("name")
+        if not name:
+            continue
+
+        mbid = item.get("mbid") or None
+        if not mbid:
+            # Last.fm ne fournit pas toujours un mbid (artiste peu connu) - on
+            # retente une resolution par nom, meme logique que l'import des
+            # favoris Navidrome (scheduler._import_favorite_artist).
+            try:
+                candidates, _total = musicbrainz.search_artists(name, limit=5)
+            except Exception:
+                continue
+            idx = best_match(name, [c["name"] for c in candidates], threshold=scheduler.FAVORITE_MATCH_THRESHOLD)
+            if idx is None:
+                continue
+            mbid = candidates[idx]["id"]
+
+        images = item.get("image") or []
+        image_url = next((img.get("#text") for img in reversed(images) if img.get("#text")), None)
+        results.append(
+            ArtistSearchResult(
+                musicbrainz_id=mbid,
+                name=name,
+                image_url=image_url,
+                already_followed=mbid in followed_ids,
+            )
+        )
+    return results
 
 
 @router.post("/{artist_id}/scan", response_model=TestConnectionResult)

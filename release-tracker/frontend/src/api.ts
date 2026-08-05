@@ -138,6 +138,9 @@ export interface Settings {
   navidrome_username: string | null
   navidrome_password: string | null
   lastfm_api_key: string | null
+  lastfm_api_secret: string | null
+  lastfm_session_key: string | null
+  lastfm_username: string | null
   smtp_host: string | null
   smtp_port: number | null
   smtp_user: string | null
@@ -232,6 +235,8 @@ export const api = {
 
   listFollowedArtists: () => request<Artist[]>('/artists'),
 
+  getRecommendedArtists: () => request<ArtistSearchResult[]>('/artists/recommended'),
+
   followArtist: (payload: {
     musicbrainz_id: string
     notify_enabled: boolean
@@ -279,6 +284,11 @@ export const api = {
   testEmail: () => request<TestConnectionResult>('/settings/test-email', { method: 'POST' }),
   testPushbullet: () => request<TestConnectionResult>('/settings/test-pushbullet', { method: 'POST' }),
   runScanNow: () => request<TestConnectionResult>('/settings/run-scan', { method: 'POST' }),
+
+  lastfmAuthStart: () => request<{ token: string; auth_url: string }>('/settings/lastfm-auth-start', { method: 'POST' }),
+  lastfmAuthFinish: (token: string) =>
+    request<Settings>('/settings/lastfm-auth-finish', { method: 'POST', body: JSON.stringify({ token }) }),
+  lastfmDisconnect: () => request<Settings>('/settings/lastfm-disconnect', { method: 'POST' }),
 
   metubeHistory: () => request<MetubeHistory>('/metube/history'),
   metubePresets: () => request<{ presets: string[] }>('/metube/presets'),

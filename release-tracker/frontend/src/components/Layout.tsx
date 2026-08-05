@@ -82,7 +82,7 @@ export default function Layout() {
           </span>
           <nav className="flex gap-1">
             <NavLink to="/" end className={navLinkClass}>
-              Suivis
+              Artistes
             </NavLink>
             <NavLink to="/calendar" className={navLinkClass}>
               Calendrier

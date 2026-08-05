@@ -40,6 +40,130 @@ function ResultLine({ result }: { result: TestConnectionResult | null }) {
   return <p className={`text-xs ${result.ok ? 'text-green-400' : 'text-red-400'}`}>{result.message}</p>
 }
 
+function LastfmSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+  const [pendingToken, setPendingToken] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function set<K extends keyof Settings>(key: K, value: Settings[K]) {
+    setSettings({ ...settings, [key]: value })
+  }
+
+  async function startConnect() {
+    setBusy(true)
+    setError(null)
+    try {
+      const { token, auth_url } = await api.lastfmAuthStart()
+      setPendingToken(token)
+      window.open(auth_url, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function finishConnect() {
+    if (!pendingToken) return
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await api.lastfmAuthFinish(pendingToken)
+      setSettings(updated)
+      setPendingToken(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await api.lastfmDisconnect()
+      setSettings(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Section title="Last.fm">
+      <Field
+        label="Cle API (la meme que celle de Navidrome fonctionne)"
+        value={settings.lastfm_api_key ?? ''}
+        onChange={(v) => set('lastfm_api_key', v)}
+      />
+      <Field
+        label="Secret partage (necessaire uniquement pour se connecter et recevoir des recommandations personnalisees)"
+        type="password"
+        value={settings.lastfm_api_secret ?? ''}
+        onChange={(v) => set('lastfm_api_secret', v)}
+      />
+      <p className="text-xs text-neutral-500">
+        Cle API et secret se recuperent sur{' '}
+        <a
+          href="https://www.last.fm/api/account/create"
+          target="_blank"
+          rel="noreferrer"
+          className="text-purple-400 hover:underline"
+        >
+          last.fm/api/account/create
+        </a>{' '}
+        - pense a enregistrer la page Reglages (bouton en bas) avant de te connecter.
+      </p>
+
+      {settings.lastfm_username ? (
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-green-400">Connecte en tant que {settings.lastfm_username}</span>
+          <button
+            onClick={disconnect}
+            disabled={busy}
+            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
+          >
+            Deconnecter
+          </button>
+        </div>
+      ) : pendingToken ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-neutral-400">
+            Une page Last.fm vient de s'ouvrir dans un nouvel onglet : autorise l'acces, puis reviens ici et valide.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={finishConnect}
+              disabled={busy}
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+            >
+              {busy && <Spinner className="w-3 h-3" />}
+              J'ai autorise l'acces, valider
+            </button>
+            <button onClick={() => setPendingToken(null)} className="text-xs text-neutral-500 hover:text-white">
+              Annuler
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <button
+            onClick={startConnect}
+            disabled={busy || !settings.lastfm_api_key || !settings.lastfm_api_secret}
+            className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+          >
+            {busy && <Spinner className="w-3 h-3" />}
+            Connecter Last.fm
+          </button>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </Section>
+  )
+}
+
 function CalendarSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
   const [copied, setCopied] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
@@ -207,9 +331,7 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="Last.fm">
-        <Field label="Cle API (la meme que celle de Navidrome fonctionne)" value={settings.lastfm_api_key ?? ''} onChange={(v) => set('lastfm_api_key', v)} />
-      </Section>
+      <LastfmSection settings={settings} setSettings={setSettings} />
 
       <Section title="Notifications par email">
         <label className="flex items-center gap-2 text-sm">

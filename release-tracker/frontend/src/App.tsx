@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import AuthGate from './components/AuthGate'
 import Layout from './components/Layout'
-import FollowedListPage from './pages/FollowedListPage'
+import ArtistsPage from './pages/ArtistsPage'
 import SearchPage from './pages/SearchPage'
 import CalendarPage from './pages/CalendarPage'
 import ArtistPage from './pages/ArtistPage'
@@ -17,7 +17,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route element={<Layout />}>
-              <Route index element={<FollowedListPage />} />
+              <Route index element={<ArtistsPage />} />
               <Route path="search" element={<SearchPage />} />
               <Route path="calendar" element={<CalendarPage />} />
               <Route path="artists/:id" element={<ArtistPage />} />

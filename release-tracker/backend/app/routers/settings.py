@@ -1,13 +1,13 @@
 import secrets
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from .. import scheduler
-from ..schemas import SettingsOut, SettingsUpdateIn, TestConnectionResult
-from ..services import navidrome, notify
+from ..schemas import LastfmAuthFinishIn, LastfmAuthStartOut, SettingsOut, SettingsUpdateIn, TestConnectionResult
+from ..services import lastfm, navidrome, notify
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -87,3 +87,49 @@ def test_pushbullet(db: Session = Depends(get_db)):
 def run_scan_now():
     scheduler.run_full_cycle()
     return TestConnectionResult(ok=True, message="Scan execute")
+
+
+def _require_lastfm_credentials(settings) -> None:
+    if not settings.lastfm_api_key or not settings.lastfm_api_secret:
+        raise HTTPException(422, "Renseigne la cle API et le secret Last.fm avant de te connecter")
+
+
+@router.post("/lastfm-auth-start", response_model=LastfmAuthStartOut)
+def lastfm_auth_start(db: Session = Depends(get_db)):
+    """1ere etape du flux de connexion Last.fm (schema "desktop", sans URL de
+    callback) : recupere un jeton temporaire et l'URL a ouvrir pour autoriser
+    l'app - voir services/lastfm.py pour le detail du flux complet."""
+    settings = scheduler.get_settings(db)
+    _require_lastfm_credentials(settings)
+    try:
+        token = lastfm.get_auth_token(settings.lastfm_api_key, settings.lastfm_api_secret)
+    except Exception as exc:
+        raise HTTPException(502, f"Last.fm indisponible : {exc}") from exc
+    return LastfmAuthStartOut(token=token, auth_url=lastfm.auth_url(settings.lastfm_api_key, token))
+
+
+@router.post("/lastfm-auth-finish", response_model=SettingsOut)
+def lastfm_auth_finish(payload: LastfmAuthFinishIn, db: Session = Depends(get_db)):
+    """2e etape : une fois l'utilisateur revenu de la page d'autorisation
+    Last.fm, echange le jeton contre une cle de session permanente."""
+    settings = scheduler.get_settings(db)
+    _require_lastfm_credentials(settings)
+    try:
+        session = lastfm.get_session(settings.lastfm_api_key, settings.lastfm_api_secret, payload.token)
+    except Exception as exc:
+        raise HTTPException(502, f"Autorisation Last.fm echouee (as-tu bien valide sur last.fm ?) : {exc}") from exc
+    settings.lastfm_session_key = session.get("key")
+    settings.lastfm_username = session.get("name")
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+@router.post("/lastfm-disconnect", response_model=SettingsOut)
+def lastfm_disconnect(db: Session = Depends(get_db)):
+    settings = scheduler.get_settings(db)
+    settings.lastfm_session_key = None
+    settings.lastfm_username = None
+    db.commit()
+    db.refresh(settings)
+    return settings

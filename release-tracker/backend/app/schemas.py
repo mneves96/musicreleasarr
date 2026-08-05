@@ -159,6 +159,9 @@ class SettingsOut(BaseModel):
     navidrome_username: str | None
     navidrome_password: str | None
     lastfm_api_key: str | None
+    lastfm_api_secret: str | None
+    lastfm_session_key: str | None
+    lastfm_username: str | None
     smtp_host: str | None
     smtp_port: int | None
     smtp_user: str | None
@@ -181,6 +184,7 @@ class SettingsUpdateIn(BaseModel):
     navidrome_username: str | None = None
     navidrome_password: str | None = None
     lastfm_api_key: str | None = None
+    lastfm_api_secret: str | None = None
     smtp_host: str | None = None
     smtp_port: int | None = None
     smtp_user: str | None = None
@@ -198,3 +202,12 @@ class SettingsUpdateIn(BaseModel):
 class TestConnectionResult(BaseModel):
     ok: bool
     message: str
+
+
+class LastfmAuthStartOut(BaseModel):
+    token: str
+    auth_url: str
+
+
+class LastfmAuthFinishIn(BaseModel):
+    token: str

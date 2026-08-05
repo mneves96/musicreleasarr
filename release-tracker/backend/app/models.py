@@ -225,6 +225,11 @@ class Settings(Base):
     navidrome_password: Mapped[str | None] = mapped_column(String, nullable=True)
 
     lastfm_api_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    lastfm_api_secret: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Remplis uniquement par le flux de connexion (POST .../lastfm-auth-finish),
+    # jamais directement via PUT /settings - voir routers/settings.py.
+    lastfm_session_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    lastfm_username: Mapped[str | None] = mapped_column(String, nullable=True)
 
     smtp_host: Mapped[str | None] = mapped_column(String, nullable=True)
     smtp_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
