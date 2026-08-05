@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from ..matching import normalize_text, similarity
 from ..models import Artist, OwnershipStatus, Release, Settings, TaggingItem, TaggingStatus
-from . import musicbrainz
+from . import coverart, musicbrainz
 
 logger = logging.getLogger("dedieufy.tagging")
 
@@ -432,14 +432,20 @@ def _write_tags(
     tags.add(TPE1(encoding=3, text=artist.name))
     tags.delall("TPE2")
     tags.add(TPE2(encoding=3, text=artist.name))
+    # delall() inconditionnel avant chaque add() conditionnel : un fichier repasse
+    # dans le backlog (retelecharge, ou remis a la main comme signale par un
+    # retour utilisateur) peut deja porter des tags issus de Picard ou d'une
+    # confirmation precedente - sans purge systematique, une valeur qu'on n'a
+    # pas cette fois (ex: pas de release_mbid trouve) laissait l'ancienne
+    # trainer telle quelle au lieu d'etre remplacee ou supprimee.
+    tags.delall("TRCK")
     if track_number:
-        tags.delall("TRCK")
         tags.add(TRCK(encoding=3, text=str(track_number)))
+    tags.delall("TPOS")
     if disc_number:
-        tags.delall("TPOS")
         tags.add(TPOS(encoding=3, text=str(disc_number)))
+    tags.delall("TDRC")
     if release.release_date:
-        tags.delall("TDRC")
         tags.add(TDRC(encoding=3, text=str(release.release_date.year)))
 
     # Identifiants MusicBrainz complets (comme Picard) : facilite le matching cote
@@ -452,10 +458,11 @@ def _write_tags(
     # precise), sinon Picard/tout autre outil MusicBrainz cherche le mauvais
     # type d'objet et ne trouve rien. release_mbid (fourni par le frontend, tire
     # de la release choisie par get_release_tracks) est la bonne valeur ; a
-    # defaut (saisie manuelle sans tracklist), on omet le tag plutot que d'y
-    # mettre une valeur plausible mais fausse.
+    # defaut (saisie manuelle sans tracklist), on supprime le tag plutot que d'y
+    # laisser une ancienne valeur (potentiellement fausse) ou d'y mettre une
+    # valeur plausible mais fausse.
+    tags.delall("TXXX:MusicBrainz Album Id")
     if release_mbid:
-        tags.delall("TXXX:MusicBrainz Album Id")
         tags.add(TXXX(encoding=3, desc="MusicBrainz Album Id", text=release_mbid))
     tags.delall("TXXX:MusicBrainz Release Group Id")
     tags.add(TXXX(encoding=3, desc="MusicBrainz Release Group Id", text=release.musicbrainz_id))
@@ -465,31 +472,41 @@ def _write_tags(
     tags.add(TXXX(encoding=3, desc="MusicBrainz Album Artist Id", text=artist.musicbrainz_id))
     tags.delall("TXXX:MusicBrainz Album Type")
     tags.add(TXXX(encoding=3, desc="MusicBrainz Album Type", text=release.release_type.value))
+    tags.delall("UFID:http://musicbrainz.org")
     if recording_id:
-        tags.delall("UFID:http://musicbrainz.org")
         tags.add(UFID(owner="http://musicbrainz.org", data=recording_id.encode("ascii")))
 
-    if release.cover_url:
+    # Retente une recuperation de cover si aucune n'est connue en base (ex:
+    # Cover Art Archive/Deezer n'avaient rien au moment de la decouverte de
+    # cette release, mais l'ont depuis) - "reecrire tout ce qu'on trouve, meme
+    # la cover" plutot que de se fier a une valeur figee au moment du scan.
+    cover_url = release.cover_url
+    if not cover_url:
+        cover_url = coverart.get_release_group_cover(release.musicbrainz_id)
+        if cover_url:
+            release.cover_url = cover_url
+
+    tags.delall("APIC")
+    if cover_url:
         try:
-            resp = httpx.get(release.cover_url, timeout=15)
+            resp = httpx.get(cover_url, timeout=15)
             resp.raise_for_status()
-            tags.delall("APIC")
             tags.add(APIC(encoding=3, mime=resp.headers.get("content-type", "image/jpeg"), type=3, desc="Cover", data=resp.content))
         except Exception:
-            logger.warning("Impossible de recuperer la cover pour le tag APIC (%s)", release.cover_url)
+            logger.warning("Impossible de recuperer la cover pour le tag APIC (%s)", cover_url)
 
     # lang="und" (indetermine, ISO 639-2) plutot que de supposer "eng" - la
     # bibliotheque peut tres bien contenir des artistes non anglophones.
+    tags.delall("USLT")
     if plain_lyrics:
-        tags.delall("USLT")
         tags.add(USLT(encoding=3, lang="und", desc="", text=plain_lyrics))
+    tags.delall("SYLT")
     if synced_lyrics:
         entries = _parse_lrc(synced_lyrics)
         if entries:
             # format=2 (millisecondes), type=1 (paroles) : c'est ce qui permet
             # aux lecteurs qui savent lire SYLT de faire defiler les paroles en
             # rythme avec la musique, plutot qu'un simple bloc de texte statique.
-            tags.delall("SYLT")
             tags.add(SYLT(encoding=3, lang="und", format=2, type=1, desc="", text=entries))
 
     tags.save(source_path, v2_version=3)
