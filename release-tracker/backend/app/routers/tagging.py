@@ -47,7 +47,12 @@ def scan_now(db: Session = Depends(get_db)):
     suite qu'un fichier fraichement depose est bien detecte."""
     settings = get_settings(db)
     created = tagging.scan_downloads_root(db, settings)
-    return TestConnectionResult(ok=True, message=f"{len(created)} nouveau(x) fichier(s) detecte(s)")
+    total_backlog = (
+        db.query(TaggingItem).filter(TaggingItem.status.in_([TaggingStatus.needs_review, TaggingStatus.error])).count()
+    )
+    return TestConnectionResult(
+        ok=True, message=f"{len(created)} fichier(s) (re)detecte(s) - {total_backlog} au total dans le backlog"
+    )
 
 
 @router.get("/identify/release-groups", response_model=list[ReleaseGroupChoice])

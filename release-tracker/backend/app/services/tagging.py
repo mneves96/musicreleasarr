@@ -126,12 +126,17 @@ def _greedy_match(
 
 
 def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
-    """Detecte tout fichier audio nouveau sous le dossier de telechargements,
-    aussi profondement imbrique soit-il, groupe par dossier de premier niveau -
+    """Detecte tout fichier audio nouveau (ou reapparu au meme chemin apres
+    avoir deja ete traite) sous le dossier de telechargements, aussi
+    profondement imbrique soit-il, groupe par dossier de premier niveau -
     comme Picard qui prend tout ce qu'il trouve, sans condition sur l'origine
-    du telechargement ni sur le statut d'une release cote app."""
+    du telechargement ni sur le statut d'une release cote app. Log en detail
+    ce qu'il trouve et ce qu'il ignore (et pourquoi), pour pouvoir diagnostiquer
+    directement depuis les logs sans avoir a deviner."""
     root = settings.tagging_downloads_path
+    logger.info("Scan du dossier de telechargements : %r", root)
     if not root or not os.path.isdir(root):
+        logger.warning("Dossier de telechargements introuvable ou non configure (Reglages) : %r", root)
         return []
 
     try:
@@ -139,18 +144,34 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
     except OSError:
         logger.exception("Impossible de lister %s", root)
         return []
+
+    total_on_disk = sum(len(files) for files in files_by_folder.values())
+    logger.info(
+        "Fichiers audio trouves sur le disque : %d, repartis sur %d dossier(s) : %s",
+        total_on_disk,
+        len(files_by_folder),
+        {(name or "<racine>"): len(files) for name, files in files_by_folder.items()},
+    )
     if not files_by_folder:
         return []
 
-    already_tracked = {path for (path,) in db.query(TaggingItem.source_path).all()}
+    existing_by_path = {item.source_path: item for item in db.query(TaggingItem).all()}
     artists_by_folder_name = {
         normalize_text(a.name): a for a in db.query(Artist).filter(Artist.is_followed.is_(True))
     }
 
     created: list[TaggingItem] = []
     for folder_name, all_files in files_by_folder.items():
-        new_files = [p for p in all_files if p not in already_tracked]
-        if not new_files:
+        # Un fichier deja "done" (deplace puis reapparu au meme chemin - ex:
+        # retelecharge) est retraite depuis zero plutot qu'ignore a jamais : sa
+        # ligne existante est reutilisee (source_path est unique en base).
+        to_process = [p for p in all_files if existing_by_path.get(p) is None or existing_by_path[p].status == TaggingStatus.done]
+        skipped = len(all_files) - len(to_process)
+        logger.info(
+            "Dossier %r : %d fichier(s) sur disque, %d a (re)traiter, %d deja en attente ignore(s)",
+            folder_name or "<racine>", len(all_files), len(to_process), skipped,
+        )
+        if not to_process:
             continue
 
         artist = artists_by_folder_name.get(folder_name)
@@ -161,15 +182,31 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
                 .filter(Release.artist_id == artist.id, Release.ownership_status != OwnershipStatus.owned)
                 .all()
             )
+            logger.info(
+                "Dossier %r rapproche de l'artiste suivi '%s' (%d release(s) candidate(s))",
+                folder_name, artist.name, len(releases),
+            )
+        else:
+            logger.info("Dossier %r non identifie (aucun artiste suivi ne correspond)", folder_name or "<racine>")
 
-        candidates = _candidates_for_releases(releases, len(new_files)) if releases else []
-        labeled = [(path, normalize_text(_clean_filename(os.path.basename(path)))) for path in new_files]
+        candidates = _candidates_for_releases(releases, len(to_process)) if releases else []
+        labeled = [(path, normalize_text(_clean_filename(os.path.basename(path)))) for path in to_process]
         matches = _greedy_match(labeled, candidates) if candidates else {}
 
-        for path in new_files:
-            item = TaggingItem(
-                source_path=path, original_filename=os.path.basename(path), source_folder=folder_name
-            )
+        for path in to_process:
+            existing = existing_by_path.get(path)
+            item = existing if existing is not None else TaggingItem(source_path=path)
+            item.original_filename = os.path.basename(path)
+            item.source_folder = folder_name
+            item.status = TaggingStatus.needs_review
+            item.error_message = None
+            item.target_path = None
+            item.release_id = None
+            item.suggested_track_title = None
+            item.suggested_track_number = None
+            item.suggested_disc_number = None
+            item.match_score = None
+
             match = matches.get(path)
             if match is not None:
                 (matched_release, track), score = match
@@ -178,10 +215,12 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
                 item.suggested_track_number = track["position"]
                 item.suggested_disc_number = track["disc_number"]
                 item.match_score = round(score, 3)
-            db.add(item)
+            if existing is None:
+                db.add(item)
             created.append(item)
 
     db.commit()
+    logger.info("Scan termine : %d fichier(s) nouveau(x) ou remis en attente sur %d trouve(s) sur le disque", len(created), total_on_disk)
     return created
 
 
