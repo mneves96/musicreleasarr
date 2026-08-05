@@ -5,8 +5,8 @@ services/metube.py + scheduler.py:224 : folder=normalize_text(artist.name)),
 pas par release - plusieurs albums d'un meme artiste peuvent donc partager le
 meme dossier source. scan_artist() traite ainsi tout le dossier d'un artiste
 d'un coup, en repartissant les fichiers detectes entre les tracklists
-MusicBrainz de toutes ses releases "downloaded" (correspondance gloutonne par
-similarite de titre).
+MusicBrainz de toutes ses releases pas encore "owned" (correspondance
+gloutonne par similarite de titre).
 
 Volontairement, aucune fonction ici n'ecrit de tag ni ne deplace de fichier
 sans qu'un TaggingItem soit explicitement confirme via l'API (routers/tagging.py) :
@@ -26,7 +26,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from ..matching import normalize_text, similarity
-from ..models import Artist, DownloadStatus, Release, Settings, TaggingItem, TaggingStatus
+from ..models import Artist, OwnershipStatus, Release, Settings, TaggingItem, TaggingStatus
 from . import musicbrainz
 
 logger = logging.getLogger("dedieufy.tagging")
@@ -67,7 +67,14 @@ def sanitize_component(name: str) -> str:
 def scan_artist(db: Session, settings: Settings, artist: Artist) -> list[TaggingItem]:
     """Detecte les nouveaux fichiers audio du dossier de telechargement de cet
     artiste et cree une entree de backlog par fichier, avec une proposition de
-    correspondance (piste + release) parmi ses releases "downloaded"."""
+    correspondance (piste + release) parmi ses releases pas encore "owned".
+
+    Delibrement pas filtre sur Release.download_status == downloaded : un
+    fichier peut avoir ete depose via l'onglet MeTube directement (sans passer
+    par le bouton "Telecharger" d'une release, qui est ce qui met a jour ce
+    champ) - voir aussi scheduler.py:scan_tagging_backlog qui appelle cette
+    fonction pour tout artiste dont le dossier existe reellement sur le disque,
+    peu importe l'origine du telechargement."""
     folder = os.path.join(settings.tagging_downloads_path, normalize_text(artist.name))
     if not os.path.isdir(folder):
         return []
@@ -85,7 +92,7 @@ def scan_artist(db: Session, settings: Settings, artist: Artist) -> list[Tagging
 
     releases = (
         db.query(Release)
-        .filter(Release.artist_id == artist.id, Release.download_status == DownloadStatus.downloaded)
+        .filter(Release.artist_id == artist.id, Release.ownership_status != OwnershipStatus.owned)
         .all()
     )
     if not releases:

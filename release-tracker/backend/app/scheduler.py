@@ -1,4 +1,5 @@
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
@@ -298,14 +299,34 @@ def scan_tagging_backlog(db: Session) -> None:
     """Detecte les nouveaux fichiers audio deposes par MeTube pour les artistes
     ayant au moins une release "downloaded", et cree les entrees de backlog
     correspondantes avec une proposition de correspondance - n'ecrit ni ne
-    deplace jamais de fichier (voir services/tagging.py)."""
+    deplace jamais de fichier (voir services/tagging.py).
+
+    Se base sur les dossiers reellement presents sur le disque, pas sur
+    Release.download_status : un fichier depose via l'onglet MeTube directement
+    (plutot que via le bouton "Telecharger" d'une release, qui est ce qui met
+    download_status a jour) ne serait sinon jamais detecte, alors que MeTube
+    range de toute facon tout par artiste (voir services/tagging.py:scan_artist)."""
     settings = get_settings(db)
-    artist_ids = {
-        row[0]
-        for row in db.query(Release.artist_id).filter(Release.download_status == DownloadStatus.downloaded).distinct()
+    downloads_root = settings.tagging_downloads_path
+    if not downloads_root or not os.path.isdir(downloads_root):
+        return
+
+    try:
+        subfolders = {
+            entry for entry in os.listdir(downloads_root) if os.path.isdir(os.path.join(downloads_root, entry))
+        }
+    except OSError:
+        logger.exception("Impossible de lister %s", downloads_root)
+        return
+    if not subfolders:
+        return
+
+    artists_by_folder_name = {
+        normalize_text(a.name): a for a in db.query(Artist).filter(Artist.is_followed.is_(True))
     }
-    for artist_id in artist_ids:
-        artist = db.get(Artist, artist_id)
+
+    for folder_name in subfolders:
+        artist = artists_by_folder_name.get(folder_name)
         if artist is None:
             continue
         try:
