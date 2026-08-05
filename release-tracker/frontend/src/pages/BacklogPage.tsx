@@ -369,12 +369,13 @@ function UnclusteredFolder({
   onIdentified: () => void
 }) {
   const [identifying, setIdentifying] = useState(false)
+  const label = sourceFolder ? `Dossier non identifie : ${sourceFolder}` : 'Fichiers en vrac (racine du dossier de telechargements)'
 
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-2">
         <h2 className="font-medium text-neutral-300">
-          Dossier non identifie : {sourceFolder}{' '}
+          {label}{' '}
           <span className="text-neutral-500 text-sm">
             ({items.length} fichier{items.length > 1 ? 's' : ''})
           </span>

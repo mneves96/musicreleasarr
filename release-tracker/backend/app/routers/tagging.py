@@ -76,8 +76,7 @@ def identify(payload: TaggingIdentifyIn, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(release)
 
-    settings = get_settings(db)
-    items = tagging.identify_folder(db, settings, payload.source_folder, release)
+    items = tagging.identify_folder(db, payload.source_folder, release)
     if not items:
         raise HTTPException(404, "Aucun fichier non identifie trouve dans ce dossier")
     return items

@@ -54,24 +54,37 @@ def _clean_filename(filename: str) -> str:
     return stem.strip()
 
 
+#  Cle synthetique pour les fichiers deposes directement a la racine du dossier
+#  de telechargements, sans aucun sous-dossier (ex: ajoutes manuellement plutot
+#  que via MeTube, qui cree toujours un dossier par artiste) - "" ne peut jamais
+#  correspondre au nom normalise d'un artiste reel.
+LOOSE_FILES_FOLDER = ""
+
+
 def _iter_audio_files_by_top_folder(root: str) -> dict[str, list[str]]:
     """Regroupe tous les fichiers audio sous `root` par dossier de PREMIER niveau,
     quelle que soit la profondeur reelle (root/Artiste/piste.mp3 et
     root/Artiste/Album/piste.mp3 sont tous deux rattaches au groupe "Artiste") -
     MeTube ne cree qu'un seul niveau de dossier par artiste, mais un rangement
-    manuel plus profond (ex: Artiste/Album/) doit rester detecte integralement."""
+    manuel plus profond (ex: Artiste/Album/) doit rester detecte integralement.
+    Les fichiers deposes directement a la racine (sans sous-dossier) sont
+    regroupes sous LOOSE_FILES_FOLDER plutot qu'ignores."""
     grouped: dict[str, list[str]] = {}
+    loose_files: list[str] = []
     for entry in sorted(os.listdir(root)):
         top_path = os.path.join(root, entry)
-        if not os.path.isdir(top_path):
-            continue
-        files: list[str] = []
-        for dirpath, _dirnames, filenames in os.walk(top_path):
-            for filename in filenames:
-                if os.path.splitext(filename)[1].lower() in AUDIO_EXTENSIONS:
-                    files.append(os.path.join(dirpath, filename))
-        if files:
-            grouped[entry] = sorted(files)
+        if os.path.isdir(top_path):
+            files: list[str] = []
+            for dirpath, _dirnames, filenames in os.walk(top_path):
+                for filename in filenames:
+                    if os.path.splitext(filename)[1].lower() in AUDIO_EXTENSIONS:
+                        files.append(os.path.join(dirpath, filename))
+            if files:
+                grouped[entry] = sorted(files)
+        elif os.path.splitext(entry)[1].lower() in AUDIO_EXTENSIONS:
+            loose_files.append(top_path)
+    if loose_files:
+        grouped[LOOSE_FILES_FOLDER] = sorted(loose_files)
     return grouped
 
 
@@ -195,14 +208,17 @@ def search_release_groups(artist_musicbrainz_id: str) -> list[dict]:
     return items
 
 
-def identify_folder(db: Session, settings: Settings, source_folder: str, release: Release) -> list[TaggingItem]:
+def identify_folder(db: Session, source_folder: str, release: Release) -> list[TaggingItem]:
     """Rattache les fichiers "non identifies" d'un dossier a la release choisie
     manuellement (recherche + selection MusicBrainz, l'equivalent du "Lookup"
-    de Picard sur un cluster), et propose une correspondance piste par piste."""
-    folder = os.path.join(settings.tagging_downloads_path, source_folder)
+    de Picard sur un cluster), et propose une correspondance piste par piste.
+    Filtre sur la colonne source_folder stockee (correspondance exacte), pas sur
+    un prefixe de chemin - gere nativement le cas des fichiers "en vrac"
+    (LOOSE_FILES_FOLDER = "") sans risquer de capturer des fichiers d'un autre
+    dossier plus profond par erreur."""
     items = (
         db.query(TaggingItem)
-        .filter(TaggingItem.release_id.is_(None), TaggingItem.source_path.like(f"{folder}{os.sep}%"))
+        .filter(TaggingItem.release_id.is_(None), TaggingItem.source_folder == source_folder)
         .all()
     )
     if not items:
