@@ -1,5 +1,41 @@
 @import "tailwindcss";
 
+/* Police Geom (Google Fonts, https://fonts.google.com/specimen/Geom) auto-hebergee
+   pour ne pas dependre de fonts.gstatic.com au chargement (app self-hosted sur le
+   LAN) - sous-ensemble latin uniquement, suffisant pour le francais. */
+@font-face {
+  font-family: "Geom";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/geom-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geom";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/geom-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geom";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/geom-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geom";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/geom-700.woff2") format("woff2");
+}
+
+@theme {
+  --font-sans: "Geom", ui-sans-serif, system-ui, sans-serif;
+}
+
 html {
   color-scheme: dark;
 }
