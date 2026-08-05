@@ -465,9 +465,10 @@ export default function BacklogPage() {
   // initialise le pre-clustering (assignation suggeree) une fois la tracklist connue.
   useEffect(() => {
     if (!items) return
-    const missing = [...new Set(items.filter((i) => i.status === 'needs_review').map((i) => i.release_id))].filter(
-      (id) => !(id in tracklists),
-    )
+    const releaseIds = items
+      .filter((i) => i.status === 'needs_review' && i.release_id != null)
+      .map((i) => i.release_id as number)
+    const missing = [...new Set(releaseIds)].filter((id) => !(id in tracklists))
     if (missing.length === 0) return
     missing.forEach(async (releaseId) => {
       const item = items.find((i) => i.release_id === releaseId)
