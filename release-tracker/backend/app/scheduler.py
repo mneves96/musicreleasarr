@@ -257,30 +257,45 @@ def refresh_download_statuses(db: Session) -> None:
         logger.exception("Impossible de recuperer l'historique MeTube")
         return
 
-    by_url: dict[str, dict] = {}
-    for bucket in ("done", "queue", "pending"):
-        for item in history.get(bucket) or []:
-            if item.get("url"):
-                by_url[item["url"]] = item
+    done_by_url = {item["url"]: item for item in history.get("done") or [] if item.get("url")}
+    queue_by_url = {item["url"]: item for item in history.get("queue") or [] if item.get("url")}
+    pending_urls = {item["url"] for item in history.get("pending") or [] if item.get("url")}
 
     for release in releases:
-        info = by_url.get(release.youtube_music_url)
-        if not info:
-            continue
-
-        status = info.get("status")
-        if status == "error":
-            release.download_status = DownloadStatus.failed
-            release.download_error = info.get("msg") or info.get("error") or "Echec du telechargement MeTube"
-            release.download_progress = None
-        elif status == "finished":
-            release.download_status = DownloadStatus.downloaded
-            release.download_progress = 100
-            release.download_error = None
-        else:
-            percent = info.get("percent")
+        url = release.youtube_music_url
+        if url in done_by_url:
+            info = done_by_url[url]
+            if info.get("status") == "error":
+                release.download_status = DownloadStatus.failed
+                release.download_error = info.get("msg") or info.get("error") or "Echec du telechargement MeTube"
+                release.download_progress = None
+            else:
+                release.download_status = DownloadStatus.downloaded
+                release.download_progress = 100
+                release.download_error = None
+        elif url in queue_by_url:
+            percent = queue_by_url[url].get("percent")
             if isinstance(percent, (int, float)):
                 release.download_progress = int(percent)
+        elif url in pending_urls:
+            pass  # toujours en attente de demarrage cote MeTube, rien a changer
+        else:
+            # Ni dans "done", ni "queue", ni "pending" : MeTube ne connait plus cette
+            # URL (suppression manuelle depuis l'onglet MeTube, redemarrage de
+            # MeTube qui a perdu son historique, ou telechargement d'un album dont
+            # yt-dlp a eclate le contenu en pistes individuelles ne correspondant
+            # plus exactement a l'URL "album" envoyee a l'origine). Laisser le
+            # statut bloque sur "queued" empechait toute nouvelle tentative (le
+            # bouton Telecharger reste cache tant que le statut est "queued") -
+            # on bascule donc en echec explicite plutot qu'un 0% permanent et
+            # muet ; le statut de possession reel (via Navidrome) reste inchange
+            # et prevaudra visuellement si le fichier est en realite bien present.
+            release.download_status = DownloadStatus.failed
+            release.download_progress = None
+            release.download_error = (
+                "Introuvable dans l'historique MeTube (supprime manuellement ou MeTube redemarre) - "
+                "relance le telechargement si la release n'est pas dans ta bibliotheque."
+            )
     db.commit()
 
 

@@ -43,14 +43,26 @@ function monthKeyAndLabel(isoDate: string): { key: string; label: string } {
 
 type Tab = 'month' | 'events'
 
+const TAB_STORAGE_KEY = 'calendar.tab'
+const EVENTS_SORT_STORAGE_KEY = 'calendar.eventsSortDesc'
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const stored = localStorage.getItem(key)
+  return (allowed as readonly string[]).includes(stored ?? '') ? (stored as T) : fallback
+}
+
 export default function CalendarPage() {
-  const [tab, setTab] = useState<Tab>('month')
+  const [tab, setTab] = useState<Tab>(() => readStored(TAB_STORAGE_KEY, ['month', 'events'] as const, 'month'))
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [monthReleases, setMonthReleases] = useState<Release[]>([])
   const [loading, setLoading] = useState(true)
 
   const grid = useMemo(() => buildGrid(month), [month])
   const today = toISODate(new Date())
+
+  useEffect(() => {
+    localStorage.setItem(TAB_STORAGE_KEY, tab)
+  }, [tab])
 
   useEffect(() => {
     if (tab !== 'month') return
@@ -183,8 +195,12 @@ function EventsView() {
   const navigate = useNavigate()
   const [releases, setReleases] = useState<Release[]>([])
   const [loading, setLoading] = useState(true)
-  const [sortDesc, setSortDesc] = useState(true)
+  const [sortDesc, setSortDesc] = useState(() => localStorage.getItem(EVENTS_SORT_STORAGE_KEY) !== 'false')
   const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    localStorage.setItem(EVENTS_SORT_STORAGE_KEY, String(sortDesc))
+  }, [sortDesc])
 
   useEffect(() => {
     setLoading(true)
