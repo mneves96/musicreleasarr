@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -42,6 +43,12 @@ class DownloadStatus(str, enum.Enum):
     queued = "queued"
     downloaded = "downloaded"
     failed = "failed"
+
+
+class TaggingStatus(str, enum.Enum):
+    needs_review = "needs_review"
+    done = "done"
+    error = "error"
 
 
 ALL_RELEASE_TYPES = [t.value for t in ReleaseType]
@@ -145,6 +152,48 @@ class Release(Base):
         return self.artist.image_url
 
 
+class TaggingItem(Base):
+    """Backlog "a redresser" : un fichier audio depose par MeTube, en attente de
+    correction des tags et de rangement vers <Artiste>/<Album>. Rien n'est ecrit
+    ni deplace tant qu'un humain n'a pas confirme la correspondance proposee
+    (voir routers/tagging.py) - une premiere version 100% automatique produisait
+    des doublons d'album lies a des tags incoherents entre pistes."""
+
+    __tablename__ = "tagging_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    release_id: Mapped[int] = mapped_column(ForeignKey("releases.id"), index=True)
+
+    # Chemin absolu cote conteneur "releases" : sert de cle de deduplication au scan.
+    source_path: Mapped[str] = mapped_column(String, unique=True)
+    original_filename: Mapped[str] = mapped_column(String)
+
+    status: Mapped[TaggingStatus] = mapped_column(Enum(TaggingStatus), default=TaggingStatus.needs_review)
+
+    suggested_track_title: Mapped[str | None] = mapped_column(String, nullable=True)
+    suggested_track_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    suggested_disc_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    target_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    release: Mapped["Release"] = relationship()
+
+    @property
+    def artist_name(self) -> str:
+        return self.release.artist.name
+
+    @property
+    def release_title(self) -> str:
+        return self.release.title
+
+
 class Settings(Base):
     __tablename__ = "settings"
 
@@ -175,6 +224,12 @@ class Settings(Base):
     scan_cron: Mapped[str] = mapped_column(String, default="0 6 * * *")
 
     calendar_token: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Chemins (cote conteneur "releases") utilises par le pipeline de redressage
+    # metadata post-telechargement : ou scanner les fichiers deposes par MeTube,
+    # et ou ranger la bibliotheque une fois les tags corriges.
+    tagging_downloads_path: Mapped[str] = mapped_column(String, default="/music/youtube")
+    tagging_library_path: Mapped[str] = mapped_column(String, default="/music")
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

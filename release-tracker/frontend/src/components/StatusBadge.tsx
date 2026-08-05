@@ -1,4 +1,4 @@
-import type { DownloadStatus, OwnershipStatus } from '../api'
+import type { DownloadStatus, OwnershipStatus, TaggingStatus } from '../api'
 
 const OWNERSHIP_STYLES: Record<OwnershipStatus, string> = {
   owned: 'bg-green-900/50 text-green-300 border-green-700',
@@ -65,6 +65,26 @@ export function DownloadBadge({
   return (
     <Badge className={DOWNLOAD_STYLES[status]} title={status === 'failed' ? error ?? undefined : undefined}>
       {label}
+    </Badge>
+  )
+}
+
+const TAGGING_STYLES: Record<TaggingStatus, string> = {
+  needs_review: 'bg-amber-900/50 text-amber-300 border-amber-700',
+  done: 'bg-green-900/50 text-green-300 border-green-700',
+  error: 'bg-red-900/50 text-red-300 border-red-700',
+}
+
+const TAGGING_LABELS: Record<TaggingStatus, string> = {
+  needs_review: 'A verifier',
+  done: 'Range',
+  error: 'Erreur',
+}
+
+export function TaggingBadge({ status, error }: { status: TaggingStatus; error?: string | null }) {
+  return (
+    <Badge className={TAGGING_STYLES[status]} title={status === 'error' ? error ?? undefined : undefined}>
+      {TAGGING_LABELS[status]}
     </Badge>
   )
 }

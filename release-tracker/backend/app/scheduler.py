@@ -11,7 +11,7 @@ from .db import SessionLocal
 from .enrichment import enrich_artist
 from .matching import best_match, normalize_text
 from .models import ALL_RELEASE_TYPES, Artist, DownloadStatus, OwnershipStatus, Release, ReleaseType, Settings
-from .services import coverart, deezer, metube, musicbrainz, navidrome, notify, ytmusic
+from .services import coverart, deezer, metube, musicbrainz, navidrome, notify, tagging, ytmusic
 
 FAVORITE_MATCH_THRESHOLD = 0.85
 
@@ -21,6 +21,7 @@ _scheduler = BackgroundScheduler()
 FULL_CYCLE_JOB_ID = "full_discovery_cycle"
 RECHECK_JOB_ID = "recheck_queued_downloads"
 DOWNLOAD_STATUS_JOB_ID = "refresh_download_statuses"
+TAGGING_SCAN_JOB_ID = "scan_tagging_backlog"
 
 
 def get_settings(db: Session) -> Settings:
@@ -299,6 +300,26 @@ def refresh_download_statuses(db: Session) -> None:
     db.commit()
 
 
+def scan_tagging_backlog(db: Session) -> None:
+    """Detecte les nouveaux fichiers audio deposes par MeTube pour les artistes
+    ayant au moins une release "downloaded", et cree les entrees de backlog
+    correspondantes avec une proposition de correspondance - n'ecrit ni ne
+    deplace jamais de fichier (voir services/tagging.py)."""
+    settings = get_settings(db)
+    artist_ids = {
+        row[0]
+        for row in db.query(Release.artist_id).filter(Release.download_status == DownloadStatus.downloaded).distinct()
+    }
+    for artist_id in artist_ids:
+        artist = db.get(Artist, artist_id)
+        if artist is None:
+            continue
+        try:
+            tagging.scan_artist(db, settings, artist)
+        except Exception:
+            logger.exception("Echec du scan de redressage metadata pour %s", artist.name)
+
+
 def _backfill_youtube_links(db: Session, artist: Artist) -> None:
     """Repare les releases deja telechargees (ou en cours/en echec) auxquelles il
     manque le lien YouTube Music - un ancien mecanisme de repli piste par piste
@@ -407,6 +428,11 @@ def run_refresh_download_statuses() -> None:
         refresh_download_statuses(db)
 
 
+def run_scan_tagging_backlog() -> None:
+    with SessionLocal() as db:
+        scan_tagging_backlog(db)
+
+
 def reschedule() -> None:
     with SessionLocal() as db:
         settings = get_settings(db)
@@ -439,6 +465,14 @@ def start_scheduler() -> None:
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=120,
+    )
+    _scheduler.add_job(
+        run_scan_tagging_backlog,
+        trigger=IntervalTrigger(minutes=5),
+        id=TAGGING_SCAN_JOB_ID,
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=300,
     )
     if not _scheduler.running:
         _scheduler.start()

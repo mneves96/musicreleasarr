@@ -98,6 +98,49 @@ def get_release_groups(artist_mbid: str) -> list[dict]:
     return release_groups
 
 
+def get_release_tracks(release_group_mbid: str, expected_track_count: int | None = None) -> list[dict]:
+    """Tracklist canonique d'une release-group, utilisee comme source de verite
+    pour le redressage des tags (voir services/tagging.py) - contrairement a
+    ytmusic.get_release_details qui ne garde ni position ni disque, ici on va
+    chercher les releases concretes de la release-group (inc=recordings) et on
+    choisit celle qui correspond le mieux : statut "Official" en priorite, puis
+    nombre de pistes le plus proche de expected_track_count (nombre de fichiers
+    deja detectes dans le backlog) si fourni."""
+    data = _throttled_get(
+        "/release",
+        {"release-group": release_group_mbid, "inc": "recordings", "limit": 25},
+    )
+    releases = data.get("releases", [])
+    if not releases:
+        return []
+
+    def sort_key(release: dict) -> tuple:
+        is_official = release.get("status") == "Official"
+        track_count = sum(len(medium.get("tracks", [])) for medium in release.get("media", []))
+        count_diff = abs(track_count - expected_track_count) if expected_track_count else 0
+        return (not is_official, count_diff, -track_count)
+
+    best = min(releases, key=sort_key)
+
+    tracks: list[dict] = []
+    for disc_idx, medium in enumerate(best.get("media", []), start=1):
+        disc_number = medium.get("position") or disc_idx
+        for track in medium.get("tracks", []):
+            try:
+                position = int(track.get("position") or track.get("number") or 0)
+            except (TypeError, ValueError):
+                position = 0
+            tracks.append(
+                {
+                    "title": track.get("title", ""),
+                    "position": position,
+                    "disc_number": disc_number,
+                    "recording_id": (track.get("recording") or {}).get("id"),
+                }
+            )
+    return tracks
+
+
 # Types qui polluent le suivi (bootlegs, radio broadcasts, demos, mixtapes...) :
 # on ignore completement ces release-groups plutot que de les ranger dans "other".
 _JUNK_SECONDARY_TYPES = {

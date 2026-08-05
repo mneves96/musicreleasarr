@@ -79,6 +79,38 @@ export interface Track {
   owned: boolean | null
 }
 
+export type TaggingStatus = 'needs_review' | 'done' | 'error'
+
+export interface TaggingItem {
+  id: number
+  release_id: number
+  artist_name: string
+  release_title: string
+  source_path: string
+  original_filename: string
+  status: TaggingStatus
+  suggested_track_title: string | null
+  suggested_track_number: number | null
+  suggested_disc_number: number | null
+  match_score: number | null
+  target_path: string | null
+  error_message: string | null
+  created_at: string
+}
+
+export interface TrackChoice {
+  title: string
+  position: number
+  disc_number: number
+  recording_id: string | null
+}
+
+export interface TaggingConfirmPayload {
+  track_title: string
+  track_number?: number | null
+  disc_number?: number | null
+}
+
 export interface Settings {
   metube_url: string | null
   metube_public_url: string | null
@@ -97,6 +129,8 @@ export interface Settings {
   notify_pushbullet_enabled: boolean
   scan_cron: string
   calendar_token: string | null
+  tagging_downloads_path: string
+  tagging_library_path: string
 }
 
 export interface AuthStatus {
@@ -236,6 +270,15 @@ export const api = {
     request<{ status: string }>('/metube/start', { method: 'POST', body: JSON.stringify({ ids }) }),
 
   regenerateCalendarToken: () => request<Settings>('/settings/regenerate-calendar-token', { method: 'POST' }),
+
+  tagging: {
+    backlog: () => request<TaggingItem[]>('/tagging/backlog'),
+    tracklist: (itemId: number) => request<TrackChoice[]>(`/tagging/${itemId}/tracklist`),
+    confirm: (itemId: number, payload: TaggingConfirmPayload) =>
+      request<TaggingItem>(`/tagging/${itemId}/confirm`, { method: 'POST', body: JSON.stringify(payload) }),
+    rescan: (itemId: number) => request<TaggingItem>(`/tagging/${itemId}/rescan`, { method: 'POST' }),
+    discard: (itemId: number) => request<{ status: string }>(`/tagging/${itemId}`, { method: 'DELETE' }),
+  },
 
   authStatus: () => request<AuthStatus>('/auth/status'),
   authSetup: (username: string, password: string) =>

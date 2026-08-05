@@ -246,6 +246,24 @@ export default function SettingsPage() {
         </div>
       </Section>
 
+      <Section title="Organisation automatique">
+        <p className="text-sm text-neutral-400">
+          Chemins vus depuis le conteneur "releases" (le meme volume musical doit y etre monte en ecriture).
+          Utilises par le backlog de redressage metadata pour detecter les telechargements MeTube et ranger les
+          fichiers confirmes.
+        </p>
+        <Field
+          label="Dossier des telechargements MeTube (ex: /music/youtube)"
+          value={settings.tagging_downloads_path}
+          onChange={(v) => set('tagging_downloads_path', v)}
+        />
+        <Field
+          label="Dossier racine de la bibliotheque rangee (ex: /music)"
+          value={settings.tagging_library_path}
+          onChange={(v) => set('tagging_library_path', v)}
+        />
+      </Section>
+
       <Section title="Planification du scan">
         <Field label="Expression cron (ex: 0 6 * * * = tous les jours a 6h)" value={settings.scan_cron} onChange={(v) => set('scan_cron', v)} />
         <div className="flex items-center gap-3">

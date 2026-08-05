@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .auth import require_auth
 from .db import init_db
-from .routers import artists, auth, calendar, metube, releases, search, settings
+from .routers import artists, auth, calendar, metube, releases, search, settings, tagging
 from .scheduler import shutdown_scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +36,7 @@ app.include_router(artists.router, dependencies=protected)
 app.include_router(releases.router, dependencies=protected)
 app.include_router(settings.router, dependencies=protected)
 app.include_router(metube.router, dependencies=protected)
+app.include_router(tagging.router, dependencies=protected)
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 

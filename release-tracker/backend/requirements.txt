@@ -6,3 +6,4 @@ apscheduler==3.10.4
 ytmusicapi==1.8.2
 bcrypt==4.2.0
 icalendar==5.0.13
+mutagen==1.47.0

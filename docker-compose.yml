@@ -67,6 +67,7 @@ services:
       TZ: "${TZ}"
     volumes:
       - "${DEDIEUFY_ROOT}/releases/data:/data"
+      - "${MUSIC_PATH}:/music:rw"
     depends_on:
       - navidrome
       - metube

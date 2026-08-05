@@ -4,6 +4,7 @@ import { api } from '../api'
 import { DownloadingIcon } from './Spinner'
 
 const METUBE_POLL_MS = 6000
+const BACKLOG_POLL_MS = 20000
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-2 rounded-md text-sm font-medium ${
@@ -15,6 +16,7 @@ export default function Layout() {
   const [params] = useSearchParams()
   const [query, setQuery] = useState(params.get('q') ?? '')
   const [downloading, setDownloading] = useState(false)
+  const [backlogCount, setBacklogCount] = useState(0)
 
   // Sonde MeTube depuis le layout (pas seulement depuis la page MeTube elle-meme)
   // pour pouvoir signaler un telechargement en cours meme quand l'utilisateur est
@@ -31,6 +33,26 @@ export default function Layout() {
     }
     poll()
     const interval = window.setInterval(poll, METUBE_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [])
+
+  // Meme logique que le sondage MeTube ci-dessus : signale un backlog a traiter
+  // depuis n'importe quelle page, pas seulement depuis /backlog.
+  useEffect(() => {
+    let cancelled = false
+    async function poll() {
+      try {
+        const backlog = await api.tagging.backlog()
+        if (!cancelled) setBacklogCount(backlog.length)
+      } catch {
+        if (!cancelled) setBacklogCount(0)
+      }
+    }
+    poll()
+    const interval = window.setInterval(poll, BACKLOG_POLL_MS)
     return () => {
       cancelled = true
       window.clearInterval(interval)
@@ -66,6 +88,16 @@ export default function Layout() {
               <span className="inline-flex items-center gap-1.5">
                 MeTube
                 {downloading && <DownloadingIcon />}
+              </span>
+            </NavLink>
+            <NavLink to="/backlog" className={navLinkClass}>
+              <span className="inline-flex items-center gap-1.5">
+                Backlog
+                {backlogCount > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-600 text-white text-[10px] font-semibold">
+                    {backlogCount}
+                  </span>
+                )}
               </span>
             </NavLink>
             <NavLink to="/settings" className={navLinkClass}>

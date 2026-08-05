@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from .models import DownloadStatus, OwnershipStatus, ReleaseType
+from .models import DownloadStatus, OwnershipStatus, ReleaseType, TaggingStatus
 
 
 class ArtistSearchResult(BaseModel):
@@ -94,6 +94,38 @@ class TrackOut(BaseModel):
     owned: bool | None = None
 
 
+class TrackChoice(BaseModel):
+    title: str
+    position: int
+    disc_number: int
+    recording_id: str | None = None
+
+
+class TaggingItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    release_id: int
+    artist_name: str
+    release_title: str
+    source_path: str
+    original_filename: str
+    status: TaggingStatus
+    suggested_track_title: str | None
+    suggested_track_number: int | None
+    suggested_disc_number: int | None
+    match_score: float | None
+    target_path: str | None
+    error_message: str | None
+    created_at: datetime
+
+
+class TaggingConfirmIn(BaseModel):
+    track_title: str
+    track_number: int | None = None
+    disc_number: int | None = None
+
+
 class SettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -114,6 +146,8 @@ class SettingsOut(BaseModel):
     notify_pushbullet_enabled: bool
     scan_cron: str
     calendar_token: str | None
+    tagging_downloads_path: str
+    tagging_library_path: str
 
 
 class SettingsUpdateIn(BaseModel):
@@ -133,6 +167,8 @@ class SettingsUpdateIn(BaseModel):
     pushbullet_token: str | None = None
     notify_pushbullet_enabled: bool | None = None
     scan_cron: str | None = None
+    tagging_downloads_path: str | None = None
+    tagging_library_path: str | None = None
 
 
 class TestConnectionResult(BaseModel):
