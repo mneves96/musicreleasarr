@@ -301,6 +301,11 @@ export const api = {
       request<ReleaseGroupChoice[]>(`/tagging/identify/release-groups?artist_musicbrainz_id=${encodeURIComponent(artistMusicbrainzId)}`),
     identify: (payload: TaggingIdentifyPayload) =>
       request<TaggingItem[]>('/tagging/identify', { method: 'POST', body: JSON.stringify(payload) }),
+    autoMatch: (sourceFolder: string) =>
+      request<TaggingItem[]>('/tagging/folders/auto-match', {
+        method: 'POST',
+        body: JSON.stringify({ source_folder: sourceFolder }),
+      }),
   },
 
   authStatus: () => request<AuthStatus>('/auth/status'),

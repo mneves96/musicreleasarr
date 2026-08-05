@@ -369,7 +369,26 @@ function UnclusteredFolder({
   onIdentified: () => void
 }) {
   const [identifying, setIdentifying] = useState(false)
+  const [matching, setMatching] = useState(false)
+  const [matchMessage, setMatchMessage] = useState<string | null>(null)
   const label = sourceFolder ? `Dossier non identifie : ${sourceFolder}` : 'Fichiers en vrac (racine du dossier de telechargements)'
+
+  async function autoMatch() {
+    setMatching(true)
+    setMatchMessage(null)
+    try {
+      const matched = await api.tagging.autoMatch(sourceFolder)
+      if (matched.length > 0) {
+        onIdentified()
+      } else {
+        setMatchMessage('Aucune correspondance trouvee (artiste non suivi ou aucune piste reconnue).')
+      }
+    } catch (err) {
+      setMatchMessage(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setMatching(false)
+    }
+  }
 
   return (
     <div className="mb-8">
@@ -380,12 +399,25 @@ function UnclusteredFolder({
             ({items.length} fichier{items.length > 1 ? 's' : ''})
           </span>
         </h2>
-        <button
-          onClick={() => setIdentifying((v) => !v)}
-          className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700"
-        >
-          {identifying ? 'Annuler' : 'Identifier...'}
-        </button>
+        <div className="flex items-center gap-2">
+          {matchMessage && <span className="text-xs text-neutral-500">{matchMessage}</span>}
+          {sourceFolder && (
+            <button
+              onClick={autoMatch}
+              disabled={matching}
+              className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+              title="Cherche si le nom du dossier correspond a un artiste suivi, et propose ses pistes manquantes"
+            >
+              {matching ? 'Recherche...' : 'Detecter automatiquement'}
+            </button>
+          )}
+          <button
+            onClick={() => setIdentifying((v) => !v)}
+            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700"
+          >
+            {identifying ? 'Annuler' : 'Identifier...'}
+          </button>
+        </div>
       </div>
       <div className="flex flex-col gap-1.5">
         {items.map((item) => (

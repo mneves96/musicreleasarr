@@ -11,7 +11,15 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Release, TaggingItem, TaggingStatus
 from ..scheduler import get_settings
-from ..schemas import ReleaseGroupChoice, TaggingConfirmIn, TaggingIdentifyIn, TaggingItemOut, TestConnectionResult, TrackChoice
+from ..schemas import (
+    ReleaseGroupChoice,
+    TaggingAutoMatchIn,
+    TaggingConfirmIn,
+    TaggingIdentifyIn,
+    TaggingItemOut,
+    TestConnectionResult,
+    TrackChoice,
+)
 from ..services import tagging
 from .artists import _get_or_create_artist
 
@@ -53,6 +61,17 @@ def scan_now(db: Session = Depends(get_db)):
     return TestConnectionResult(
         ok=True, message=f"{len(created)} fichier(s) (re)detecte(s) - {total_backlog} au total dans le backlog"
     )
+
+
+@router.post("/folders/auto-match", response_model=list[TaggingItemOut])
+def auto_match(payload: TaggingAutoMatchIn, db: Session = Depends(get_db)):
+    """Tente de rapprocher un dossier non identifie d'un artiste suivi (nom de
+    dossier <-> nom d'artiste) - declenche a la demande (bouton "Detecter"),
+    pas automatiquement par le scan periodique (voir services/tagging.py)."""
+    items = tagging.auto_match_folder(db, payload.source_folder)
+    if not items:
+        raise HTTPException(404, "Aucune correspondance trouvee pour ce dossier")
+    return items
 
 
 @router.get("/identify/release-groups", response_model=list[ReleaseGroupChoice])

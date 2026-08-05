@@ -126,13 +126,24 @@ def _greedy_match(
 
 
 def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
-    """Detecte tout fichier audio nouveau (ou reapparu au meme chemin apres
+    """Detecte tout fichier audio present (ou reapparu au meme chemin apres
     avoir deja ete traite) sous le dossier de telechargements, aussi
     profondement imbrique soit-il, groupe par dossier de premier niveau -
     comme Picard qui prend tout ce qu'il trouve, sans condition sur l'origine
-    du telechargement ni sur le statut d'une release cote app. Log en detail
-    ce qu'il trouve et ce qu'il ignore (et pourquoi), pour pouvoir diagnostiquer
-    directement depuis les logs sans avoir a deviner."""
+    du telechargement ni sur le statut d'une release cote app.
+
+    Purement base sur le systeme de fichiers : AUCUN appel reseau ici. Tenter
+    de rapprocher chaque dossier de la tracklist MusicBrainz de toutes les
+    releases manquantes de tous les artistes suivis, a chaque scan (toutes les
+    5 min), etait lent (MusicBrainz limite a 1 requete/seconde) et fragile (un
+    503 ponctuel de MusicBrainz laissait des dossiers entiers sans proposition,
+    sans que la simple detection des fichiers en souffre pour autant). La
+    correspondance devient une action explicite et ciblee - voir
+    auto_match_folder() - a la demande de l'utilisateur, comme le bouton
+    "Lookup" de Picard plutot qu'un scan automatique en arriere-plan.
+
+    Log en detail ce qu'il trouve, pour diagnostiquer directement depuis les
+    logs sans avoir a deviner."""
     root = settings.tagging_downloads_path
     logger.info("Scan du dossier de telechargements : %r", root)
     if not root or not os.path.isdir(root):
@@ -156,9 +167,6 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
         return []
 
     existing_by_path = {item.source_path: item for item in db.query(TaggingItem).all()}
-    artists_by_folder_name = {
-        normalize_text(a.name): a for a in db.query(Artist).filter(Artist.is_followed.is_(True))
-    }
 
     created: list[TaggingItem] = []
     for folder_name, all_files in files_by_folder.items():
@@ -168,31 +176,9 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
         to_process = [p for p in all_files if existing_by_path.get(p) is None or existing_by_path[p].status == TaggingStatus.done]
         skipped = len(all_files) - len(to_process)
         logger.info(
-            "Dossier %r : %d fichier(s) sur disque, %d a (re)traiter, %d deja en attente ignore(s)",
+            "Dossier %r : %d fichier(s) sur disque, %d a (re)detecter, %d deja en attente ignore(s)",
             folder_name or "<racine>", len(all_files), len(to_process), skipped,
         )
-        if not to_process:
-            continue
-
-        artist = artists_by_folder_name.get(folder_name)
-        releases: list[Release] = []
-        if artist is not None:
-            releases = (
-                db.query(Release)
-                .filter(Release.artist_id == artist.id, Release.ownership_status != OwnershipStatus.owned)
-                .all()
-            )
-            logger.info(
-                "Dossier %r rapproche de l'artiste suivi '%s' (%d release(s) candidate(s))",
-                folder_name, artist.name, len(releases),
-            )
-        else:
-            logger.info("Dossier %r non identifie (aucun artiste suivi ne correspond)", folder_name or "<racine>")
-
-        candidates = _candidates_for_releases(releases, len(to_process)) if releases else []
-        labeled = [(path, normalize_text(_clean_filename(os.path.basename(path)))) for path in to_process]
-        matches = _greedy_match(labeled, candidates) if candidates else {}
-
         for path in to_process:
             existing = existing_by_path.get(path)
             item = existing if existing is not None else TaggingItem(source_path=path)
@@ -206,15 +192,6 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
             item.suggested_track_number = None
             item.suggested_disc_number = None
             item.match_score = None
-
-            match = matches.get(path)
-            if match is not None:
-                (matched_release, track), score = match
-                item.release_id = matched_release.id
-                item.suggested_track_title = track["title"]
-                item.suggested_track_number = track["position"]
-                item.suggested_disc_number = track["disc_number"]
-                item.match_score = round(score, 3)
             if existing is None:
                 db.add(item)
             created.append(item)
@@ -222,6 +199,60 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
     db.commit()
     logger.info("Scan termine : %d fichier(s) nouveau(x) ou remis en attente sur %d trouve(s) sur le disque", len(created), total_on_disk)
     return created
+
+
+def auto_match_folder(db: Session, source_folder: str) -> list[TaggingItem]:
+    """Tentative de correspondance automatique nom-de-dossier <-> artiste
+    suivi, declenchee explicitement (bouton "Detecter" cote frontend) plutot
+    que par le scan periodique - voir scan_downloads_root pour le pourquoi.
+    Ne renvoie que les fichiers effectivement matches (les autres restent
+    "non identifies", a traiter via identify_folder si besoin)."""
+    items = (
+        db.query(TaggingItem)
+        .filter(
+            TaggingItem.release_id.is_(None),
+            TaggingItem.source_folder == source_folder,
+            TaggingItem.status == TaggingStatus.needs_review,
+        )
+        .all()
+    )
+    if not items:
+        return []
+
+    followed_artists = db.query(Artist).filter(Artist.is_followed.is_(True)).all()
+    artist = next((a for a in followed_artists if normalize_text(a.name) == source_folder), None)
+    if artist is None:
+        return []
+
+    releases = (
+        db.query(Release)
+        .filter(Release.artist_id == artist.id, Release.ownership_status != OwnershipStatus.owned)
+        .all()
+    )
+    if not releases:
+        return []
+
+    candidates = _candidates_for_releases(releases, len(items))
+    if not candidates:
+        return []
+    labeled = [(str(item.id), normalize_text(_clean_filename(item.original_filename))) for item in items]
+    matches = _greedy_match(labeled, candidates)
+
+    matched_items: list[TaggingItem] = []
+    for item in items:
+        match = matches.get(str(item.id))
+        if match is None:
+            continue
+        (matched_release, track), score = match
+        item.release_id = matched_release.id
+        item.suggested_track_title = track["title"]
+        item.suggested_track_number = track["position"]
+        item.suggested_disc_number = track["disc_number"]
+        item.match_score = round(score, 3)
+        matched_items.append(item)
+
+    db.commit()
+    return matched_items
 
 
 def search_release_groups(artist_musicbrainz_id: str) -> list[dict]:

@@ -144,6 +144,10 @@ class TaggingIdentifyIn(BaseModel):
     release_date: date | None = None
 
 
+class TaggingAutoMatchIn(BaseModel):
+    source_folder: str
+
+
 class SettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
