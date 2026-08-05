@@ -103,6 +103,7 @@ export interface TrackChoice {
   position: number
   disc_number: number
   recording_id: string | null
+  release_mbid: string | null
 }
 
 export interface TaggingConfirmPayload {
@@ -110,6 +111,7 @@ export interface TaggingConfirmPayload {
   track_number?: number | null
   disc_number?: number | null
   recording_id?: string | null
+  release_mbid?: string | null
 }
 
 export interface ReleaseGroupChoice {

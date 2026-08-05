@@ -136,6 +136,13 @@ def get_release_tracks(release_group_mbid: str, expected_track_count: int | None
                     "position": position,
                     "disc_number": disc_number,
                     "recording_id": (track.get("recording") or {}).get("id"),
+                    # ID de la release CONCRETE choisie (distinct de release_group_mbid,
+                    # l'"album abstrait") : c'est celui-ci qu'il faut ecrire dans le tag
+                    # "MusicBrainz Album Id" pour que Picard/tout autre outil MusicBrainz
+                    # retrouve la bonne fiche - ecrire l'id de release-group a la place
+                    # (l'erreur initiale ici) fait chercher le mauvais type d'objet et
+                    # ne trouve donc rien.
+                    "release_mbid": best.get("id"),
                 }
             )
     return tracks

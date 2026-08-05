@@ -407,6 +407,7 @@ def _write_tags(
     track_number: int | None,
     disc_number: int | None,
     recording_id: str | None,
+    release_mbid: str | None,
     plain_lyrics: str | None,
     synced_lyrics: str | None,
 ) -> None:
@@ -444,8 +445,18 @@ def _write_tags(
     # Identifiants MusicBrainz complets (comme Picard) : facilite le matching cote
     # Navidrome/autres lecteurs et evite les doublons d'album lies a des tags
     # incoherents entre pistes.
-    tags.delall("TXXX:MusicBrainz Album Id")
-    tags.add(TXXX(encoding=3, desc="MusicBrainz Album Id", text=release.musicbrainz_id))
+    #
+    # release.musicbrainz_id est un id de RELEASE-GROUP (l'"album abstrait" -
+    # voir services/musicbrainz.py:get_release_groups), pas de release concrete.
+    # "MusicBrainz Album Id" doit contenir l'id d'une release CONCRETE (edition
+    # precise), sinon Picard/tout autre outil MusicBrainz cherche le mauvais
+    # type d'objet et ne trouve rien. release_mbid (fourni par le frontend, tire
+    # de la release choisie par get_release_tracks) est la bonne valeur ; a
+    # defaut (saisie manuelle sans tracklist), on omet le tag plutot que d'y
+    # mettre une valeur plausible mais fausse.
+    if release_mbid:
+        tags.delall("TXXX:MusicBrainz Album Id")
+        tags.add(TXXX(encoding=3, desc="MusicBrainz Album Id", text=release_mbid))
     tags.delall("TXXX:MusicBrainz Release Group Id")
     tags.add(TXXX(encoding=3, desc="MusicBrainz Release Group Id", text=release.musicbrainz_id))
     tags.delall("TXXX:MusicBrainz Artist Id")
@@ -511,6 +522,7 @@ def apply_tag_and_move(
     track_number: int | None,
     disc_number: int | None,
     recording_id: str | None = None,
+    release_mbid: str | None = None,
 ) -> TaggingItem:
     """Ecrit les tags ID3 et deplace le fichier vers <bibliotheque>/<Artiste>/<Album>/
     - seule fonction de ce module qui ecrit sur le disque, appelee uniquement
@@ -546,7 +558,7 @@ def apply_tag_and_move(
 
     source_dir = os.path.dirname(item.source_path)
     try:
-        _write_tags(item.source_path, item, track_title, track_number, disc_number, recording_id, plain_lyrics, synced_lyrics)
+        _write_tags(item.source_path, item, track_title, track_number, disc_number, recording_id, release_mbid, plain_lyrics, synced_lyrics)
         os.makedirs(target_dir, exist_ok=True)
         shutil.move(item.source_path, target_path)
     except Exception as exc:
