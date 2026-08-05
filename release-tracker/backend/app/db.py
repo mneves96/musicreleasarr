@@ -45,8 +45,15 @@ def _add_missing_columns():
     jamais les lignes existantes avec le default cote Python (default= ne joue
     que sur les futurs INSERT via l'ORM) : une colonne non-nullable ajoutee
     ainsi se retrouve a NULL sur les installations existantes, ce qui casse
-    ensuite la validation Pydantic des schemas *Out qui la declarent non-optionnelle
-    - d'ou le backfill explicite ci-dessous pour les colonnes ayant un default scalaire."""
+    ensuite la validation Pydantic des schemas *Out qui la declarent non-optionnelle.
+
+    Le backfill ci-dessous tourne a CHAQUE demarrage, pas seulement pour les
+    colonnes qui viennent d'etre ajoutees : une installation qui a deja tourne
+    une fois avec la colonne presente-mais-NULL (ex: deployee entre l'ajout de
+    la colonne et l'ajout de ce backfill) resterait sinon bloquee a NULL pour
+    toujours, puisque `col.name in existing_cols` la ferait sauter des le tour
+    suivant. Idempotent et sans cout (WHERE ... IS NULL ne touche plus rien une
+    fois la ligne reparee)."""
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
 
@@ -55,12 +62,13 @@ def _add_missing_columns():
             continue
         existing_cols = {c["name"] for c in inspector.get_columns(table.name)}
         for col in table.columns:
-            if col.name in existing_cols:
-                continue
-            col_type = col.type.compile(engine.dialect)
-            with engine.begin() as conn:
-                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}'))
-                if col.default is not None and getattr(col.default, "is_scalar", False):
+            if col.name not in existing_cols:
+                col_type = col.type.compile(engine.dialect)
+                with engine.begin() as conn:
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}'))
+
+            if not col.nullable and col.default is not None and getattr(col.default, "is_scalar", False):
+                with engine.begin() as conn:
                     conn.execute(
                         text(f'UPDATE "{table.name}" SET "{col.name}" = :val WHERE "{col.name}" IS NULL'),
                         {"val": col.default.arg},
