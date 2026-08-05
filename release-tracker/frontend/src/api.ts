@@ -80,6 +80,13 @@ export interface Settings {
   pushbullet_token: string | null
   notify_pushbullet_enabled: boolean
   scan_cron: string
+  calendar_token: string | null
+}
+
+export interface AuthStatus {
+  needs_setup: boolean
+  authenticated: boolean
+  username: string | null
 }
 
 export interface TestConnectionResult {
@@ -128,6 +135,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })
+  if (resp.status === 401) {
+    // La session a expire ou a ete invalidee (changement de mot de passe sur un
+    // autre onglet, etc.) - previent AuthGate pour qu'il reaffiche l'ecran de
+    // connexion, plutot que de laisser chaque page geter un 401 individuellement.
+    window.dispatchEvent(new Event('auth:unauthorized'))
+  }
   if (!resp.ok) {
     const body = await resp.text()
     throw new Error(`${resp.status} ${resp.statusText} : ${body}`)
@@ -198,6 +211,20 @@ export const api = {
     request<{ status: string }>('/metube/delete', { method: 'POST', body: JSON.stringify({ ids, where }) }),
   metubeStart: (ids: string[]) =>
     request<{ status: string }>('/metube/start', { method: 'POST', body: JSON.stringify({ ids }) }),
+
+  regenerateCalendarToken: () => request<Settings>('/settings/regenerate-calendar-token', { method: 'POST' }),
+
+  authStatus: () => request<AuthStatus>('/auth/status'),
+  authSetup: (username: string, password: string) =>
+    request<AuthStatus>('/auth/setup', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  authLogin: (username: string, password: string) =>
+    request<AuthStatus>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  authLogout: () => request<{ status: string }>('/auth/logout', { method: 'POST' }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ status: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password, new_password }),
+    }),
 }
 
 export const RELEASE_TYPE_LABELS: Record<ReleaseType, string> = {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, RELEASE_TYPE_LABELS, type Release } from '../api'
+import { LoadingBlock } from '../components/Spinner'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const MONTH_NAMES = [
@@ -87,7 +88,7 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {loading && <p className="text-neutral-400 mb-2">Chargement...</p>}
+      {loading && <div className="mb-2"><LoadingBlock /></div>}
 
       <div className="grid grid-cols-7 gap-1 text-xs text-neutral-500 mb-1">
         {WEEKDAYS.map((w) => (

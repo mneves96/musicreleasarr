@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ..db import get_db
+from ..db import SessionLocal, get_db
 from ..enrichment import enrich_artist
 from ..models import ALL_RELEASE_TYPES, Artist
 from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
@@ -42,15 +42,20 @@ def _get_or_create_artist(db: Session, musicbrainz_id: str) -> Artist:
     return artist
 
 
-def _scan_best_effort(db: Session, artist: Artist) -> None:
-    try:
-        scheduler.scan_artist(db, artist)
-        db.refresh(artist)
-    except Exception:
-        # L'artiste existe deja avec succes en base a ce stade : un echec de scan
-        # (reseau MusicBrainz/YouTube Music flaky) ne doit pas faire echouer la
-        # requete. Il sera retente par le cron ou le bouton "Actualiser".
-        logger.exception("Scan echoue pour %s, sera retente automatiquement", artist.name)
+def _scan_in_background(artist_id: int) -> None:
+    """Le scan (decouverte MusicBrainz + YouTube Music) domine largement le temps
+    de reponse de "suivre"/"previsualiser" un artiste (pagination MusicBrainz
+    limitee a 1 req/s). On le deporte donc en tache de fond, avec sa propre
+    session DB puisque celle de la requete HTTP sera deja fermee. Un echec ici
+    (reseau flaky) sera retente par le cron ou le bouton "Actualiser"."""
+    with SessionLocal() as db:
+        artist = db.get(Artist, artist_id)
+        if artist is None:
+            return
+        try:
+            scheduler.scan_artist(db, artist)
+        except Exception:
+            logger.exception("Scan echoue pour %s, sera retente automatiquement", artist.name)
 
 
 class PreviewIn(BaseModel):
@@ -58,17 +63,17 @@ class PreviewIn(BaseModel):
 
 
 @router.post("/preview", response_model=ArtistOut)
-def preview_artist(payload: PreviewIn, db: Session = Depends(get_db)):
-    """Cree/recupere la fiche d'un artiste et lance un scan, sans le faire suivre -
-    permet d'ouvrir la page d'un artiste trouve par la recherche pour consulter sa
-    discographie avant de decider de le suivre."""
+def preview_artist(payload: PreviewIn, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Cree/recupere la fiche d'un artiste et lance un scan en arriere-plan, sans
+    le faire suivre - permet d'ouvrir la page d'un artiste trouve par la
+    recherche pour consulter sa discographie avant de decider de le suivre."""
     artist = _get_or_create_artist(db, payload.musicbrainz_id)
-    _scan_best_effort(db, artist)
+    background_tasks.add_task(_scan_in_background, artist.id)
     return artist
 
 
 @router.post("", response_model=ArtistOut)
-def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
+def follow_artist(payload: FollowArtistIn, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     artist = _get_or_create_artist(db, payload.musicbrainz_id)
 
     artist.is_followed = True
@@ -80,7 +85,7 @@ def follow_artist(payload: FollowArtistIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(artist)
 
-    _scan_best_effort(db, artist)
+    background_tasks.add_task(_scan_in_background, artist.id)
     return artist
 
 

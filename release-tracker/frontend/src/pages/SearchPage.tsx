@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ALL_RELEASE_TYPES, api, type ArtistSearchResult } from '../api'
+import Spinner, { LoadingBlock } from '../components/Spinner'
 
 export default function SearchPage() {
   const [params] = useSearchParams()
@@ -58,7 +59,7 @@ export default function SearchPage() {
         {query ? `Resultats pour "${query}"` : 'Recherche d\'artistes'}
       </h1>
       {!query && <p className="text-neutral-400">Utilise la barre de recherche en haut de page.</p>}
-      {loading && <p className="text-neutral-400">Recherche en cours...</p>}
+      {loading && <LoadingBlock label="Recherche en cours..." />}
       {error && <p className="text-red-400">{error}</p>}
       <div className="flex flex-col gap-2">
         {results.map((r) => (
@@ -88,9 +89,10 @@ export default function SearchPage() {
               <button
                 onClick={() => follow(r)}
                 disabled={busyId === r.musicbrainz_id}
-                className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+                className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
               >
-                {busyId === r.musicbrainz_id ? '...' : 'Suivre'}
+                {busyId === r.musicbrainz_id && <Spinner className="w-3 h-3" />}
+                Suivre
               </button>
             )}
           </div>

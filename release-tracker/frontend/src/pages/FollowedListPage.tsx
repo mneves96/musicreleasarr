@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, type Artist } from '../api'
 import ArtistCard from '../components/ArtistCard'
 import ArtistListRow from '../components/ArtistListRow'
+import { LoadingBlock } from '../components/Spinner'
 
 type ViewMode = 'grid' | 'list'
 type SortBy = 'name' | 'albums' | 'latest'
@@ -10,11 +11,21 @@ type SortBy = 'name' | 'albums' | 'latest'
 const POLL_INTERVAL_MS = 4000
 const POLL_MAX_TICKS = 15 // ~1 minute
 
+const VIEW_STORAGE_KEY = 'followedList.view'
+const SORT_STORAGE_KEY = 'followedList.sortBy'
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const stored = localStorage.getItem(key)
+  return (allowed as readonly string[]).includes(stored ?? '') ? (stored as T) : fallback
+}
+
 export default function FollowedListPage() {
   const [artists, setArtists] = useState<Artist[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<ViewMode>('grid')
-  const [sortBy, setSortBy] = useState<SortBy>('name')
+  const [view, setView] = useState<ViewMode>(() => readStored(VIEW_STORAGE_KEY, ['grid', 'list'] as const, 'grid'))
+  const [sortBy, setSortBy] = useState<SortBy>(() =>
+    readStored(SORT_STORAGE_KEY, ['name', 'albums', 'latest'] as const, 'name')
+  )
   const [query, setQuery] = useState('')
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
@@ -28,6 +39,14 @@ export default function FollowedListPage() {
       if (pollRef.current) window.clearInterval(pollRef.current)
     }
   }, [load])
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_STORAGE_KEY, view)
+  }, [view])
+
+  useEffect(() => {
+    localStorage.setItem(SORT_STORAGE_KEY, sortBy)
+  }, [sortBy])
 
   async function importFavorites() {
     setImporting(true)
@@ -69,7 +88,7 @@ export default function FollowedListPage() {
     return sorted
   }, [artists, query, sortBy])
 
-  if (loading) return <p className="text-neutral-400">Chargement...</p>
+  if (loading) return <LoadingBlock />
 
   return (
     <div>

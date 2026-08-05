@@ -2,12 +2,13 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .auth import require_auth
 from .db import init_db
-from .routers import artists, metube, releases, search, settings
+from .routers import artists, auth, calendar, metube, releases, search, settings
 from .scheduler import shutdown_scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -23,11 +24,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MusicReleasarr", lifespan=lifespan)
 
-app.include_router(search.router)
-app.include_router(artists.router)
-app.include_router(releases.router)
-app.include_router(settings.router)
-app.include_router(metube.router)
+# auth.router (login/setup/status) et calendar.router (flux ICS, protege par
+# son propre token dans l'URL) restent accessibles sans session - tout le
+# reste de l'API exige une session valide.
+app.include_router(auth.router)
+app.include_router(calendar.router)
+
+protected = [Depends(require_auth)]
+app.include_router(search.router, dependencies=protected)
+app.include_router(artists.router, dependencies=protected)
+app.include_router(releases.router, dependencies=protected)
+app.include_router(settings.router, dependencies=protected)
+app.include_router(metube.router, dependencies=protected)
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 

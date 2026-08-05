@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
+import { api } from '../api'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-2 rounded-md text-sm font-medium ${
@@ -14,6 +15,11 @@ export default function Layout() {
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (query.trim()) navigate(`/search?q=${encodeURIComponent(query.trim())}`)
+  }
+
+  async function logout() {
+    await api.authLogout()
+    window.dispatchEvent(new Event('auth:unauthorized'))
   }
 
   return (
@@ -46,6 +52,13 @@ export default function Layout() {
               className="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </form>
+          <button
+            onClick={logout}
+            title="Se deconnecter"
+            className="text-xs px-3 py-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-900 whitespace-nowrap"
+          >
+            Deconnexion
+          </button>
         </div>
       </header>
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">

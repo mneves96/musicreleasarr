@@ -9,10 +9,12 @@ export default function ReleaseRow({
   release,
   showArtist = false,
   onChanged,
+  onTracksLoaded,
 }: {
   release: Release
   showArtist?: boolean
   onChanged?: () => void
+  onTracksLoaded?: (releaseId: number, tracks: Track[]) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -42,7 +44,9 @@ export default function ReleaseRow({
     setTracksLoading(true)
     setMessage(null)
     try {
-      setTracks(await api.listTracks(release.id))
+      const result = await api.listTracks(release.id)
+      setTracks(result)
+      onTracksLoaded?.(release.id, result)
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Impossible de recuperer les pistes')
     } finally {

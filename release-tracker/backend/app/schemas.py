@@ -103,6 +103,7 @@ class SettingsOut(BaseModel):
     pushbullet_token: str | None
     notify_pushbullet_enabled: bool
     scan_cron: str
+    calendar_token: str | None
 
 
 class SettingsUpdateIn(BaseModel):

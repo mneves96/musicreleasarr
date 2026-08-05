@@ -1,11 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { ALL_RELEASE_TYPES, api, RELEASE_TYPE_LABELS, type ArtistWithReleases, type ReleaseType } from '../api'
+import { ALL_RELEASE_TYPES, api, RELEASE_TYPE_LABELS, type ArtistWithReleases, type ReleaseType, type Track } from '../api'
 import ReleaseRow from '../components/ReleaseRow'
 import ServiceLink from '../components/ServiceLink'
 import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from '../components/ServiceIcons'
+import Spinner, { LoadingBlock } from '../components/Spinner'
 
 const FILTER_TYPES: (ReleaseType | 'all')[] = ['all', 'album', 'ep', 'single', 'compilation', 'other']
+
+// Le premier scan (decouverte MusicBrainz + resolution YouTube Music) tourne en
+// arriere-plan des le suivi/la previsualisation - on sonde donc la fiche le temps
+// qu'il se termine, plutot que de laisser la page paraitre vide indefiniment.
+const SCAN_POLL_INTERVAL_MS = 3000
+const SCAN_POLL_MAX_TICKS = 20 // ~1 minute
 
 export default function ArtistPage() {
   const { id } = useParams()
@@ -15,12 +22,19 @@ export default function ArtistPage() {
   const [scanning, setScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<ReleaseType | 'all'>('all')
+  const [sortDesc, setSortDesc] = useState(true)
+  const [query, setQuery] = useState('')
+  const [tracksByRelease, setTracksByRelease] = useState<Record<number, Track[]>>({})
+  const [awaitingScan, setAwaitingScan] = useState(false)
+  const scanPollTicks = useRef(0)
 
   const load = useCallback(() => {
     return api.getArtist(artistId).then(setArtist)
   }, [artistId])
 
   useEffect(() => {
+    setArtist(null)
+    scanPollTicks.current = 0
     load()
   }, [load])
 
@@ -32,7 +46,31 @@ export default function ArtistPage() {
     return () => window.clearInterval(interval)
   }, [artist, load])
 
-  if (!artist) return <p className="text-neutral-400">Chargement...</p>
+  // Le scan initial (lance en arriere-plan par le backend) peut prendre jusqu'a
+  // une minute sur un catalogue important - on sonde tant qu'aucune sortie n'est
+  // encore visible, pour afficher les resultats des qu'ils arrivent sans que
+  // l'utilisateur ait a rafraichir la page manuellement. Reprogramme un seul
+  // sondage a la fois (plutot qu'un setInterval) : des que "artist" est
+  // remplace par une version avec des sorties, cet effet se re-declenche et
+  // s'arrete de lui-meme au lieu de continuer jusqu'a la limite de temps.
+  useEffect(() => {
+    if (!artist || artist.releases.length > 0 || scanPollTicks.current >= SCAN_POLL_MAX_TICKS) {
+      setAwaitingScan(false)
+      return
+    }
+    setAwaitingScan(true)
+    const timeout = window.setTimeout(() => {
+      scanPollTicks.current += 1
+      load()
+    }, SCAN_POLL_INTERVAL_MS)
+    return () => window.clearTimeout(timeout)
+  }, [artist, load])
+
+  function onTracksLoaded(releaseId: number, tracks: Track[]) {
+    setTracksByRelease((prev) => ({ ...prev, [releaseId]: tracks }))
+  }
+
+  if (!artist) return <LoadingBlock />
 
   async function updateFollow(patch: Partial<ArtistWithReleases>) {
     setSaving(true)
@@ -78,8 +116,9 @@ export default function ArtistPage() {
             <button
               onClick={refresh}
               disabled={scanning}
-              className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 whitespace-nowrap"
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 whitespace-nowrap"
             >
+              {scanning && <Spinner className="w-3 h-3" />}
               {scanning ? 'Scan en cours...' : '↻ Actualiser'}
             </button>
             {scanMessage && <span className="text-xs text-neutral-400">{scanMessage}</span>}
@@ -153,17 +192,48 @@ export default function ArtistPage() {
         </div>
       </div>
 
+      {awaitingScan && (
+        <div className="flex items-center gap-2 text-sm text-neutral-400 mb-4 bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+          <Spinner className="w-4 h-4" />
+          Scan en cours, ca peut prendre jusqu'a une minute pour un catalogue important...
+        </div>
+      )}
+
       {(() => {
-        const filtered =
-          typeFilter === 'all' ? artist.releases : artist.releases.filter((r) => r.release_type === typeFilter)
+        const q = query.trim().toLowerCase()
+        let filtered = typeFilter === 'all' ? artist.releases : artist.releases.filter((r) => r.release_type === typeFilter)
+        if (q) {
+          filtered = filtered.filter(
+            (r) =>
+              r.title.toLowerCase().includes(q) ||
+              (tracksByRelease[r.id] ?? []).some((t) => t.title.toLowerCase().includes(q))
+          )
+        }
+        filtered = [...filtered].sort((a, b) => {
+          const cmp = (a.release_date ?? '').localeCompare(b.release_date ?? '')
+          return sortDesc ? -cmp : cmp
+        })
         return (
           <>
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <h2 className="font-medium">
                 Sorties ({filtered.length}
-                {typeFilter !== 'all' && ` / ${artist.releases.length}`})
+                {(typeFilter !== 'all' || q) && ` / ${artist.releases.length}`})
               </h2>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap items-center">
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Rechercher un titre (release ou piste deja consultee)..."
+                  className="bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <button
+                  onClick={() => setSortDesc((v) => !v)}
+                  title={sortDesc ? 'Plus recentes en premier' : 'Plus anciennes en premier'}
+                  className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 whitespace-nowrap"
+                >
+                  Date {sortDesc ? '↓' : '↑'}
+                </button>
                 {FILTER_TYPES.map((type) => (
                   <button
                     key={type}
@@ -184,11 +254,11 @@ export default function ArtistPage() {
                 <p className="text-neutral-400 text-sm">
                   {artist.releases.length === 0
                     ? 'Aucune sortie trouvee pour le moment (le premier scan n\'a peut-etre pas encore tourne).'
-                    : 'Aucune sortie de ce type.'}
+                    : 'Aucune sortie ne correspond au filtre.'}
                 </p>
               )}
               {filtered.map((r) => (
-                <ReleaseRow key={r.id} release={r} onChanged={load} />
+                <ReleaseRow key={r.id} release={r} onChanged={load} onTracksLoaded={onTracksLoaded} />
               ))}
             </div>
           </>

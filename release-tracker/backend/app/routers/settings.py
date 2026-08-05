@@ -1,3 +1,5 @@
+import secrets
+
 import httpx
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -12,7 +14,21 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 @router.get("", response_model=SettingsOut)
 def read_settings(db: Session = Depends(get_db)):
-    return scheduler.get_settings(db)
+    settings = scheduler.get_settings(db)
+    if not settings.calendar_token:
+        settings.calendar_token = secrets.token_urlsafe(24)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
+@router.post("/regenerate-calendar-token", response_model=SettingsOut)
+def regenerate_calendar_token(db: Session = Depends(get_db)):
+    settings = scheduler.get_settings(db)
+    settings.calendar_token = secrets.token_urlsafe(24)
+    db.commit()
+    db.refresh(settings)
+    return settings
 
 
 @router.put("", response_model=SettingsOut)

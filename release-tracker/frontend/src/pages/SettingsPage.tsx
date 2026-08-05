@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, type Settings, type TestConnectionResult } from '../api'
+import Spinner, { LoadingBlock } from '../components/Spinner'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -39,6 +40,107 @@ function ResultLine({ result }: { result: TestConnectionResult | null }) {
   return <p className={`text-xs ${result.ok ? 'text-green-400' : 'text-red-400'}`}>{result.message}</p>
 }
 
+function CalendarSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+  const [copied, setCopied] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const url = settings.calendar_token ? `${window.location.origin}/api/calendar/${settings.calendar_token}.ics` : null
+
+  async function copy() {
+    if (!url) return
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function regenerate() {
+    setRegenerating(true)
+    try {
+      setSettings(await api.regenerateCalendarToken())
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  return (
+    <Section title="Calendrier">
+      <p className="text-sm text-neutral-400">
+        Abonne-toi a ce lien depuis Google Calendar, Apple Calendar ou Outlook pour voir les sorties directement
+        dans ton calendrier - il se met a jour automatiquement, comme la page Calendrier de l'app.
+      </p>
+      {url && (
+        <div className="flex items-center gap-2">
+          <input readOnly value={url} className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-neutral-400" />
+          <button onClick={copy} className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 whitespace-nowrap">
+            {copied ? 'Copie !' : 'Copier'}
+          </button>
+        </div>
+      )}
+      <div>
+        <button
+          onClick={regenerate}
+          disabled={regenerating}
+          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {regenerating && <Spinner className="w-3 h-3" />}
+          Regenerer le lien
+        </button>
+        <p className="text-xs text-neutral-500 mt-1">L'ancien lien cessera de fonctionner immediatement.</p>
+      </div>
+    </Section>
+  )
+}
+
+function SecuritySection() {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<TestConnectionResult | null>(null)
+
+  async function submit() {
+    setResult(null)
+    if (next !== confirm) {
+      setResult({ ok: false, message: 'Les deux mots de passe ne correspondent pas' })
+      return
+    }
+    if (next.length < 8) {
+      setResult({ ok: false, message: 'Nouveau mot de passe trop court (8 caracteres minimum)' })
+      return
+    }
+    setBusy(true)
+    try {
+      await api.changePassword(current, next)
+      setResult({ ok: true, message: 'Mot de passe mis a jour' })
+      setCurrent('')
+      setNext('')
+      setConfirm('')
+    } catch (err) {
+      setResult({ ok: false, message: err instanceof Error ? err.message : 'Erreur' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Section title="Securite">
+      <Field label="Mot de passe actuel" type="password" value={current} onChange={setCurrent} />
+      <Field label="Nouveau mot de passe" type="password" value={next} onChange={setNext} />
+      <Field label="Confirmer le nouveau mot de passe" type="password" value={confirm} onChange={setConfirm} />
+      <div className="flex items-center gap-3">
+        <button
+          onClick={submit}
+          disabled={busy || !current || !next}
+          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {busy && <Spinner className="w-3 h-3" />}
+          Changer le mot de passe
+        </button>
+        <ResultLine result={result} />
+      </div>
+    </Section>
+  )
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [saving, setSaving] = useState(false)
@@ -49,7 +151,7 @@ export default function SettingsPage() {
     api.getSettings().then(setSettings)
   }, [])
 
-  if (!settings) return <p className="text-neutral-400">Chargement...</p>
+  if (!settings) return <LoadingBlock />
 
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
     setSettings((s) => (s ? { ...s, [key]: value } : s))
@@ -153,6 +255,10 @@ export default function SettingsPage() {
           <ResultLine result={results.scan ?? null} />
         </div>
       </Section>
+
+      <CalendarSection settings={settings} setSettings={setSettings} />
+
+      <SecuritySection />
 
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={saving} className="px-4 py-2 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50">

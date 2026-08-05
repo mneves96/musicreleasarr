@@ -38,8 +38,23 @@ Un scan complet tourne selon la planification definie dans Reglages (par defaut 
 2. Cree un **mot de passe d'application** (Compte Google > Securite > Mots de passe des applications)
 3. Renseigne dans Reglages : serveur `smtp.gmail.com`, port `587`, ton adresse Gmail comme utilisateur, le mot de passe d'application genere, et l'adresse d'envoi/destination
 
+## Authentification
+
+A la premiere ouverture, l'app demande de creer un compte (nom d'utilisateur + mot de passe, 8 caracteres minimum) - c'est le seul compte de l'app, elle n'est pas multi-utilisateur. Une fois cree, chaque acces necessite une connexion (session valable 30 jours).
+
+- **Changer de mot de passe** : Reglages > Securite
+- **Mot de passe perdu** : comme il n'y a qu'un seul compte et pas d'email de recuperation fiable a demeure, la reinitialisation se fait directement dans le conteneur, la ou l'acces shell au NAS fait deja office de niveau de confiance :
+  ```bash
+  docker compose exec releases python -m app.cli reset-password
+  ```
+  La commande demande un nouveau mot de passe (saisie masquee) et l'applique immediatement.
+
+## Abonnement calendrier (ICS)
+
+Reglages > Calendrier fournit un lien `.ics` a coller dans Google Calendar, Apple Calendar ou Outlook ("s'abonner a un calendrier par URL"). Il reflete en temps reel les memes sorties que la page Calendrier de l'app - pas besoin de le re-generer sauf si tu veux invalider un lien deja partage.
+
 ## Limites connues
 
 - La recherche/le telechargement YouTube Music repose sur `ytmusicapi`, une librairie non-officielle qui peut casser si Google modifie son frontend. En cas d'echec de recherche, le telechargement manuel piste par piste depuis la page artiste reste possible en reessayant plus tard.
 - Spotify n'est pas integre en v1 (les champs existent en base pour une evolution future), les liens/covers Spotify ne sont donc pas affiches.
-- MusicBrainz applique une limite de 1 requete/seconde ; le premier scan d'un artiste avec un tres gros catalogue peut prendre plusieurs dizaines de secondes.
+- MusicBrainz applique une limite de 1 requete/seconde ; le premier scan d'un artiste avec un tres gros catalogue peut prendre jusqu'a une minute. Suivre/previsualiser un artiste ne bloque plus sur ce scan (il tourne en arriere-plan), mais la liste des sorties peut mettre quelques dizaines de secondes a se remplir.
