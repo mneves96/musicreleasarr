@@ -39,15 +39,23 @@ export default function ArtistPage() {
     load()
   }, [load])
 
-  // Le scan initial (lance en arriere-plan par le backend) peut prendre jusqu'a
-  // une minute sur un catalogue important - on sonde tant qu'aucune sortie n'est
-  // encore visible, pour afficher les resultats des qu'ils arrivent sans que
-  // l'utilisateur ait a rafraichir la page manuellement. Reprogramme un seul
-  // sondage a la fois (plutot qu'un setInterval) : des que "artist" est
-  // remplace par une version avec des sorties, cet effet se re-declenche et
-  // s'arrete de lui-meme au lieu de continuer jusqu'a la limite de temps.
+  // Le scan initial (lance en arriere-plan par le backend au moment de suivre/
+  // previsualiser un artiste, voir routers/artists.py:_scan_in_background) peut
+  // prendre jusqu'a une minute sur un catalogue important - on sonde tant
+  // qu'aucune sortie n'est encore visible, pour afficher les resultats des
+  // qu'ils arrivent sans que l'utilisateur ait a rafraichir la page
+  // manuellement. Reprogramme un seul sondage a la fois (plutot qu'un
+  // setInterval) : des que "artist" est remplace par une version avec des
+  // sorties, cet effet se re-declenche et s'arrete de lui-meme au lieu de
+  // continuer jusqu'a la limite de temps.
+  //
+  // Les artistes recommandes Last.fm (is_recommended) ne beneficient jamais de
+  // ce scan automatique - genere en masse chaque nuit, le declencher pour
+  // chacun saturerait MusicBrainz (1 requete/seconde) - donc sonder ici pour
+  // eux attendait indefiniment des sorties qui n'arriveraient jamais. Le
+  // bouton "Actualiser" reste le moyen de lancer ce scan a la demande.
   useEffect(() => {
-    if (!artist || artist.releases.length > 0 || scanPollTicks.current >= SCAN_POLL_MAX_TICKS) {
+    if (!artist || artist.is_recommended || artist.releases.length > 0 || scanPollTicks.current >= SCAN_POLL_MAX_TICKS) {
       setAwaitingScan(false)
       return
     }
@@ -248,7 +256,9 @@ export default function ArtistPage() {
               {filtered.length === 0 && (
                 <p className="text-neutral-400 text-sm">
                   {artist.releases.length === 0
-                    ? 'Aucune sortie trouvee pour le moment (le premier scan n\'a peut-etre pas encore tourne).'
+                    ? artist.is_recommended
+                      ? 'Aucune sortie chargee pour le moment - clique sur "Actualiser" pour decouvrir la discographie de cet artiste.'
+                      : 'Aucune sortie trouvee pour le moment (le premier scan n\'a peut-etre pas encore tourne).'
                     : 'Aucune sortie ne correspond au filtre.'}
                 </p>
               )}
