@@ -80,6 +80,16 @@ export interface Track {
   owned: boolean | null
 }
 
+export interface TopTrack {
+  title: string
+  playcount: number | null
+  listeners: number | null
+  album_title: string | null
+  release_date: string | null
+  cover_url: string | null
+  video_id: string | null
+}
+
 export type TaggingStatus = 'needs_review' | 'done' | 'error'
 
 export interface TaggingItem {
@@ -257,6 +267,8 @@ export const api = {
     request<Artist>(`/artists/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
   scanArtist: (id: number) => request<TestConnectionResult>(`/artists/${id}/scan`, { method: 'POST' }),
+
+  getArtistTopTracks: (id: number) => request<TopTrack[]>(`/artists/${id}/top-tracks`),
 
   importFavorites: () => request<TestConnectionResult>('/artists/import-favorites', { method: 'POST' }),
 

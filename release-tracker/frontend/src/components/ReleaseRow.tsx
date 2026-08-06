@@ -6,14 +6,7 @@ import ServiceLink from './ServiceLink'
 import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from './ServiceIcons'
 import { usePlayer, type QueueTrack } from '../context/PlayerContext'
 import Spinner from './Spinner'
-
-function PlayGlyph({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
-      <path d="M7 5v14l12-7z" />
-    </svg>
-  )
-}
+import PlayGlyph from './PlayGlyph'
 
 export default function ReleaseRow({
   release,

@@ -100,6 +100,16 @@ class ArtistUpdateIn(BaseModel):
     followed_release_types: list[str] | None = None
 
 
+class TopTrackOut(BaseModel):
+    title: str
+    playcount: int | None = None
+    listeners: int | None = None
+    album_title: str | None = None
+    release_date: date | None = None
+    cover_url: str | None = None
+    video_id: str | None = None
+
+
 class TrackOut(BaseModel):
     title: str
     video_id: str

@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
@@ -6,14 +7,38 @@ from sqlalchemy.orm import Session
 
 from ..db import SessionLocal, get_db
 from ..enrichment import get_or_create_artist
+from ..matching import best_match
 from ..models import ALL_RELEASE_TYPES, Artist
-from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
-from ..services import navidrome
+from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult, TopTrackOut
+from ..services import lastfm, navidrome, ytmusic
 from .. import scheduler
 
 logger = logging.getLogger("dedieufy.artists")
 
 router = APIRouter(prefix="/api/artists", tags=["artists"])
+
+TOP_TRACKS_LIMIT = 5
+
+
+def _safe_track_info(artist_name: str, track_name: str, api_key: str) -> dict | None:
+    try:
+        return lastfm.get_track_info(artist_name, track_name, api_key)
+    except Exception:
+        return None
+
+
+def _safe_video_id(artist_name: str, track_name: str) -> str | None:
+    try:
+        return ytmusic.search_song_video_id(artist_name, track_name)
+    except Exception:
+        return None
+
+
+def _as_int(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 @router.get("", response_model=list[ArtistOut])
@@ -136,6 +161,75 @@ def refresh_recommended_artists(background_tasks: BackgroundTasks, db: Session =
         raise HTTPException(422, "Connecte Last.fm dans Reglages pour rafraichir les recommandations")
     background_tasks.add_task(scheduler.run_refresh_lastfm_recommendations)
     return TestConnectionResult(ok=True, message="Rafraichissement des recommandations lance")
+
+
+@router.get("/{artist_id}/top-tracks", response_model=list[TopTrackOut])
+def top_tracks(artist_id: int, db: Session = Depends(get_db)):
+    """Les titres les plus ecoutes de l'artiste (playcount Last.fm), avec
+    lecture directe via le lecteur audio existant - meme principe que
+    l'ecoute d'une release (ReleaseRow.tsx), video_id resolu via YouTube
+    Music. La cover/date/nom d'album privilegient la release deja en base
+    quand son titre correspond (meilleure resolution, deja recuperee via
+    Deezer/Cover Art Archive) ; sinon on retombe sur ce que Last.fm associe
+    au morceau."""
+    artist = db.get(Artist, artist_id)
+    if artist is None:
+        raise HTTPException(404, "Artiste introuvable")
+
+    settings = scheduler.get_settings(db)
+    if not settings.lastfm_api_key:
+        raise HTTPException(422, "Cle API Last.fm requise dans Reglages pour les titres populaires")
+
+    try:
+        raw_tracks = lastfm.get_top_tracks(artist.name, settings.lastfm_api_key, limit=TOP_TRACKS_LIMIT)
+    except Exception as exc:
+        raise HTTPException(502, f"Last.fm indisponible : {exc}") from exc
+
+    if not raw_tracks:
+        return []
+
+    # Les resolutions Last.fm (detail du morceau) et YouTube Music (videoId)
+    # sont independantes entre elles et entre morceaux - parallelisees pour ne
+    # pas payer sequentiellement 2 x TOP_TRACKS_LIMIT appels reseau.
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        infos = list(pool.map(lambda t: _safe_track_info(artist.name, t.get("name", ""), settings.lastfm_api_key), raw_tracks))
+        video_ids = list(pool.map(lambda t: _safe_video_id(artist.name, t.get("name", "")), raw_tracks))
+
+    releases = artist.releases
+    release_titles = [r.title for r in releases]
+
+    results: list[TopTrackOut] = []
+    for track, info, video_id in zip(raw_tracks, infos, video_ids):
+        name = track.get("name")
+        if not name:
+            continue
+
+        album_title, cover_url, release_date = None, None, None
+        lastfm_album = (info or {}).get("album") or {}
+        lf_title = lastfm_album.get("title")
+        if lf_title and release_titles:
+            idx = best_match(lf_title, release_titles, threshold=0.6)
+            if idx is not None:
+                matched = releases[idx]
+                album_title, cover_url, release_date = matched.title, matched.cover_url, matched.release_date
+
+        if album_title is None and lf_title:
+            album_title = lf_title
+            images = lastfm_album.get("image") or []
+            cover_url = next((img.get("#text") for img in reversed(images) if img.get("#text")), None)
+
+        results.append(
+            TopTrackOut(
+                title=name,
+                playcount=_as_int(track.get("playcount")),
+                listeners=_as_int(track.get("listeners")),
+                album_title=album_title,
+                release_date=release_date,
+                cover_url=cover_url,
+                video_id=video_id,
+            )
+        )
+    return results
 
 
 @router.post("/{artist_id}/scan", response_model=TestConnectionResult)

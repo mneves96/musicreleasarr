@@ -126,6 +126,45 @@ def get_similar_artists(name: str, api_key: str, limit: int = 15) -> list[dict]:
     return data.get("similarartists", {}).get("artist", [])
 
 
+def get_top_tracks(artist_name: str, api_key: str, limit: int = 5) -> list[dict]:
+    """Titres les plus ecoutes d'un artiste au sens Last.fm (playcount cumule
+    tous utilisateurs confondus) - publique, cle API seule suffit. Utilise pour
+    la section "Titres populaires" de la fiche artiste (voir
+    routers/artists.py:top_tracks). Renvoie [] si l'artiste n'est pas trouve
+    plutot que de lever, comme get_similar_artists : mieux vaut une section
+    vide qu'une erreur bloquante sur une fiche artiste par ailleurs valide."""
+    resp = httpx.get(
+        BASE_URL,
+        params={"method": "artist.gettoptracks", "artist": artist_name, "api_key": api_key, "limit": str(limit), "format": "json"},
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        return []
+    data = resp.json()
+    if "error" in data:
+        return []
+    return (data.get("toptracks") or {}).get("track") or []
+
+
+def get_track_info(artist_name: str, track_name: str, api_key: str) -> dict | None:
+    """Detail d'un morceau, notamment son album {title, image[]} tel que
+    Last.fm le rattache - utilise pour retrouver la cover/le nom d'album d'un
+    top titre (voir routers/artists.py:top_tracks, qui prefere ensuite la
+    release deja en base si elle correspond, plus fiable/meilleure resolution
+    que la cover Last.fm)."""
+    resp = httpx.get(
+        BASE_URL,
+        params={"method": "track.getinfo", "artist": artist_name, "track": track_name, "api_key": api_key, "format": "json"},
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    if "error" in data:
+        return None
+    return data.get("track")
+
+
 def get_similar_to_followed(followed: list[tuple[int, str]], api_key: str, limit: int = 50, per_artist_limit: int = 15) -> list[dict]:
     """Recommandations basees sur les artistes reellement suivis dans l'app
     (pas sur l'historique d'ecoute Last.fm, qui peut diverger) : pour chaque

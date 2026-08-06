@@ -115,6 +115,30 @@ def search_song_album_browse_id(artist_name: str, release_title: str, threshold:
     return best_album_id if best_score >= threshold else None
 
 
+def search_song_video_id(artist_name: str, track_title: str, threshold: float = 0.7) -> str | None:
+    """Retrouve le videoId YouTube Music d'un morceau precis (section "Titres
+    populaires" de la fiche artiste, voir routers/artists.py:top_tracks) -
+    meme heuristique de score que search_song_album_browse_id, mais renvoie
+    directement le videoId de la chanson plutot que l'id de son album parent."""
+    yt = _client()
+    results = yt.search(f"{artist_name} {track_title}", filter="songs", limit=10)
+
+    best_id, best_score = None, 0.0
+    for item in results:
+        video_id = item.get("videoId")
+        if not video_id:
+            continue
+        title = item.get("title", "")
+        artists = " ".join(a.get("name", "") for a in item.get("artists") or [])
+        title_score = similarity(track_title, title)
+        artist_score = similarity(artist_name, artists)
+        score = title_score if title_score >= 0.92 else title_score * 0.8 + artist_score * 0.2
+        if score > best_score:
+            best_score, best_id = score, video_id
+
+    return best_id if best_score >= threshold else None
+
+
 def resolve_release_browse_id(
     artist_name: str, release_title: str, artist_ytmusic_browse_id: str | None = None
 ) -> str | None:

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { ALL_RELEASE_TYPES, api, RELEASE_TYPE_LABELS, type ArtistWithReleases, type ReleaseType, type Track } from '../api'
 import ReleaseRow from '../components/ReleaseRow'
+import TopTracksSection from '../components/TopTracksSection'
 import ServiceLink from '../components/ServiceLink'
 import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from '../components/ServiceIcons'
 import Spinner, { LoadingBlock } from '../components/Spinner'
@@ -191,6 +192,8 @@ export default function ArtistPage() {
           </div>
         </div>
       </div>
+
+      <TopTracksSection artistId={artist.id} artistName={artist.name} />
 
       {awaitingScan && (
         <div className="flex items-center gap-2 text-sm text-neutral-400 mb-4 bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
