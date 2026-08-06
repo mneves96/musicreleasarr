@@ -97,15 +97,41 @@ function RecommendedArtistRow({ result }: { result: ArtistSearchResult }) {
   )
 }
 
+// Certaines recommandations Last.fm sans MusicBrainz id declenchent une
+// resolution par nom cote backend (limitee a 1 req/s MusicBrainz) - la
+// reponse peut donc legitimement prendre plusieurs secondes, sans que ce soit
+// bloque pour autant. Au-dela de ce delai, on le signale plutot que de
+// laisser un loader tourner sans explication.
+const SLOW_HINT_MS = 8000
+
 export default function RecommendedArtistsPage() {
   const [results, setResults] = useState<ArtistSearchResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [slow, setSlow] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+    const slowTimer = window.setTimeout(() => {
+      if (!cancelled) setSlow(true)
+    }, SLOW_HINT_MS)
+
     api
       .getRecommendedArtists()
-      .then(setResults)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Erreur'))
+      .then((data) => {
+        if (cancelled) return
+        setResults(data)
+        setError(null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : 'Erreur')
+      })
+      .finally(() => window.clearTimeout(slowTimer))
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(slowTimer)
+    }
   }, [])
 
   if (error) {
@@ -123,7 +149,19 @@ export default function RecommendedArtistsPage() {
     )
   }
 
-  if (results === null) return <LoadingBlock />
+  if (results === null) {
+    return (
+      <div>
+        <LoadingBlock />
+        {slow && (
+          <p className="text-xs text-neutral-500 mt-2">
+            Ca prend plus longtemps que prevu (resolution de certains artistes cote MusicBrainz, limitee a 1
+            requete/seconde) - encore quelques secondes...
+          </p>
+        )}
+      </div>
+    )
+  }
 
   const toShow = results.filter((r) => !r.already_followed)
 

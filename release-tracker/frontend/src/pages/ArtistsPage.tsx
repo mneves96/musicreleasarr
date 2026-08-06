@@ -27,7 +27,7 @@ export default function ArtistsPage() {
           Suivis
         </button>
         <button onClick={() => setTab('recommended')} className={tabClass(tab === 'recommended')}>
-          Recommandes Last.fm
+          Recommandations Last.fm
         </button>
       </div>
       {tab === 'followed' ? <FollowedListPage /> : <RecommendedArtistsPage />}

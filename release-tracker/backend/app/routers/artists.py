@@ -133,6 +133,14 @@ def recommended_artists(db: Session = Depends(get_db)):
 
     followed_ids = {a.musicbrainz_id for a in db.query(Artist).filter(Artist.is_followed.is_(True)).all()}
 
+    # MusicBrainz limite a 1 requete/seconde : resoudre un mbid manquant pour
+    # chaque recommandation pourrait faire trainer la reponse 20-30s+ si
+    # beaucoup d'entre elles n'en ont pas (artistes peu connus). On borne le
+    # nombre de resolutions tentees plutot que de faire attendre l'utilisateur
+    # indefiniment - quitte a laisser de cote quelques recommandations obscures.
+    MAX_MBID_RESOLUTIONS = 8
+    resolutions_used = 0
+
     results: list[ArtistSearchResult] = []
     for item in raw:
         name = item.get("name")
@@ -141,6 +149,9 @@ def recommended_artists(db: Session = Depends(get_db)):
 
         mbid = item.get("mbid") or None
         if not mbid:
+            if resolutions_used >= MAX_MBID_RESOLUTIONS:
+                continue
+            resolutions_used += 1
             # Last.fm ne fournit pas toujours un mbid (artiste peu connu) - on
             # retente une resolution par nom, meme logique que l'import des
             # favoris Navidrome (scheduler._import_favorite_artist).
