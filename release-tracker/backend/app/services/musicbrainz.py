@@ -73,6 +73,38 @@ def get_artist(artist_mbid: str) -> dict:
     return _throttled_get(f"/artist/{artist_mbid}", {})
 
 
+def search_recordings(title: str, artist: str | None = None, limit: int = 5) -> list[dict]:
+    """Recherche libre d'enregistrements (pas limite aux artistes suivis) -
+    utilise pour le "Lookup" automatique piste par piste (voir
+    services/tagging.py:search_musicbrainz_for_item), l'equivalent du Lookup
+    de Picard sur un fichier non identifie. Le titre est un terme libre (pas
+    de guillemets, meme raisonnement que _build_search_query) pour maximiser
+    le rappel ; l'artiste, quand connu, resserre la recherche."""
+    escaped_title = title.replace('"', '\\"')
+    clauses = [f'recording:"{escaped_title}"']
+    if artist:
+        escaped_artist = artist.replace('"', '\\"')
+        clauses.append(f'artist:"{escaped_artist}"')
+    data = _throttled_get("/recording", {"query": " AND ".join(clauses), "limit": limit})
+    return data.get("recordings", [])
+
+
+def get_recording_release_groups(recording_mbid: str) -> list[dict]:
+    """Release-groups auxquelles appartient un enregistrement (lookup direct,
+    complet) - utilise apres search_recordings() pour resoudre la release-group
+    du meilleur resultat, la recherche elle-meme ne renvoyant pas toujours
+    cette info de façon fiable/complete."""
+    data = _throttled_get(f"/recording/{recording_mbid}", {"inc": "releases+release-groups"})
+    seen: set[str] = set()
+    release_groups: list[dict] = []
+    for release in data.get("releases", []):
+        rg = release.get("release-group")
+        if rg and rg.get("id") not in seen:
+            seen.add(rg["id"])
+            release_groups.append(rg)
+    return release_groups
+
+
 def extract_area(mb_artist: dict) -> tuple[str | None, str | None]:
     """Code pays ISO (ex: "GB") et nom de la zone (ex: "United Kingdom") pour la nationalite."""
     country = mb_artist.get("country")

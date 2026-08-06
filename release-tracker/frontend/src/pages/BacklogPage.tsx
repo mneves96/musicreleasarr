@@ -1,39 +1,24 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   api,
   RELEASE_TYPE_LABELS,
   type ArtistSearchResult,
+  type ReleaseCard,
   type ReleaseGroupChoice,
   type TaggingItem,
+  type TaggingSearchScope,
   type TrackChoice,
 } from '../api'
-import { TaggingBadge } from '../components/StatusBadge'
+import AlbumCard, { type AlbumDropPayload, editFromItem, trackKey, type Edit } from '../components/AlbumCard'
+import FileTree from '../components/FileTree'
 import Spinner, { LoadingBlock } from '../components/Spinner'
 
 const POLL_MS = 15000
+const COLUMN_HEIGHT = 'calc(100vh - 15rem)'
 
-interface Edit {
-  trackTitle: string
-  trackNumber: string
-  discNumber: string
-}
-
-function editFromItem(item: TaggingItem): Edit {
-  return {
-    trackTitle: item.suggested_track_title ?? '',
-    trackNumber: item.suggested_track_number != null ? String(item.suggested_track_number) : '',
-    discNumber: item.suggested_disc_number != null ? String(item.suggested_disc_number) : '',
-  }
-}
-
-function trackKey(track: TrackChoice): number {
-  return track.disc_number * 10000 + track.position
-}
-
-// Assignation initiale piste <- fichier a partir des suggestions du scan automatique
-// (voir services/tagging.py:scan_artist) : meme principe que le pre-clustering de
-// Picard, mais purement indicatif - rien n'est confirme tant que l'utilisateur n'a
-// pas valide (glisser-deposer ou bouton Confirmer).
+// Pre-clustering initial a partir des suggestions du scan/de la recherche
+// (voir services/tagging.py) : purement indicatif, rien n'est confirme tant
+// que l'utilisateur n'a pas valide (glisser-deposer ou bouton Confirmer).
 function initialAssignment(items: TaggingItem[]): Record<number, number> {
   const assignment: Record<number, number> = {}
   const used = new Set<number>()
@@ -49,185 +34,28 @@ function initialAssignment(items: TaggingItem[]): Record<number, number> {
   return assignment
 }
 
-function FileChip({
-  item,
-  onDiscard,
-  draggable = true,
-}: {
-  item: TaggingItem
-  onDiscard: () => void
-  draggable?: boolean
-}) {
-  return (
-    <div
-      draggable={draggable}
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/plain', String(item.id))
-        e.dataTransfer.effectAllowed = 'move'
-      }}
-      className={`flex items-center justify-between gap-2 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm ${
-        draggable ? 'cursor-grab active:cursor-grabbing' : ''
-      }`}
-      title={item.original_filename}
-    >
-      <span className="truncate flex-1">{item.original_filename}</span>
-      {item.match_score != null && (
-        <span className="text-[10px] text-neutral-500 whitespace-nowrap">{Math.round(item.match_score * 100)}%</span>
-      )}
-      <button onClick={onDiscard} className="text-neutral-500 hover:text-red-400 text-xs px-1" title="Ignorer ce fichier">
-        ✕
-      </button>
-    </div>
-  )
+function releaseCardFromItem(item: TaggingItem): ReleaseCard | null {
+  if (item.release_id == null) return null
+  return {
+    release_id: item.release_id,
+    artist_name: item.artist_name ?? '',
+    release_title: item.release_title ?? '',
+    cover_url: item.release_cover_url,
+    release_date: item.release_date,
+    release_type: 'other',
+  }
 }
 
-function TrackSlot({
-  track,
-  assignedItem,
-  isDragOver,
-  busy,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onUnassign,
-  onConfirm,
-}: {
-  track: TrackChoice
-  assignedItem: TaggingItem | undefined
-  isDragOver: boolean
-  busy: boolean
-  onDragOver: (e: DragEvent<HTMLDivElement>) => void
-  onDragLeave: () => void
-  onDrop: (e: DragEvent<HTMLDivElement>) => void
-  onUnassign: () => void
-  onConfirm: () => void
-}) {
-  const label = `${track.disc_number > 1 ? `${track.disc_number}-` : ''}${String(track.position).padStart(2, '0')}. ${track.title}`
-  return (
-    <div
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      className={`rounded-md border px-2 py-1.5 text-sm flex items-center gap-2 ${
-        isDragOver
-          ? 'border-purple-500 bg-purple-950/30'
-          : assignedItem
-            ? 'border-green-800 bg-green-950/20'
-            : 'border-dashed border-neutral-700 bg-neutral-950/40'
-      }`}
-    >
-      <span className="flex-1 min-w-0">
-        <span className="text-neutral-200 truncate block">{label}</span>
-        {assignedItem ? (
-          <span className="text-xs text-green-400 truncate block" title={assignedItem.original_filename}>
-            ← {assignedItem.original_filename}
-          </span>
-        ) : (
-          <span className="text-xs text-neutral-600">Glisse un fichier ici...</span>
-        )}
-      </span>
-      {assignedItem && (
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={onConfirm}
-            disabled={busy}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
-            title="Taguer et ranger cette piste"
-          >
-            {busy && <Spinner className="w-3 h-3" />}
-            Confirmer
-          </button>
-          <button
-            onClick={onUnassign}
-            disabled={busy}
-            className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
-            title="Detacher ce fichier"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
+type ReleaseSearchStep = 'search' | 'artists' | 'releases'
 
-function FallbackRow({
-  item,
-  edit,
-  onEditChange,
-  onConfirm,
-  onDiscard,
-  busy,
-}: {
-  item: TaggingItem
-  edit: Edit
-  onEditChange: (edit: Edit) => void
-  onConfirm: () => void
-  onDiscard: () => void
-  busy: boolean
-}) {
-  return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-3 flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm text-neutral-300 truncate" title={item.original_filename}>
-          {item.original_filename}
-        </span>
-        <TaggingBadge status={item.status} error={item.error_message} />
-      </div>
-      <p className="text-xs text-neutral-500">
-        Tracklist MusicBrainz indisponible pour cet album - saisis les informations a la main.
-      </p>
-      <div className="flex gap-2">
-        <input
-          value={edit.trackTitle}
-          onChange={(e) => onEditChange({ ...edit, trackTitle: e.target.value })}
-          placeholder="Titre de la piste"
-          className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-        />
-        <input
-          value={edit.trackNumber}
-          onChange={(e) => onEditChange({ ...edit, trackNumber: e.target.value })}
-          placeholder="N°"
-          type="number"
-          className="w-16 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-        />
-        <input
-          value={edit.discNumber}
-          onChange={(e) => onEditChange({ ...edit, discNumber: e.target.value })}
-          placeholder="Disque"
-          type="number"
-          className="w-20 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-        />
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={onConfirm}
-          disabled={busy || !edit.trackTitle.trim()}
-          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
-        >
-          {busy && <Spinner className="w-3 h-3" />}
-          Confirmer (taguer + ranger)
-        </button>
-        <button
-          onClick={onDiscard}
-          disabled={busy}
-          className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
-        >
-          Ignorer
-        </button>
-      </div>
-    </div>
-  )
-}
-
-type IdentifyStep = 'search' | 'artists' | 'releases'
-
-// Panneau de recherche MusicBrainz pour rattacher un dossier "non identifie" a un
-// artiste/album - l'equivalent du "Lookup" de Picard sur un cluster de fichiers
-// qu'il n'a pas reussi a associer automatiquement a ta bibliotheque.
-function IdentifyPanel({ sourceFolder, onIdentified }: { sourceFolder: string; onIdentified: () => void }) {
-  const [query, setQuery] = useState(sourceFolder)
-  const [step, setStep] = useState<IdentifyStep>('search')
+// Recherche manuelle d'un album a ajouter a la colonne de droite (meme flux
+// que la recherche d'artiste globale : artiste -> release), avec le panneau
+// d'autocomplete positionne en overlay pour ne jamais pousser la liste des
+// albums vers le bas.
+function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void }) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [step, setStep] = useState<ReleaseSearchStep>('search')
   const [artists, setArtists] = useState<ArtistSearchResult[]>([])
   const [selectedArtist, setSelectedArtist] = useState<ArtistSearchResult | null>(null)
   const [releaseGroups, setReleaseGroups] = useState<ReleaseGroupChoice[]>([])
@@ -242,6 +70,7 @@ function IdentifyPanel({ sourceFolder, onIdentified }: { sourceFolder: string; o
       const page = await api.searchArtists(query.trim())
       setArtists(page.results)
       setStep('artists')
+      setOpen(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur')
     } finally {
@@ -269,8 +98,7 @@ function IdentifyPanel({ sourceFolder, onIdentified }: { sourceFolder: string; o
     setBusy(true)
     setError(null)
     try {
-      await api.tagging.identify({
-        source_folder: sourceFolder,
+      const card = await api.tagging.createRelease({
         artist_musicbrainz_id: selectedArtist.musicbrainz_id,
         artist_name: selectedArtist.name,
         release_group_musicbrainz_id: rg.musicbrainz_id,
@@ -278,7 +106,11 @@ function IdentifyPanel({ sourceFolder, onIdentified }: { sourceFolder: string; o
         release_type: rg.release_type,
         release_date: rg.release_date,
       })
-      onIdentified()
+      onAdded(card)
+      setOpen(false)
+      setStep('search')
+      setQuery('')
+      setSelectedArtist(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur')
     } finally {
@@ -287,172 +119,74 @@ function IdentifyPanel({ sourceFolder, onIdentified }: { sourceFolder: string; o
   }
 
   return (
-    <div className="bg-neutral-950 border border-neutral-800 rounded-md p-3 flex flex-col gap-2 mt-2">
-      {error && <p className="text-xs text-red-400">{error}</p>}
-
-      {step === 'search' && (
-        <div className="flex gap-2">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && searchArtists()}
-            placeholder="Nom de l'artiste"
-            className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-            autoFocus
-          />
-          <button
-            onClick={searchArtists}
-            disabled={busy || !query.trim()}
-            className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
-          >
-            {busy ? '...' : 'Rechercher'}
-          </button>
-        </div>
-      )}
-
-      {step === 'artists' && (
-        <div className="flex flex-col gap-1">
-          <button onClick={() => setStep('search')} className="text-xs text-neutral-500 hover:text-white self-start">
-            ← Nouvelle recherche
-          </button>
-          {busy && <p className="text-xs text-neutral-500">Chargement...</p>}
-          {!busy && artists.length === 0 && <p className="text-xs text-neutral-500">Aucun resultat.</p>}
-          {artists.map((a) => (
-            <button
-              key={a.musicbrainz_id}
-              onClick={() => pickArtist(a)}
-              disabled={busy}
-              className="text-left text-sm px-2 py-1.5 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50"
-            >
-              {a.name} {a.disambiguation && <span className="text-neutral-500">({a.disambiguation})</span>}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {step === 'releases' && (
-        <div className="flex flex-col gap-1">
-          <button onClick={() => setStep('artists')} className="text-xs text-neutral-500 hover:text-white self-start">
-            ← Autre artiste
-          </button>
-          {busy && <p className="text-xs text-neutral-500">Chargement...</p>}
-          {!busy && releaseGroups.length === 0 && <p className="text-xs text-neutral-500">Aucune release trouvee.</p>}
-          {releaseGroups.map((rg) => (
-            <button
-              key={rg.musicbrainz_id}
-              onClick={() => pickRelease(rg)}
-              disabled={busy}
-              className="text-left text-sm px-2 py-1.5 rounded-md bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 flex items-center justify-between gap-2"
-            >
-              <span className="truncate">{rg.title}</span>
-              <span className="text-xs text-neutral-500 whitespace-nowrap">
-                {RELEASE_TYPE_LABELS[rg.release_type]}
-                {rg.release_date ? ` - ${rg.release_date.slice(0, 4)}` : ''}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function UnclusteredFolder({
-  sourceFolder,
-  items,
-  onDiscard,
-  onIdentified,
-}: {
-  sourceFolder: string
-  items: TaggingItem[]
-  onDiscard: (item: TaggingItem) => void
-  onIdentified: () => void
-}) {
-  const [identifying, setIdentifying] = useState(false)
-  const [matching, setMatching] = useState(false)
-  const [matchMessage, setMatchMessage] = useState<string | null>(null)
-  const label = sourceFolder ? `Dossier non identifie : ${sourceFolder}` : 'Fichiers en vrac (racine du dossier de telechargements)'
-
-  async function autoMatch() {
-    setMatching(true)
-    setMatchMessage(null)
-    try {
-      const matched = await api.tagging.autoMatch(sourceFolder)
-      if (matched.length > 0) {
-        onIdentified()
-      } else {
-        setMatchMessage('Aucune correspondance trouvee (artiste non suivi ou aucune piste reconnue).')
-      }
-    } catch (err) {
-      setMatchMessage(err instanceof Error ? err.message : 'Erreur')
-    } finally {
-      setMatching(false)
-    }
-  }
-
-  return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="font-medium text-neutral-300">
-          {label}{' '}
-          <span className="text-neutral-500 text-sm">
-            ({items.length} fichier{items.length > 1 ? 's' : ''})
-          </span>
-        </h2>
-        <div className="flex items-center gap-2">
-          {matchMessage && <span className="text-xs text-neutral-500">{matchMessage}</span>}
-          {sourceFolder && (
-            <button
-              onClick={autoMatch}
-              disabled={matching}
-              className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
-              title="Recherche MusicBrainz : verifie si le nom du dossier correspond a un artiste suivi, et propose ses pistes manquantes"
-            >
-              {matching ? 'Recherche MusicBrainz...' : 'Chercher sur MusicBrainz (artiste suivi)'}
-            </button>
-          )}
-          <button
-            onClick={() => setIdentifying((v) => !v)}
-            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700"
-            title="Recherche MusicBrainz manuelle (n'importe quel artiste)"
-          >
-            {identifying ? 'Annuler' : 'Chercher sur MusicBrainz...'}
-          </button>
-        </div>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {items.map((item) => (
-          <FileChip key={item.id} item={item} onDiscard={() => onDiscard(item)} draggable={false} />
-        ))}
-      </div>
-      {identifying && (
-        <IdentifyPanel
-          sourceFolder={sourceFolder}
-          onIdentified={() => {
-            setIdentifying(false)
-            onIdentified()
+    <div className="relative mb-3">
+      <div className="flex gap-2">
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            if (e.target.value.trim()) setOpen(true)
           }}
+          onKeyDown={(e) => e.key === 'Enter' && searchArtists()}
+          placeholder="Ajouter un album (recherche artiste)..."
+          className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
         />
-      )}
-    </div>
-  )
-}
+        <button
+          onClick={searchArtists}
+          disabled={busy || !query.trim()}
+          className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+        >
+          {busy ? '...' : 'Rechercher'}
+        </button>
+      </div>
 
-function ErrorRow({ item, onRescan, onDiscard, busy }: { item: TaggingItem; onRescan: () => void; onDiscard: () => void; busy: boolean }) {
-  return (
-    <div className="bg-neutral-900 border border-red-900/60 rounded-lg p-3 flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <div className="text-sm text-neutral-300 truncate">{item.original_filename}</div>
-        <div className="text-xs text-red-400">{item.error_message}</div>
-      </div>
-      <div className="flex gap-2 shrink-0">
-        <button onClick={onRescan} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50">
-          Reessayer
-        </button>
-        <button onClick={onDiscard} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50">
-          Ignorer
-        </button>
-      </div>
+      {open && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-neutral-950 border border-neutral-700 rounded-md p-2 shadow-lg max-h-80 overflow-y-auto">
+          {error && <p className="text-xs text-red-400 mb-1">{error}</p>}
+          {step === 'artists' && (
+            <div className="flex flex-col gap-1">
+              {busy && <p className="text-xs text-neutral-500">Chargement...</p>}
+              {!busy && artists.length === 0 && <p className="text-xs text-neutral-500">Aucun resultat.</p>}
+              {artists.map((a) => (
+                <button
+                  key={a.musicbrainz_id}
+                  onClick={() => pickArtist(a)}
+                  disabled={busy}
+                  className="text-left text-sm px-2 py-1.5 rounded-md hover:bg-neutral-900 disabled:opacity-50"
+                >
+                  {a.name} {a.disambiguation && <span className="text-neutral-500">({a.disambiguation})</span>}
+                </button>
+              ))}
+            </div>
+          )}
+          {step === 'releases' && (
+            <div className="flex flex-col gap-1">
+              <button onClick={() => setStep('artists')} className="text-xs text-neutral-500 hover:text-white self-start">
+                ← Autre artiste
+              </button>
+              {busy && <p className="text-xs text-neutral-500">Chargement...</p>}
+              {!busy && releaseGroups.length === 0 && <p className="text-xs text-neutral-500">Aucune release trouvee.</p>}
+              {releaseGroups.map((rg) => (
+                <button
+                  key={rg.musicbrainz_id}
+                  onClick={() => pickRelease(rg)}
+                  disabled={busy}
+                  className="text-left text-sm px-2 py-1.5 rounded-md hover:bg-neutral-900 disabled:opacity-50 flex items-center justify-between gap-2"
+                >
+                  <span className="truncate">{rg.title}</span>
+                  <span className="text-xs text-neutral-500 whitespace-nowrap">
+                    {RELEASE_TYPE_LABELS[rg.release_type]}
+                    {rg.release_date ? ` - ${rg.release_date.slice(0, 4)}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <button onClick={() => setOpen(false)} className="text-xs text-neutral-500 hover:text-white mt-2">
+            Fermer
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -461,14 +195,20 @@ export default function BacklogPage() {
   const [items, setItems] = useState<TaggingItem[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
+
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [searchScope, setSearchScope] = useState<TaggingSearchScope>('followed')
+  const [searching, setSearching] = useState(false)
+  const [searchMessage, setSearchMessage] = useState<string | null>(null)
+
+  const [openReleases, setOpenReleases] = useState<Map<number, ReleaseCard>>(new Map())
   const [edits, setEdits] = useState<Record<number, Edit>>({})
   const [tracklists, setTracklists] = useState<Record<number, TrackChoice[] | null>>({})
   const [assignments, setAssignments] = useState<Record<number, Record<number, number>>>({})
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set())
   const [busyReleaseIds, setBusyReleaseIds] = useState<Set<number>>(new Set())
-  const [dragOverKey, setDragOverKey] = useState<string | null>(null)
-  const [scanning, setScanning] = useState(false)
-  const [scanMessage, setScanMessage] = useState<string | null>(null)
 
   const refresh = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true)
@@ -476,6 +216,14 @@ export default function BacklogPage() {
       const backlog = await api.tagging.backlog()
       setItems(backlog)
       setLoadError(null)
+      setOpenReleases((prev) => {
+        const next = new Map(prev)
+        for (const item of backlog) {
+          const card = releaseCardFromItem(item)
+          if (card && !next.has(card.release_id)) next.set(card.release_id, card)
+        }
+        return next
+      })
       setEdits((prev) => {
         const next = { ...prev }
         for (const item of backlog) {
@@ -496,6 +244,32 @@ export default function BacklogPage() {
     return () => window.clearInterval(interval)
   }, [refresh])
 
+  // Charge la tracklist MusicBrainz une seule fois par album ouvert (y compris
+  // les cartes vides ajoutees via la recherche manuelle, avant tout fichier
+  // rattache - voir routers/tagging.py:release_tracklist), puis initialise le
+  // pre-clustering des qu'elle est connue.
+  useEffect(() => {
+    if (!items) return
+    const releaseIds = [...openReleases.keys()]
+    const missing = releaseIds.filter((id) => !(id in tracklists))
+    if (missing.length === 0) return
+    missing.forEach(async (releaseId) => {
+      try {
+        const choices = await api.tagging.tracklist(releaseId)
+        setTracklists((prev) => ({ ...prev, [releaseId]: choices.length > 0 ? choices : null }))
+        if (choices.length > 0) {
+          const releaseItems = items.filter((i) => i.release_id === releaseId)
+          setAssignments((prev) => ({ ...prev, [releaseId]: prev[releaseId] ?? initialAssignment(releaseItems) }))
+        }
+      } catch {
+        setTracklists((prev) => ({ ...prev, [releaseId]: null }))
+      }
+    })
+  }, [items, openReleases, tracklists])
+
+  const itemsById = useMemo(() => new Map((items ?? []).map((i) => [i.id, i])), [items])
+  const unclusteredItems = useMemo(() => (items ?? []).filter((i) => i.release_id == null), [items])
+
   async function scanNow() {
     setScanning(true)
     setScanMessage(null)
@@ -509,34 +283,6 @@ export default function BacklogPage() {
       setScanning(false)
     }
   }
-
-  // Charge la tracklist MusicBrainz une seule fois par release (plusieurs fichiers du
-  // backlog partagent souvent le meme dossier source - voir services/tagging.py), puis
-  // initialise le pre-clustering (assignation suggeree) une fois la tracklist connue.
-  useEffect(() => {
-    if (!items) return
-    const releaseIds = items
-      .filter((i) => i.status === 'needs_review' && i.release_id != null)
-      .map((i) => i.release_id as number)
-    const missing = [...new Set(releaseIds)].filter((id) => !(id in tracklists))
-    if (missing.length === 0) return
-    missing.forEach(async (releaseId) => {
-      const item = items.find((i) => i.release_id === releaseId)
-      if (!item) return
-      try {
-        const choices = await api.tagging.tracklist(item.id)
-        setTracklists((prev) => ({ ...prev, [releaseId]: choices.length > 0 ? choices : null }))
-        if (choices.length > 0) {
-          const releaseItems = items.filter((i) => i.release_id === releaseId)
-          setAssignments((prev) => ({ ...prev, [releaseId]: prev[releaseId] ?? initialAssignment(releaseItems) }))
-        }
-      } catch {
-        setTracklists((prev) => ({ ...prev, [releaseId]: null }))
-      }
-    })
-  }, [items, tracklists])
-
-  const itemsById = useMemo(() => new Map((items ?? []).map((i) => [i.id, i])), [items])
 
   function setBusy(id: number, busy: boolean) {
     setBusyIds((prev) => {
@@ -556,10 +302,20 @@ export default function BacklogPage() {
     })
   }
 
+  function toggleSelect(ids: number[], selected: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) {
+        if (selected) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
+  }
+
   function assign(releaseId: number, key: number, itemId: number) {
     setAssignments((prev) => {
       const current = { ...(prev[releaseId] ?? {}) }
-      // Un fichier ne peut occuper qu'une seule piste a la fois.
       for (const k of Object.keys(current)) {
         if (current[Number(k)] === itemId) delete current[Number(k)]
       }
@@ -573,6 +329,52 @@ export default function BacklogPage() {
       const current = { ...(prev[releaseId] ?? {}) }
       delete current[key]
       return { ...prev, [releaseId]: current }
+    })
+  }
+
+  // Apres une recherche/un glisser-deposer, integre les correspondances de
+  // piste trouvees cote serveur dans le pre-clustering client, sans ecraser
+  // une assignation deja en place sur le meme slot.
+  function mergeAssignmentFromItems(releaseId: number, releaseItems: TaggingItem[]) {
+    setAssignments((prev) => {
+      const current = { ...(prev[releaseId] ?? {}) }
+      const used = new Set(Object.values(current))
+      for (const item of releaseItems) {
+        if (item.status !== 'needs_review' || item.suggested_track_number == null || used.has(item.id)) continue
+        const key = (item.suggested_disc_number ?? 1) * 10000 + item.suggested_track_number
+        if (current[key] != null) continue
+        current[key] = item.id
+        used.add(item.id)
+      }
+      return { ...prev, [releaseId]: current }
+    })
+  }
+
+  function removeFromAssignments(itemIds: number[], exceptReleaseId?: number) {
+    setAssignments((prev) => {
+      const next = { ...prev }
+      for (const [relIdStr, assignment] of Object.entries(next)) {
+        const relId = Number(relIdStr)
+        if (relId === exceptReleaseId) continue
+        let changed = false
+        const cleaned = { ...assignment }
+        for (const k of Object.keys(cleaned)) {
+          if (itemIds.includes(cleaned[Number(k)])) {
+            delete cleaned[Number(k)]
+            changed = true
+          }
+        }
+        if (changed) next[relId] = cleaned
+      }
+      return next
+    })
+  }
+
+  function mergeUpdatedItems(updated: TaggingItem[]) {
+    setItems((prev) => {
+      if (!prev) return prev
+      const byId = new Map(updated.map((u) => [u.id, u]))
+      return prev.map((i) => byId.get(i.id) ?? i)
     })
   }
 
@@ -590,7 +392,7 @@ export default function BacklogPage() {
         setItems((prev) => (prev ? prev.filter((i) => i.id !== item.id) : prev))
         unassign(releaseId, key)
       } else {
-        setItems((prev) => (prev ? prev.map((i) => (i.id === item.id ? updated : i)) : prev))
+        mergeUpdatedItems([updated])
       }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Erreur lors de la confirmation')
@@ -599,7 +401,9 @@ export default function BacklogPage() {
     }
   }
 
-  async function confirmAlbum(releaseId: number, tracklist: TrackChoice[]) {
+  async function confirmAlbum(releaseId: number) {
+    const tracklist = tracklists[releaseId]
+    if (!tracklist) return
     const assignment = assignments[releaseId] ?? {}
     const pairs = tracklist
       .map((track) => ({ track, itemId: assignment[trackKey(track)] }))
@@ -622,7 +426,7 @@ export default function BacklogPage() {
           } catch {
             return null
           }
-        }),
+        })
       )
       const doneIds = new Set(results.filter((r) => r?.status === 'done').map((r) => r!.id))
       if (doneIds.size > 0) {
@@ -637,9 +441,7 @@ export default function BacklogPage() {
       }
       const failedResults = results.filter((r) => r && r.status !== 'done')
       if (failedResults.length > 0) {
-        setItems((prev) =>
-          prev ? prev.map((i) => failedResults.find((r) => r!.id === i.id) ?? i) : prev,
-        )
+        mergeUpdatedItems(failedResults as TaggingItem[])
         setLoadError(`${failedResults.length} piste(s) n'ont pas pu etre rangees (voir les erreurs ci-dessous)`)
       }
     } finally {
@@ -647,18 +449,16 @@ export default function BacklogPage() {
     }
   }
 
-  async function discardItem(item: TaggingItem, releaseId?: number) {
+  async function discardItem(item: TaggingItem) {
     setBusy(item.id, true)
     setItems((prev) => (prev ? prev.filter((i) => i.id !== item.id) : prev))
-    if (releaseId != null) {
-      setAssignments((prev) => {
-        const current = { ...(prev[releaseId] ?? {}) }
-        for (const k of Object.keys(current)) {
-          if (current[Number(k)] === item.id) delete current[Number(k)]
-        }
-        return { ...prev, [releaseId]: current }
-      })
-    }
+    if (item.release_id != null) removeFromAssignments([item.id])
+    setSelectedIds((prev) => {
+      if (!prev.has(item.id)) return prev
+      const next = new Set(prev)
+      next.delete(item.id)
+      return next
+    })
     try {
       await api.tagging.discard(item.id)
     } catch (err) {
@@ -673,7 +473,7 @@ export default function BacklogPage() {
     setBusy(item.id, true)
     try {
       const updated = await api.tagging.rescan(item.id)
-      setItems((prev) => (prev ? prev.map((i) => (i.id === item.id ? updated : i)) : prev))
+      mergeUpdatedItems([updated])
       setEdits((prev) => ({ ...prev, [item.id]: editFromItem(updated) }))
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Erreur')
@@ -695,7 +495,7 @@ export default function BacklogPage() {
       if (updated.status === 'done') {
         setItems((prev) => (prev ? prev.filter((i) => i.id !== item.id) : prev))
       } else {
-        setItems((prev) => (prev ? prev.map((i) => (i.id === item.id ? updated : i)) : prev))
+        mergeUpdatedItems([updated])
       }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Erreur lors de la confirmation')
@@ -704,21 +504,112 @@ export default function BacklogPage() {
     }
   }
 
-  if (items === null) return <LoadingBlock />
-
-  const grouped = new Map<number, TaggingItem[]>()
-  const unclustered = new Map<string, TaggingItem[]>()
-  for (const item of items) {
-    if (item.release_id == null) {
-      const list = unclustered.get(item.source_folder) ?? []
-      list.push(item)
-      unclustered.set(item.source_folder, list)
-      continue
+  async function searchSelected() {
+    if (selectedIds.size === 0) return
+    const requested = selectedIds.size
+    setSearching(true)
+    setSearchMessage(null)
+    try {
+      const matched = await api.tagging.search([...selectedIds], searchScope)
+      if (matched.length > 0) {
+        mergeUpdatedItems(matched)
+        setOpenReleases((prev) => {
+          const next = new Map(prev)
+          for (const m of matched) {
+            const card = releaseCardFromItem(m)
+            if (card && !next.has(card.release_id)) next.set(card.release_id, card)
+          }
+          return next
+        })
+        const matchedIds = matched.map((m) => m.id)
+        setSelectedIds((prev) => {
+          const next = new Set(prev)
+          for (const id of matchedIds) next.delete(id)
+          return next
+        })
+      }
+      setSearchMessage(
+        matched.length === 0 ? 'Aucune correspondance trouvee.' : `${matched.length}/${requested} fichier(s) trouve(s).`
+      )
+    } catch (err) {
+      setSearchMessage(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setSearching(false)
     }
-    const list = grouped.get(item.release_id) ?? []
-    list.push(item)
-    grouped.set(item.release_id, list)
   }
+
+  async function deleteAlbum(releaseId: number) {
+    setReleaseBusy(releaseId, true)
+    try {
+      const updated = await api.tagging.unlinkRelease(releaseId)
+      mergeUpdatedItems(updated)
+      setOpenReleases((prev) => {
+        const next = new Map(prev)
+        next.delete(releaseId)
+        return next
+      })
+      setAssignments((prev) => {
+        const next = { ...prev }
+        delete next[releaseId]
+        return next
+      })
+      setTracklists((prev) => {
+        const next = { ...prev }
+        delete next[releaseId]
+        return next
+      })
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setReleaseBusy(releaseId, false)
+    }
+  }
+
+  async function dropOnRelease(targetReleaseId: number, payload: AlbumDropPayload) {
+    let itemIds: number[]
+    if (payload.type === 'file') {
+      itemIds = [payload.itemId]
+    } else if (payload.type === 'folder') {
+      itemIds = payload.itemIds
+    } else {
+      if (payload.releaseId === targetReleaseId) return
+      itemIds = (items ?? []).filter((i) => i.release_id === payload.releaseId && i.status !== 'done').map((i) => i.id)
+    }
+    if (itemIds.length === 0) return
+
+    try {
+      const updated = await api.tagging.assignItemsToRelease(targetReleaseId, itemIds)
+      mergeUpdatedItems(updated)
+      removeFromAssignments(itemIds, targetReleaseId)
+      mergeAssignmentFromItems(targetReleaseId, updated)
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of itemIds) next.delete(id)
+        return next
+      })
+      if (payload.type === 'album') {
+        setOpenReleases((prev) => {
+          const next = new Map(prev)
+          next.delete(payload.releaseId)
+          return next
+        })
+        setAssignments((prev) => {
+          const next = { ...prev }
+          delete next[payload.releaseId]
+          return next
+        })
+        setTracklists((prev) => {
+          const next = { ...prev }
+          delete next[payload.releaseId]
+          return next
+        })
+      }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur lors du glisser-deposer')
+    }
+  }
+
+  if (items === null) return <LoadingBlock />
 
   return (
     <div>
@@ -746,131 +637,83 @@ export default function BacklogPage() {
       </div>
 
       <p className="text-sm text-neutral-400 mb-4">
-        Fichiers telecharges en attente de correction des tags et de rangement. Glisse un fichier sur la piste
-        correspondante (comme dans Picard), ou identifie un dossier inconnu via une recherche MusicBrainz - rien
-        n'est ecrit sur le disque avant confirmation.
+        Selectionne des fichiers/dossiers a gauche pour les rechercher sur MusicBrainz, ou glisse-les directement sur
+        un album a droite (comme dans Picard) - rien n'est ecrit sur le disque avant confirmation.
       </p>
 
-      {items.length === 0 ? (
-        <p className="text-sm text-neutral-500">Rien a traiter pour le moment.</p>
-      ) : (
-        <>
-          {[...unclustered.entries()].map(([sourceFolder, folderItems]) => (
-            <UnclusteredFolder
-              key={sourceFolder}
-              sourceFolder={sourceFolder}
-              items={folderItems}
-              onDiscard={(item) => discardItem(item)}
-              onIdentified={() => refresh()}
-            />
-          ))}
-          {[...grouped.entries()].map(([releaseId, groupItems]) => {
-          const tracklist = tracklists[releaseId]
-          const assignment = assignments[releaseId] ?? {}
-          const pending = groupItems.filter((i) => i.status === 'needs_review')
-          const errors = groupItems.filter((i) => i.status === 'error')
-          const assignedCount = Object.keys(assignment).length
-
-          return (
-            <div key={releaseId} className="mb-8">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="font-medium text-neutral-300">
-                  {groupItems[0].artist_name} - {groupItems[0].release_title}
-                </h2>
-                {tracklist && tracklist.length > 0 && assignedCount > 0 && (
-                  <button
-                    onClick={() => confirmAlbum(releaseId, tracklist)}
-                    disabled={busyReleaseIds.has(releaseId)}
-                    className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
-                  >
-                    {busyReleaseIds.has(releaseId) && <Spinner className="w-3 h-3" />}
-                    Confirmer l'album ({assignedCount} piste{assignedCount > 1 ? 's' : ''})
-                  </button>
-                )}
-              </div>
-
-              {tracklist === undefined && <p className="text-xs text-neutral-500">Chargement de la tracklist...</p>}
-
-              {tracklist && tracklist.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="text-xs text-neutral-500 mb-1">Fichiers ({pending.filter((i) => !Object.values(assignment).includes(i.id)).length})</div>
-                    {pending
-                      .filter((i) => !Object.values(assignment).includes(i.id))
-                      .map((item) => (
-                        <FileChip key={item.id} item={item} onDiscard={() => discardItem(item, releaseId)} />
-                      ))}
-                    {pending.filter((i) => !Object.values(assignment).includes(i.id)).length === 0 && (
-                      <p className="text-xs text-neutral-600 italic">Tous les fichiers sont assignes.</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <div className="text-xs text-neutral-500 mb-1">Pistes ({tracklist.length})</div>
-                    {[...tracklist]
-                      .sort((a, b) => a.disc_number - b.disc_number || a.position - b.position)
-                      .map((track) => {
-                        const key = trackKey(track)
-                        const assignedItem = assignment[key] != null ? itemsById.get(assignment[key]) : undefined
-                        const dragKey = `${releaseId}:${key}`
-                        return (
-                          <TrackSlot
-                            key={key}
-                            track={track}
-                            assignedItem={assignedItem}
-                            isDragOver={dragOverKey === dragKey}
-                            busy={assignedItem ? busyIds.has(assignedItem.id) : false}
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              setDragOverKey(dragKey)
-                            }}
-                            onDragLeave={() => setDragOverKey((k) => (k === dragKey ? null : k))}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              setDragOverKey(null)
-                              const itemId = Number(e.dataTransfer.getData('text/plain'))
-                              if (itemId) assign(releaseId, key, itemId)
-                            }}
-                            onUnassign={() => unassign(releaseId, key)}
-                            onConfirm={() => assignedItem && confirmPair(assignedItem, track, releaseId, key)}
-                          />
-                        )
-                      })}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {pending.map((item) => (
-                    <FallbackRow
-                      key={item.id}
-                      item={item}
-                      edit={edits[item.id] ?? editFromItem(item)}
-                      onEditChange={(edit) => setEdits((prev) => ({ ...prev, [item.id]: edit }))}
-                      onConfirm={() => confirmManual(item)}
-                      onDiscard={() => discardItem(item)}
-                      busy={busyIds.has(item.id)}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {errors.length > 0 && (
-                <div className="flex flex-col gap-2 mt-3">
-                  {errors.map((item) => (
-                    <ErrorRow
-                      key={item.id}
-                      item={item}
-                      onRescan={() => rescanItem(item)}
-                      onDiscard={() => discardItem(item, releaseId)}
-                      busy={busyIds.has(item.id)}
-                    />
-                  ))}
-                </div>
-              )}
+      <div className="flex gap-4" style={{ height: COLUMN_HEIGHT }}>
+        <div className="w-1/2 flex flex-col min-h-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap shrink-0">
+            <div className="flex rounded-md overflow-hidden border border-neutral-700 shrink-0">
+              <button
+                onClick={() => setSearchScope('followed')}
+                className={`text-xs px-3 py-1.5 ${searchScope === 'followed' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
+              >
+                Artistes suivis
+              </button>
+              <button
+                onClick={() => setSearchScope('musicbrainz')}
+                className={`text-xs px-3 py-1.5 ${searchScope === 'musicbrainz' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
+              >
+                Tout MusicBrainz
+              </button>
             </div>
-          )
-        })}
-        </>
-      )}
+            <button
+              onClick={searchSelected}
+              disabled={selectedIds.size === 0 || searching}
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+            >
+              {searching && <Spinner className="w-3 h-3" />}
+              Rechercher ({selectedIds.size})
+            </button>
+            {searchMessage && <span className="text-xs text-neutral-500">{searchMessage}</span>}
+          </div>
+          <div className="flex-1 overflow-y-auto min-h-0 pr-1 border border-neutral-800 rounded-lg bg-neutral-950/40 p-2">
+            <FileTree items={unclusteredItems} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+          </div>
+        </div>
+
+        <div className="w-1/2 flex flex-col min-h-0">
+          <ReleaseSearchBar
+            onAdded={(card) =>
+              setOpenReleases((prev) => {
+                const next = new Map(prev)
+                next.set(card.release_id, card)
+                return next
+              })
+            }
+          />
+          <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+            {openReleases.size === 0 ? (
+              <p className="text-sm text-neutral-500">Aucun album ouvert - selectionne des fichiers a gauche et lance une recherche.</p>
+            ) : (
+              [...openReleases.values()].map((release) => (
+                <AlbumCard
+                  key={release.release_id}
+                  release={release}
+                  items={items.filter((i) => i.release_id === release.release_id)}
+                  tracklist={tracklists[release.release_id]}
+                  assignment={assignments[release.release_id] ?? {}}
+                  itemsById={itemsById}
+                  busy={busyReleaseIds.has(release.release_id)}
+                  busyIds={busyIds}
+                  edits={edits}
+                  onAssign={(key, itemId) => assign(release.release_id, key, itemId)}
+                  onUnassign={(key) => unassign(release.release_id, key)}
+                  onConfirmPair={(item, track, key) => confirmPair(item, track, release.release_id, key)}
+                  onConfirmAlbum={() => confirmAlbum(release.release_id)}
+                  onDiscard={discardItem}
+                  onRescan={rescanItem}
+                  onEditChange={(itemId, edit) => setEdits((prev) => ({ ...prev, [itemId]: edit }))}
+                  onConfirmManual={confirmManual}
+                  onDelete={() => deleteAlbum(release.release_id)}
+                  onDrop={(payload) => dropOnRelease(release.release_id, payload)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

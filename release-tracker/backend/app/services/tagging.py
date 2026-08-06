@@ -2,20 +2,21 @@
 
 Comme Picard, scan_downloads_root() parcourt l'integralite du dossier de
 telechargements - pas seulement les artistes suivis par l'app - et cree une
-entree de backlog pour chaque fichier audio trouve. Un dossier dont le nom
-correspond a un artiste suivi (voir services/metube.py : MeTube range par
-ARTISTE, folder=normalize_text(artist.name), pas par release) est directement
-rapproche de ses releases pas encore "owned" ; les autres fichiers restent
-"non identifies" (release_id=None) jusqu'a une recherche MusicBrainz manuelle
-(identify_folder(), l'equivalent du "Lookup" de Picard sur un cluster).
+entree de backlog pour chaque fichier audio trouve. Rien n'est rapproche
+automatiquement au scan : la recherche MusicBrainz (par nom de dossier parmi
+les artistes suivis, ou recherche libre piste par piste, l'equivalent du
+"Lookup" de Picard) est une action explicite de l'utilisateur cote
+frontend (POST /api/tagging/search), tout comme l'ajout manuel d'un album via
+recherche artiste/release (POST /api/tagging/releases) ou le glisser-deposer
+entre albums/dossiers (POST /api/tagging/releases/{id}/assign-items).
 
 Volontairement, aucune fonction ici n'ecrit de tag ni ne deplace de fichier
 sans qu'un TaggingItem soit explicitement confirme via l'API (routers/tagging.py) :
 un retour d'experience utilisateur indique qu'un tagging 100% automatique
 produisait des doublons d'album (tags incoherents entre pistes d'un meme
-album). scan_downloads_root()/identify_folder()/rescan_item() ne font donc que
-proposer une correspondance ; seul apply_tag_and_move() ecrit sur le disque, et
-uniquement a la demande explicite de l'utilisateur.
+album). Les fonctions de ce module ne font donc que proposer une
+correspondance ; seul apply_tag_and_move() ecrit sur le disque, et uniquement
+a la demande explicite de l'utilisateur.
 """
 
 import logging
@@ -27,8 +28,9 @@ from datetime import date
 import httpx
 from sqlalchemy.orm import Session
 
+from ..enrichment import get_or_create_artist
 from ..matching import normalize_text, similarity
-from ..models import Artist, OwnershipStatus, Release, Settings, TaggingItem, TaggingStatus
+from ..models import Artist, OwnershipStatus, Release, ReleaseType, Settings, TaggingItem, TaggingStatus
 from . import coverart, musicbrainz
 
 logger = logging.getLogger("dedieufy.tagging")
@@ -93,6 +95,20 @@ def sanitize_component(name: str) -> str:
     return cleaned or "Inconnu"
 
 
+def relative_source_path(item: TaggingItem, downloads_root: str) -> str:
+    """Chemin complet relatif au dossier de telechargements (ex:
+    "The Prodigy/Album/01 - piste.mp3"), pour reconstruire l'arborescence
+    reelle cote frontend (voir TaggingItemOut.relative_path) - contrairement a
+    source_folder qui ne retient que le 1er niveau."""
+    try:
+        rel = os.path.relpath(item.source_path, downloads_root)
+    except ValueError:
+        # Chemins sur des racines differentes (jamais en pratique dans un
+        # conteneur Linux) - filet de securite plutot qu'une exception.
+        rel = item.original_filename
+    return rel.replace(os.sep, "/")
+
+
 def _candidates_for_releases(releases: list[Release], expected_track_count: int) -> list[Candidate]:
     candidates: list[Candidate] = []
     for release in releases:
@@ -139,8 +155,9 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
     503 ponctuel de MusicBrainz laissait des dossiers entiers sans proposition,
     sans que la simple detection des fichiers en souffre pour autant). La
     correspondance devient une action explicite et ciblee - voir
-    auto_match_folder() - a la demande de l'utilisateur, comme le bouton
-    "Lookup" de Picard plutot qu'un scan automatique en arriere-plan.
+    auto_match_items()/search_musicbrainz_for_item() - a la demande de
+    l'utilisateur, comme le bouton "Lookup" de Picard plutot qu'un scan
+    automatique en arriere-plan.
 
     Log en detail ce qu'il trouve, pour diagnostiquer directement depuis les
     logs sans avoir a deviner."""
@@ -201,21 +218,11 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
     return created
 
 
-def auto_match_folder(db: Session, source_folder: str) -> list[TaggingItem]:
-    """Tentative de correspondance automatique nom-de-dossier <-> artiste
-    suivi, declenchee explicitement (bouton "Detecter" cote frontend) plutot
-    que par le scan periodique - voir scan_downloads_root pour le pourquoi.
-    Ne renvoie que les fichiers effectivement matches (les autres restent
-    "non identifies", a traiter via identify_folder si besoin)."""
-    items = (
-        db.query(TaggingItem)
-        .filter(
-            TaggingItem.release_id.is_(None),
-            TaggingItem.source_folder == source_folder,
-            TaggingItem.status == TaggingStatus.needs_review,
-        )
-        .all()
-    )
+def _auto_match_group(db: Session, source_folder: str, items: list[TaggingItem]) -> list[TaggingItem]:
+    """Coeur de la recherche "artistes suivis" pour un groupe d'items
+    partageant le meme dossier source : tente de rapprocher le nom du dossier
+    d'un artiste suivi, propose ses pistes manquantes. Ne modifie que les
+    items effectivement matches (les autres restent "non identifies")."""
     if not items:
         return []
 
@@ -251,14 +258,124 @@ def auto_match_folder(db: Session, source_folder: str) -> list[TaggingItem]:
         item.match_score = round(score, 3)
         matched_items.append(item)
 
-    db.commit()
     return matched_items
+
+
+def auto_match_items(db: Session, item_ids: list[int]) -> list[TaggingItem]:
+    """Recherche "artistes suivis" (voir _auto_match_group) sur une selection
+    explicite de fichiers (case a cocher dans l'arborescence du Backlog),
+    regroupes par dossier source - plusieurs dossiers peuvent etre selectionnes
+    a la fois, chacun teste independamment contre les artistes suivis."""
+    items = (
+        db.query(TaggingItem)
+        .filter(
+            TaggingItem.id.in_(item_ids),
+            TaggingItem.release_id.is_(None),
+            TaggingItem.status == TaggingStatus.needs_review,
+        )
+        .all()
+    )
+    groups: dict[str, list[TaggingItem]] = {}
+    for item in items:
+        groups.setdefault(item.source_folder, []).append(item)
+
+    matched: list[TaggingItem] = []
+    for source_folder, group_items in groups.items():
+        matched.extend(_auto_match_group(db, source_folder, group_items))
+
+    db.commit()
+    return matched
+
+
+_ARTIST_TITLE_SEP_RE = re.compile(r"\s+-\s+")
+
+
+def _guess_artist_from_filename(cleaned: str) -> tuple[str | None, str]:
+    """Motif frequent "Artiste - Titre" dans un nom de fichier nettoye -
+    renvoie (artiste devine ou None, titre restant)."""
+    parts = _ARTIST_TITLE_SEP_RE.split(cleaned, maxsplit=1)
+    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+        return parts[0].strip(), parts[1].strip()
+    return None, cleaned
+
+
+def search_musicbrainz_for_item(
+    db: Session, item: TaggingItem, lastfm_api_key: str | None, tracklist_cache: dict[str, list[dict]]
+) -> bool:
+    """Recherche MusicBrainz automatique, piste par piste, sans se limiter aux
+    artistes suivis - l'equivalent du "Lookup" de Picard sur un fichier isole
+    (scope="musicbrainz" de POST /api/tagging/search). tracklist_cache evite
+    de refetch la tracklist d'une release-group deja resolue pour un fichier
+    precedent de la meme selection. Renvoie False sans lever si aucune
+    correspondance fiable n'est trouvee (MusicBrainz indisponible, artiste non
+    identifiable...) - un echec individuel ne doit jamais interrompre le
+    traitement du reste de la selection (voir l'appelant)."""
+    cleaned = _clean_filename(item.original_filename)
+    guessed_artist, guessed_title = _guess_artist_from_filename(cleaned)
+
+    try:
+        recordings = musicbrainz.search_recordings(guessed_title, guessed_artist)
+        if not recordings and guessed_artist:
+            # Le decoupage "Artiste - Titre" peut mal deviner (featuring,
+            # ponctuation...) - retente sans artiste plutot que d'abandonner.
+            recordings = musicbrainz.search_recordings(cleaned)
+    except Exception:
+        logger.warning("Recherche MusicBrainz indisponible pour %r", item.original_filename)
+        return False
+
+    if not recordings:
+        return False
+
+    best = recordings[0]
+    artist_credit = (best.get("artist-credit") or [{}])[0].get("artist") or {}
+    artist_mbid = artist_credit.get("id")
+    if not artist_mbid:
+        return False
+
+    try:
+        artist = get_or_create_artist(db, artist_mbid, lastfm_api_key)
+        release_groups = musicbrainz.get_recording_release_groups(best["id"])
+    except Exception:
+        logger.warning("Impossible de resoudre l'artiste/release-group pour %r", item.original_filename)
+        return False
+
+    if not release_groups:
+        return False
+
+    rg = release_groups[0]
+    release_type = musicbrainz.classify_release_type(rg) or ReleaseType.other.value
+    release_date, _precision = musicbrainz.parse_release_date(rg.get("first-release-date"))
+    release = get_or_create_release(db, artist, rg["id"], rg["title"], release_type, release_date)
+
+    tracks = tracklist_cache.get(rg["id"])
+    if tracks is None:
+        try:
+            tracks = musicbrainz.get_release_tracks(rg["id"])
+        except Exception:
+            tracks = []
+        tracklist_cache[rg["id"]] = tracks
+
+    # Priorite au recording_id exact (deja connu via la recherche, plus fiable
+    # qu'une comparaison de titres) ; repli sur la similarite de titre sinon.
+    track = next((t for t in tracks if t.get("recording_id") == best["id"]), None)
+    score = 1.0
+    if track is None and tracks:
+        score, track = max(((similarity(cleaned, t["title"]), t) for t in tracks), key=lambda st: st[0])
+
+    item.release_id = release.id
+    if track is not None:
+        item.suggested_track_title = track["title"]
+        item.suggested_track_number = track["position"]
+        item.suggested_disc_number = track["disc_number"]
+        item.match_score = round(score, 3)
+    db.commit()
+    return True
 
 
 def search_release_groups(artist_musicbrainz_id: str) -> list[dict]:
     """Albums/EP/singles/compilations d'un artiste MusicBrainz, pour le
-    selecteur d'identification manuelle (POST /api/tagging/identify) - meme
-    filtrage que la decouverte automatique (scheduler._discover_for_artist).
+    selecteur de recherche manuelle d'album (POST /api/tagging/releases) -
+    meme filtrage que la decouverte automatique (scheduler._discover_for_artist).
     MusicBrainz est parfois temporairement indisponible (503) : plutot qu'un
     500 brut qui casse tout le panneau d'identification, on renvoie une liste
     vide et le frontend affiche "aucune release trouvee"."""
@@ -285,35 +402,100 @@ def search_release_groups(artist_musicbrainz_id: str) -> list[dict]:
     return items
 
 
-def identify_folder(db: Session, source_folder: str, release: Release) -> list[TaggingItem]:
-    """Rattache les fichiers "non identifies" d'un dossier a la release choisie
-    manuellement (recherche + selection MusicBrainz, l'equivalent du "Lookup"
-    de Picard sur un cluster), et propose une correspondance piste par piste.
-    Filtre sur la colonne source_folder stockee (correspondance exacte), pas sur
-    un prefixe de chemin - gere nativement le cas des fichiers "en vrac"
-    (LOOSE_FILES_FOLDER = "") sans risquer de capturer des fichiers d'un autre
-    dossier plus profond par erreur."""
+def get_or_create_release(
+    db: Session,
+    artist: Artist,
+    release_group_mbid: str,
+    title: str,
+    release_type: str,
+    release_date: date | None,
+) -> Release:
+    """Recupere la release deja en base pour cette release-group, ou en cree
+    une nouvelle - utilise a la fois par l'ajout manuel d'une carte album vide
+    (POST /api/tagging/releases) et par la recherche MusicBrainz automatique
+    (search_musicbrainz_for_item)."""
+    release = db.query(Release).filter(Release.musicbrainz_id == release_group_mbid).first()
+    if release is not None:
+        return release
+    release = Release(
+        artist_id=artist.id,
+        title=title,
+        release_type=release_type,
+        release_date=release_date,
+        musicbrainz_id=release_group_mbid,
+    )
+    db.add(release)
+    db.commit()
+    db.refresh(release)
+    return release
+
+
+REMATCH_THRESHOLD = 0.5
+
+
+def assign_items_to_release(db: Session, item_ids: list[int], release: Release) -> list[TaggingItem]:
+    """Reassigne des items (non identifies, ou deja lies a une autre release)
+    vers `release`, en recalculant leur meilleure correspondance dans SA
+    tracklist - le coeur des deux interactions glisser-deposer demandees
+    (glisser un album sur un autre : item_ids = ceux de l'album source ;
+    glisser un dossier sur un album : item_ids = ceux de ce dossier). En
+    dessous de REMATCH_THRESHOLD, la piste reste volontairement sans
+    correspondance plutot qu'une proposition peu fiable - le frontend
+    l'affiche dans une section "Sans correspondance" de la carte album,
+    corrigeable a la main (glisser-deposer sur un slot precis)."""
     items = (
         db.query(TaggingItem)
-        .filter(TaggingItem.release_id.is_(None), TaggingItem.source_folder == source_folder)
+        .filter(TaggingItem.id.in_(item_ids), TaggingItem.status != TaggingStatus.done)
         .all()
     )
     if not items:
         return []
 
-    candidates = _candidates_for_releases([release], len(items))
+    try:
+        tracks = musicbrainz.get_release_tracks(release.musicbrainz_id, expected_track_count=len(items))
+    except Exception:
+        logger.exception("Tracklist MusicBrainz indisponible pour %s - %s", release.artist.name, release.title)
+        tracks = []
+
+    candidates: list[Candidate] = [(release, t) for t in tracks]
     labeled = [(str(item.id), normalize_text(_clean_filename(item.original_filename))) for item in items]
     matches = _greedy_match(labeled, candidates) if candidates else {}
 
     for item in items:
         item.release_id = release.id
         match = matches.get(str(item.id))
-        if match is not None:
+        if match is not None and match[1] >= REMATCH_THRESHOLD:
             (_matched_release, track), score = match
             item.suggested_track_title = track["title"]
             item.suggested_track_number = track["position"]
             item.suggested_disc_number = track["disc_number"]
             item.match_score = round(score, 3)
+        else:
+            item.suggested_track_title = None
+            item.suggested_track_number = None
+            item.suggested_disc_number = None
+            item.match_score = match[1] if match is not None else None
+
+    db.commit()
+    return items
+
+
+def unlink_release_items(db: Session, release: Release) -> list[TaggingItem]:
+    """Retire tous les items non confirmes de cette release (suppression d'une
+    carte album a droite, comme dans Picard) - ils redeviennent "non
+    identifies" et reapparaissent donc dans l'arborescence de gauche. Les
+    fichiers deja tagues/deplaces (status=done) ne sont jamais concernes."""
+    items = (
+        db.query(TaggingItem)
+        .filter(TaggingItem.release_id == release.id, TaggingItem.status != TaggingStatus.done)
+        .all()
+    )
+    for item in items:
+        item.release_id = None
+        item.suggested_track_title = None
+        item.suggested_track_number = None
+        item.suggested_disc_number = None
+        item.match_score = None
 
     db.commit()
     return items

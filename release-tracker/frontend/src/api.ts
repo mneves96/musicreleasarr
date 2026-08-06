@@ -113,8 +113,11 @@ export interface TaggingItem {
   release_id: number | null
   artist_name: string | null
   release_title: string | null
+  release_cover_url: string | null
+  release_date: string | null
   source_folder: string
   source_path: string
+  relative_path: string
   original_filename: string
   status: TaggingStatus
   suggested_track_title: string | null
@@ -149,14 +152,24 @@ export interface ReleaseGroupChoice {
   release_date: string | null
 }
 
-export interface TaggingIdentifyPayload {
-  source_folder: string
+export type TaggingSearchScope = 'followed' | 'musicbrainz'
+
+export interface ReleaseCreatePayload {
   artist_musicbrainz_id: string
   artist_name: string
   release_group_musicbrainz_id: string
   release_title: string
   release_type: ReleaseType
   release_date?: string | null
+}
+
+export interface ReleaseCard {
+  release_id: number
+  artist_name: string
+  release_title: string
+  cover_url: string | null
+  release_date: string | null
+  release_type: ReleaseType
 }
 
 export interface Settings {
@@ -385,19 +398,23 @@ export const api = {
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),
     scanNow: () => request<TestConnectionResult>('/tagging/scan', { method: 'POST' }),
-    tracklist: (itemId: number) => request<TrackChoice[]>(`/tagging/${itemId}/tracklist`),
+    tracklist: (releaseId: number) => request<TrackChoice[]>(`/tagging/releases/${releaseId}/tracklist`),
     confirm: (itemId: number, payload: TaggingConfirmPayload) =>
       request<TaggingItem>(`/tagging/${itemId}/confirm`, { method: 'POST', body: JSON.stringify(payload) }),
     rescan: (itemId: number) => request<TaggingItem>(`/tagging/${itemId}/rescan`, { method: 'POST' }),
     discard: (itemId: number) => request<{ status: string }>(`/tagging/${itemId}`, { method: 'DELETE' }),
     releaseGroups: (artistMusicbrainzId: string) =>
       request<ReleaseGroupChoice[]>(`/tagging/identify/release-groups?artist_musicbrainz_id=${encodeURIComponent(artistMusicbrainzId)}`),
-    identify: (payload: TaggingIdentifyPayload) =>
-      request<TaggingItem[]>('/tagging/identify', { method: 'POST', body: JSON.stringify(payload) }),
-    autoMatch: (sourceFolder: string) =>
-      request<TaggingItem[]>('/tagging/folders/auto-match', {
+    search: (itemIds: number[], scope: TaggingSearchScope) =>
+      request<TaggingItem[]>('/tagging/search', { method: 'POST', body: JSON.stringify({ item_ids: itemIds, scope }) }),
+    createRelease: (payload: ReleaseCreatePayload) =>
+      request<ReleaseCard>('/tagging/releases', { method: 'POST', body: JSON.stringify(payload) }),
+    unlinkRelease: (releaseId: number) =>
+      request<TaggingItem[]>(`/tagging/releases/${releaseId}/unlink`, { method: 'POST' }),
+    assignItemsToRelease: (releaseId: number, itemIds: number[]) =>
+      request<TaggingItem[]>(`/tagging/releases/${releaseId}/assign-items`, {
         method: 'POST',
-        body: JSON.stringify({ source_folder: sourceFolder }),
+        body: JSON.stringify({ item_ids: itemIds }),
       }),
   },
 

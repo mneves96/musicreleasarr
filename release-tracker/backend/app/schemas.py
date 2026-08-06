@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -146,8 +147,16 @@ class TaggingItemOut(BaseModel):
     release_id: int | None
     artist_name: str | None
     release_title: str | None
+    release_cover_url: str | None = None
+    release_date: date | None = None
     source_folder: str
     source_path: str
+    # Chemin complet relatif au dossier de telechargements (ex:
+    # "The Prodigy/Album/01 - piste.mp3"), pour reconstruire l'arborescence
+    # reelle cote frontend - contrairement a source_folder qui ne retient que
+    # le 1er niveau. Calcule a la volee (voir routers/tagging.py:_to_out), pas
+    # stocke : ne depend que de source_path + du reglage courant.
+    relative_path: str
     original_filename: str
     status: TaggingStatus
     suggested_track_title: str | None
@@ -174,8 +183,11 @@ class ReleaseGroupChoice(BaseModel):
     release_date: date | None = None
 
 
-class TaggingIdentifyIn(BaseModel):
-    source_folder: str
+class ReleaseCreateIn(BaseModel):
+    """Ajout manuel d'une carte album vide (recherche au-dessus de la colonne
+    de droite du Backlog) - plus de source_folder : on peut l'ajouter sans
+    qu'aucun fichier n'y soit encore rattache, puis y glisser des fichiers."""
+
     artist_musicbrainz_id: str
     artist_name: str
     release_group_musicbrainz_id: str
@@ -184,8 +196,22 @@ class TaggingIdentifyIn(BaseModel):
     release_date: date | None = None
 
 
-class TaggingAutoMatchIn(BaseModel):
-    source_folder: str
+class ReleaseCardOut(BaseModel):
+    release_id: int
+    artist_name: str
+    release_title: str
+    cover_url: str | None = None
+    release_date: date | None = None
+    release_type: ReleaseType
+
+
+class TaggingSearchIn(BaseModel):
+    item_ids: list[int]
+    scope: Literal["followed", "musicbrainz"]
+
+
+class AssignItemsIn(BaseModel):
+    item_ids: list[int]
 
 
 class SettingsOut(BaseModel):
