@@ -7,6 +7,7 @@ import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from './Ser
 import { usePlayer, type QueueTrack } from '../context/PlayerContext'
 import Spinner from './Spinner'
 import PlayGlyph from './PlayGlyph'
+import DownloadGlyph from './DownloadGlyph'
 
 export default function ReleaseRow({
   release,
@@ -180,15 +181,14 @@ export default function ReleaseRow({
         </div>
         <OwnershipBadge status={release.ownership_status} />
         <DownloadBadge status={release.download_status} error={release.download_error} />
-        {release.download_status !== 'queued' && (
-          <button
-            onClick={download}
-            disabled={busy}
-            className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
-          >
-            {busy ? '...' : downloadLabel}
-          </button>
-        )}
+        <button
+          onClick={download}
+          disabled={busy}
+          title={downloadLabel}
+          className="flex items-center justify-center w-8 h-8 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 shrink-0"
+        >
+          {busy ? <Spinner className="w-4 h-4" /> : <DownloadGlyph className="w-4 h-4" />}
+        </button>
         <button
           onClick={toggleTracks}
           disabled={tracksLoading}
@@ -213,37 +213,46 @@ export default function ReleaseRow({
               {missingBusy ? '...' : `Telecharger les ${missingTrackCount} piste(s) manquante(s)`}
             </button>
           )}
-          <ul className="flex flex-col gap-1">
-            {tracks.map((t, idx) => (
-              <li key={t.video_id} className="flex items-center justify-between text-sm text-neutral-300 gap-2">
-                <button
-                  onClick={() => play(idx)}
-                  className="flex items-center justify-center w-5 h-5 rounded-full border border-neutral-600 text-neutral-400 text-[10px] hover:text-white hover:border-neutral-400 shrink-0"
-                  title="Ecouter cette piste"
+          <ul className="flex flex-col">
+            {tracks.map((t, idx) => {
+              const trackDownloadLabel = t.owned === true ? 'Retelecharger' : 'Telecharger'
+              return (
+                <li
+                  key={t.video_id}
+                  className={`flex items-center justify-between text-sm text-neutral-300 gap-2 px-2 py-1.5 rounded ${
+                    idx % 2 === 1 ? 'bg-neutral-900/60' : ''
+                  }`}
                 >
-                  ▶
-                </button>
-                <span className="truncate flex-1">
-                  {t.title} {t.duration && <span className="text-neutral-500">({t.duration})</span>}
-                </span>
-                {t.owned === true && (
-                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-900/50 text-green-300 whitespace-nowrap">
-                    Possedee
+                  <button
+                    onClick={() => play(idx)}
+                    className="flex items-center justify-center w-5 h-5 rounded-full border border-neutral-600 text-neutral-400 text-[10px] hover:text-white hover:border-neutral-400 shrink-0"
+                    title="Ecouter cette piste"
+                  >
+                    ▶
+                  </button>
+                  <span className="truncate flex-1">
+                    {t.title} {t.duration && <span className="text-neutral-500">({t.duration})</span>}
                   </span>
-                )}
-                {t.owned === false && (
-                  <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-900/50 text-amber-300 whitespace-nowrap">
-                    Manquante
-                  </span>
-                )}
-                <button
-                  onClick={() => downloadTrack(t.video_id)}
-                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 whitespace-nowrap"
-                >
-                  {t.owned === true ? 'Retelecharger' : 'Telecharger'}
-                </button>
-              </li>
-            ))}
+                  {t.owned === true && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-900/50 text-green-300 whitespace-nowrap">
+                      Possedee
+                    </span>
+                  )}
+                  {t.owned === false && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-900/50 text-amber-300 whitespace-nowrap">
+                      Manquante
+                    </span>
+                  )}
+                  <button
+                    onClick={() => downloadTrack(t.video_id)}
+                    title={trackDownloadLabel}
+                    className="flex items-center justify-center w-6 h-6 rounded-md bg-neutral-800 hover:bg-neutral-700 shrink-0"
+                  >
+                    <DownloadGlyph className="w-3.5 h-3.5" />
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

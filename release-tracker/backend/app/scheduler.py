@@ -27,7 +27,6 @@ logger = logging.getLogger("dedieufy.scheduler")
 _scheduler = BackgroundScheduler()
 FULL_CYCLE_JOB_ID = "full_discovery_cycle"
 RECHECK_JOB_ID = "recheck_queued_downloads"
-DOWNLOAD_STATUS_JOB_ID = "refresh_download_statuses"
 TAGGING_SCAN_JOB_ID = "scan_tagging_backlog"
 LASTFM_RECOMMENDATIONS_JOB_ID = "refresh_lastfm_recommendations"
 
@@ -142,8 +141,14 @@ def scan_ownership(db: Session, only_queued: bool = False, artist_id: int | None
     if artist_id is not None:
         query = query.filter(Release.artist_id == artist_id)
     if only_queued:
-        # Inclut aussi "downloaded" (deja confirme cote MeTube via refresh_download_statuses)
-        # tant que Navidrome n'a pas encore indexe le fichier - sinon on ne le revererait jamais.
+        # Inclut aussi "downloaded" (au cas ou une precedente ligne l'aurait
+        # deja marque ainsi) tant que Navidrome n'a pas encore indexe le
+        # fichier - sinon on ne le revererait jamais. La seule source qui fait
+        # passer une release de "queued" a "downloaded" est cette revalidation
+        # Navidrome elle-meme (voir plus bas) : on ne fait plus confiance a
+        # l'historique MeTube, trop souvent desynchronise (URL non retrouvee
+        # apres un redemarrage, un album eclate en pistes individuelles par
+        # yt-dlp, etc.) pour etre une source fiable de statut.
         query = query.filter(
             Release.download_status.in_([DownloadStatus.queued, DownloadStatus.downloaded]),
             Release.ownership_status != OwnershipStatus.owned,
@@ -239,67 +244,6 @@ def _trigger_download(db: Session, settings: Settings, artist: Artist, release: 
     except Exception:
         logger.exception("Echec du declenchement de telechargement pour %s - %s", artist.name, release.title)
         release.download_status = DownloadStatus.failed
-
-
-def refresh_download_statuses(db: Session) -> None:
-    """Interroge MeTube pour savoir ou en sont les telechargements "queued" :
-    MeTube telecharge en arriere-plan, /add ne fait qu'accepter la demande, donc
-    sans ca le statut restait bloque sur "queued" indefiniment meme en cas
-    d'echec cote MeTube (video indisponible, region-locked, etc.)."""
-    settings = get_settings(db)
-    if not settings.metube_url:
-        return
-
-    releases = (
-        db.query(Release)
-        .filter(Release.download_status == DownloadStatus.queued)
-        .filter(Release.youtube_music_url.isnot(None))
-        .all()
-    )
-    if not releases:
-        return
-
-    try:
-        history = metube.get_history(settings.metube_url)
-    except Exception:
-        logger.exception("Impossible de recuperer l'historique MeTube")
-        return
-
-    done_by_url = {item["url"]: item for item in history.get("done") or [] if item.get("url")}
-    queue_by_url = {item["url"]: item for item in history.get("queue") or [] if item.get("url")}
-    pending_urls = {item["url"] for item in history.get("pending") or [] if item.get("url")}
-
-    for release in releases:
-        url = release.youtube_music_url
-        if url in done_by_url:
-            info = done_by_url[url]
-            if info.get("status") == "error":
-                release.download_status = DownloadStatus.failed
-                release.download_error = info.get("msg") or info.get("error") or "Echec du telechargement MeTube"
-            else:
-                release.download_status = DownloadStatus.downloaded
-                release.download_error = None
-        elif url in queue_by_url:
-            pass  # toujours en cours cote MeTube, rien a changer
-        elif url in pending_urls:
-            pass  # toujours en attente de demarrage cote MeTube, rien a changer
-        else:
-            # Ni dans "done", ni "queue", ni "pending" : MeTube ne connait plus cette
-            # URL (suppression manuelle depuis l'onglet MeTube, redemarrage de
-            # MeTube qui a perdu son historique, ou telechargement d'un album dont
-            # yt-dlp a eclate le contenu en pistes individuelles ne correspondant
-            # plus exactement a l'URL "album" envoyee a l'origine). Laisser le
-            # statut bloque sur "queued" empechait toute nouvelle tentative (le
-            # bouton Telecharger reste cache tant que le statut est "queued") -
-            # on bascule donc en echec explicite plutot que de rester bloque en
-            # silence ; le statut de possession reel (via Navidrome) reste inchange
-            # et prevaudra visuellement si le fichier est en realite bien present.
-            release.download_status = DownloadStatus.failed
-            release.download_error = (
-                "Introuvable dans l'historique MeTube (supprime manuellement ou MeTube redemarre) - "
-                "relance le telechargement si la release n'est pas dans ta bibliotheque."
-            )
-    db.commit()
 
 
 def scan_tagging_backlog(db: Session) -> None:
@@ -503,11 +447,6 @@ def run_recheck_queued() -> None:
         scan_ownership(db, only_queued=True)
 
 
-def run_refresh_download_statuses() -> None:
-    with SessionLocal() as db:
-        refresh_download_statuses(db)
-
-
 def run_scan_tagging_backlog() -> None:
     with SessionLocal() as db:
         scan_tagging_backlog(db)
@@ -551,14 +490,6 @@ def start_scheduler() -> None:
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=1800,
-    )
-    _scheduler.add_job(
-        run_refresh_download_statuses,
-        trigger=IntervalTrigger(minutes=2),
-        id=DOWNLOAD_STATUS_JOB_ID,
-        replace_existing=True,
-        max_instances=1,
-        misfire_grace_time=120,
     )
     _scheduler.add_job(
         run_scan_tagging_backlog,

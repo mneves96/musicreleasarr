@@ -39,14 +39,6 @@ export default function ArtistPage() {
     load()
   }, [load])
 
-  // Tant qu'un telechargement est en cours, on rafraichit periodiquement pour
-  // voir la progression avancer (le backend interroge MeTube toutes les 2 min).
-  useEffect(() => {
-    if (!artist?.releases.some((r) => r.download_status === 'queued')) return
-    const interval = window.setInterval(load, 15000)
-    return () => window.clearInterval(interval)
-  }, [artist, load])
-
   // Le scan initial (lance en arriere-plan par le backend) peut prendre jusqu'a
   // une minute sur un catalogue important - on sonde tant qu'aucune sortie n'est
   // encore visible, pour afficher les resultats des qu'ils arrivent sans que

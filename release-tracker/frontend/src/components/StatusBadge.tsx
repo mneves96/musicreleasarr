@@ -21,7 +21,7 @@ const DOWNLOAD_STYLES: Record<DownloadStatus, string> = {
 
 const DOWNLOAD_LABELS: Record<DownloadStatus, string> = {
   not_requested: '',
-  queued: 'Telechargement en cours',
+  queued: 'Envoye a MeTube',
   downloaded: 'Telecharge',
   failed: 'Echec du telechargement',
 }

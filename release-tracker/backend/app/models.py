@@ -144,7 +144,6 @@ class Release(Base):
     download_status: Mapped[DownloadStatus] = mapped_column(
         Enum(DownloadStatus), default=DownloadStatus.not_requested
     )
-    download_progress: Mapped[int | None] = mapped_column(Integer, nullable=True)
     download_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
