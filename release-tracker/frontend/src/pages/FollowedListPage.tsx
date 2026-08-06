@@ -1,32 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Artist } from '../api'
-import ArtistCard from '../components/ArtistCard'
-import ArtistListRow from '../components/ArtistListRow'
+import ArtistListView from '../components/ArtistListView'
 import { LoadingBlock } from '../components/Spinner'
-
-type ViewMode = 'grid' | 'list'
-type SortBy = 'name' | 'albums' | 'latest'
 
 const POLL_INTERVAL_MS = 4000
 const POLL_MAX_TICKS = 15 // ~1 minute
 
-const VIEW_STORAGE_KEY = 'followedList.view'
-const SORT_STORAGE_KEY = 'followedList.sortBy'
-
-function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
-  const stored = localStorage.getItem(key)
-  return (allowed as readonly string[]).includes(stored ?? '') ? (stored as T) : fallback
-}
-
 export default function FollowedListPage() {
   const [artists, setArtists] = useState<Artist[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<ViewMode>(() => readStored(VIEW_STORAGE_KEY, ['grid', 'list'] as const, 'grid'))
-  const [sortBy, setSortBy] = useState<SortBy>(() =>
-    readStored(SORT_STORAGE_KEY, ['name', 'albums', 'latest'] as const, 'name')
-  )
-  const [query, setQuery] = useState('')
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
@@ -39,14 +22,6 @@ export default function FollowedListPage() {
       if (pollRef.current) window.clearInterval(pollRef.current)
     }
   }, [load])
-
-  useEffect(() => {
-    localStorage.setItem(VIEW_STORAGE_KEY, view)
-  }, [view])
-
-  useEffect(() => {
-    localStorage.setItem(SORT_STORAGE_KEY, sortBy)
-  }, [sortBy])
 
   async function importFavorites() {
     setImporting(true)
@@ -70,23 +45,6 @@ export default function FollowedListPage() {
       setImporting(false)
     }
   }
-
-  const visibleArtists = useMemo(() => {
-    let list = artists
-    if (query.trim()) {
-      const q = query.trim().toLowerCase()
-      list = list.filter((a) => a.name.toLowerCase().includes(q))
-    }
-    const sorted = [...list]
-    if (sortBy === 'name') {
-      sorted.sort((a, b) => a.name.localeCompare(b.name))
-    } else if (sortBy === 'albums') {
-      sorted.sort((a, b) => b.album_count - a.album_count)
-    } else if (sortBy === 'latest') {
-      sorted.sort((a, b) => (b.latest_release_date ?? '').localeCompare(a.latest_release_date ?? ''))
-    }
-    return sorted
-  }, [artists, query, sortBy])
 
   if (loading) return <LoadingBlock />
 
@@ -113,55 +71,7 @@ export default function FollowedListPage() {
           </p>
         </div>
       ) : (
-        <>
-          <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filtrer par nom..."
-              className="bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
-            >
-              <option value="name">Trier : Nom (A-Z)</option>
-              <option value="albums">Trier : Nombre d'albums</option>
-              <option value="latest">Trier : Sortie la plus recente</option>
-            </select>
-            <div className="flex gap-1 ml-auto">
-              <button
-                onClick={() => setView('grid')}
-                className={`text-xs px-3 py-1.5 rounded-md ${view === 'grid' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
-              >
-                Details
-              </button>
-              <button
-                onClick={() => setView('list')}
-                className={`text-xs px-3 py-1.5 rounded-md ${view === 'list' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
-              >
-                Liste
-              </button>
-            </div>
-          </div>
-
-          {visibleArtists.length === 0 && <p className="text-neutral-400 text-sm">Aucun artiste ne correspond au filtre.</p>}
-
-          {view === 'grid' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {visibleArtists.map((a) => (
-                <ArtistCard key={a.id} artist={a} />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {visibleArtists.map((a) => (
-                <ArtistListRow key={a.id} artist={a} />
-              ))}
-            </div>
-          )}
-        </>
+        <ArtistListView artists={artists} storageKeyPrefix="followedList" />
       )}
     </div>
   )

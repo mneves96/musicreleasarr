@@ -118,15 +118,27 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
       </p>
 
       {settings.lastfm_username ? (
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-green-400">Connecte en tant que {settings.lastfm_username}</span>
-          <button
-            onClick={disconnect}
-            disabled={busy}
-            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
-          >
-            Deconnecter
-          </button>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-green-400">Connecte en tant que {settings.lastfm_username}</span>
+            <button
+              onClick={disconnect}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
+            >
+              Deconnecter
+            </button>
+          </div>
+          <Field
+            label="Planification du rafraichissement des recommandations (ex: 0 3 * * * = tous les jours a 3h)"
+            value={settings.lastfm_recommendations_cron}
+            onChange={(v) => set('lastfm_recommendations_cron', v)}
+          />
+          <p className="text-xs text-neutral-500">
+            Chaque nuit, les anciennes recommandations non suivies sont supprimees et remplacees par les
+            nouvelles - un bouton "Rafraichir" dans l'onglet Recommandations declenche le meme rafraichissement
+            a la demande.
+          </p>
         </div>
       ) : pendingToken ? (
         <div className="flex flex-col gap-2">

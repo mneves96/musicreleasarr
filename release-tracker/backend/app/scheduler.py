@@ -8,12 +8,19 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal
-from .enrichment import enrich_artist
+from .enrichment import enrich_artist, get_or_create_artist
 from .matching import best_match, normalize_text
 from .models import ALL_RELEASE_TYPES, Artist, DownloadStatus, OwnershipStatus, Release, ReleaseType, Settings
-from .services import coverart, deezer, metube, musicbrainz, navidrome, notify, tagging, ytmusic
+from .services import coverart, deezer, lastfm, metube, musicbrainz, navidrome, notify, tagging, ytmusic
 
 FAVORITE_MATCH_THRESHOLD = 0.85
+# MusicBrainz limite a 1 requete/seconde : resoudre un mbid manquant pour
+# chaque recommandation pourrait faire trainer le job plusieurs minutes si
+# beaucoup d'entre elles n'en ont pas (artistes peu connus) - on borne le
+# nombre de resolutions tentees par rafraichissement plutot que de laisser le
+# job trainer indefiniment, quitte a laisser de cote quelques recommandations
+# obscures (elles seront retentees au prochain rafraichissement nocturne).
+MAX_RECOMMENDATION_MBID_RESOLUTIONS = 8
 
 logger = logging.getLogger("dedieufy.scheduler")
 
@@ -22,6 +29,7 @@ FULL_CYCLE_JOB_ID = "full_discovery_cycle"
 RECHECK_JOB_ID = "recheck_queued_downloads"
 DOWNLOAD_STATUS_JOB_ID = "refresh_download_statuses"
 TAGGING_SCAN_JOB_ID = "scan_tagging_backlog"
+LASTFM_RECOMMENDATIONS_JOB_ID = "refresh_lastfm_recommendations"
 
 
 def get_settings(db: Session) -> Settings:
@@ -306,6 +314,75 @@ def scan_tagging_backlog(db: Session) -> None:
         logger.exception("Echec du scan de redressage metadata")
 
 
+def refresh_lastfm_recommendations(db: Session) -> None:
+    """Rafraichissement nocturne des recommandations Last.fm (voir POST
+    /api/artists/recommended/refresh pour le declenchement manuel) : supprime
+    les recommandations precedentes non suivies puis en reimporte de
+    nouvelles, stockees comme de vrais Artist (is_recommended=True) - meme
+    table que les artistes suivis, pour que l'onglet Recommandations
+    reutilise telle quelle l'UI/le code de l'onglet Suivis (meme composants
+    ArtistCard/ArtistListRow, meme fiche artiste pour les parametres de
+    suivi)."""
+    settings = get_settings(db)
+    if not (settings.lastfm_api_key and settings.lastfm_api_secret and settings.lastfm_session_key):
+        logger.info("Last.fm non connecte, rafraichissement des recommandations ignore")
+        return
+
+    try:
+        raw = lastfm.get_recommended_artists(
+            settings.lastfm_api_key, settings.lastfm_api_secret, settings.lastfm_session_key
+        )
+    except Exception:
+        logger.exception("Echec de la recuperation des recommandations Last.fm")
+        return
+
+    # Un artiste suivi ne doit jamais etre supprime, meme s'il ressort de
+    # Last.fm comme recommandation - is_recommended reste False pour lui plus
+    # bas (le check `if not artist.is_followed` avant de le marquer).
+    stale = db.query(Artist).filter(Artist.is_recommended.is_(True), Artist.is_followed.is_(False)).all()
+    for artist in stale:
+        db.delete(artist)
+    db.commit()
+
+    followed_ids = {a.musicbrainz_id for a in db.query(Artist).filter(Artist.is_followed.is_(True)).all()}
+    resolutions_used = 0
+
+    for item in raw:
+        name = item.get("name")
+        if not name:
+            continue
+
+        mbid = item.get("mbid") or None
+        if not mbid:
+            if resolutions_used >= MAX_RECOMMENDATION_MBID_RESOLUTIONS:
+                continue
+            resolutions_used += 1
+            # Last.fm ne fournit pas toujours un mbid (artiste peu connu) - meme
+            # logique de repli que l'import des favoris Navidrome ci-dessous.
+            try:
+                candidates, _total = musicbrainz.search_artists(name, limit=5)
+            except Exception:
+                continue
+            idx = best_match(name, [c["name"] for c in candidates], threshold=FAVORITE_MATCH_THRESHOLD)
+            if idx is None:
+                continue
+            mbid = candidates[idx]["id"]
+
+        if mbid in followed_ids:
+            continue
+
+        try:
+            artist = get_or_create_artist(db, mbid, settings.lastfm_api_key)
+        except Exception:
+            logger.warning("Impossible de creer l'artiste recommande '%s'", name)
+            continue
+
+        if not artist.is_followed:
+            artist.is_recommended = True
+
+    db.commit()
+
+
 def _backfill_youtube_links(db: Session, artist: Artist) -> None:
     """Repare les releases deja telechargees (ou en cours/en echec) auxquelles il
     manque le lien YouTube Music - un ancien mecanisme de repli piste par piste
@@ -419,15 +496,29 @@ def run_scan_tagging_backlog() -> None:
         scan_tagging_backlog(db)
 
 
+def run_refresh_lastfm_recommendations() -> None:
+    with SessionLocal() as db:
+        refresh_lastfm_recommendations(db)
+
+
 def reschedule() -> None:
     with SessionLocal() as db:
         settings = get_settings(db)
         cron = settings.scan_cron
+        lastfm_cron = settings.lastfm_recommendations_cron
 
     _scheduler.add_job(
         run_full_cycle,
         trigger=CronTrigger.from_crontab(cron),
         id=FULL_CYCLE_JOB_ID,
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    _scheduler.add_job(
+        run_refresh_lastfm_recommendations,
+        trigger=CronTrigger.from_crontab(lastfm_cron),
+        id=LASTFM_RECOMMENDATIONS_JOB_ID,
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=3600,

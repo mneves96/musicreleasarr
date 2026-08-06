@@ -5,11 +5,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal, get_db
-from ..enrichment import enrich_artist
-from ..matching import best_match
+from ..enrichment import get_or_create_artist
 from ..models import ALL_RELEASE_TYPES, Artist
-from ..schemas import ArtistOut, ArtistSearchResult, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
-from ..services import lastfm, musicbrainz, navidrome
+from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult
+from ..services import navidrome
 from .. import scheduler
 
 logger = logging.getLogger("dedieufy.artists")
@@ -23,24 +22,13 @@ def list_followed(db: Session = Depends(get_db)):
 
 
 def _get_or_create_artist(db: Session, musicbrainz_id: str) -> Artist:
-    artist = db.query(Artist).filter(Artist.musicbrainz_id == musicbrainz_id).first()
-    if artist is not None:
-        return artist
-
     try:
-        mb_artist = musicbrainz.get_artist(musicbrainz_id)
+        settings = scheduler.get_settings(db)
+        return get_or_create_artist(db, musicbrainz_id, settings.lastfm_api_key)
     except Exception as exc:
         # MusicBrainz est rate-limite/parfois lent : mieux vaut un 502 clair et
         # invitant a reessayer qu'un 500 brut qui laisse croire a un bug.
         raise HTTPException(502, f"MusicBrainz indisponible, reessaie dans un instant : {exc}") from exc
-
-    artist = Artist(name=mb_artist["name"], musicbrainz_id=musicbrainz_id)
-    settings = scheduler.get_settings(db)
-    enrich_artist(artist, settings.lastfm_api_key, mb_artist=mb_artist)
-    db.add(artist)
-    db.commit()
-    db.refresh(artist)
-    return artist
 
 
 def _scan_in_background(artist_id: int) -> None:
@@ -113,68 +101,35 @@ def import_favorites(background_tasks: BackgroundTasks, db: Session = Depends(ge
     )
 
 
-@router.get("/recommended", response_model=list[ArtistSearchResult])
+@router.get("/recommended", response_model=list[ArtistOut])
 def recommended_artists(db: Session = Depends(get_db)):
-    """Recommandations personnalisees Last.fm (necessite une connexion complete,
-    voir routers/settings.py:lastfm-auth-*). Ne cree aucune ligne Artist en
-    base - meme principe que /api/search/artists, la creation n'a lieu que si
-    l'utilisateur suit/previsualise effectivement l'un des resultats.
+    """Recommandations personnalisees Last.fm, stockees comme de vraies lignes
+    Artist (is_recommended=True) - meme table que les artistes suivis, meme
+    schema de sortie, rafraichies chaque nuit par le scheduler (voir
+    scheduler.refresh_lastfm_recommendations) ou a la demande via
+    POST /recommended/refresh. Simple lecture DB : aucun appel reseau ici.
 
     IMPORTANT : cette route doit rester declaree AVANT /{artist_id} ci-dessous,
     sinon Starlette la fait matcher comme artist_id="recommended" (404/422)."""
+    return (
+        db.query(Artist)
+        .filter(Artist.is_recommended.is_(True), Artist.is_followed.is_(False))
+        .order_by(Artist.name)
+        .all()
+    )
+
+
+@router.post("/recommended/refresh", response_model=TestConnectionResult)
+def refresh_recommended_artists(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Rafraichissement manuel (bouton "Rafraichir" de l'onglet Recommandations),
+    meme logique que le job nocturne - deportee en tache de fond car elle
+    peut prendre plusieurs secondes/minutes (appels Last.fm + resolutions
+    MusicBrainz limitees a 1 req/s)."""
     settings = scheduler.get_settings(db)
     if not (settings.lastfm_api_key and settings.lastfm_api_secret and settings.lastfm_session_key):
-        raise HTTPException(422, "Connecte Last.fm dans Reglages pour voir des recommandations")
-
-    try:
-        raw = lastfm.get_recommended_artists(settings.lastfm_api_key, settings.lastfm_api_secret, settings.lastfm_session_key)
-    except Exception as exc:
-        raise HTTPException(502, f"Last.fm indisponible : {exc}") from exc
-
-    followed_ids = {a.musicbrainz_id for a in db.query(Artist).filter(Artist.is_followed.is_(True)).all()}
-
-    # MusicBrainz limite a 1 requete/seconde : resoudre un mbid manquant pour
-    # chaque recommandation pourrait faire trainer la reponse 20-30s+ si
-    # beaucoup d'entre elles n'en ont pas (artistes peu connus). On borne le
-    # nombre de resolutions tentees plutot que de faire attendre l'utilisateur
-    # indefiniment - quitte a laisser de cote quelques recommandations obscures.
-    MAX_MBID_RESOLUTIONS = 8
-    resolutions_used = 0
-
-    results: list[ArtistSearchResult] = []
-    for item in raw:
-        name = item.get("name")
-        if not name:
-            continue
-
-        mbid = item.get("mbid") or None
-        if not mbid:
-            if resolutions_used >= MAX_MBID_RESOLUTIONS:
-                continue
-            resolutions_used += 1
-            # Last.fm ne fournit pas toujours un mbid (artiste peu connu) - on
-            # retente une resolution par nom, meme logique que l'import des
-            # favoris Navidrome (scheduler._import_favorite_artist).
-            try:
-                candidates, _total = musicbrainz.search_artists(name, limit=5)
-            except Exception:
-                continue
-            idx = best_match(name, [c["name"] for c in candidates], threshold=scheduler.FAVORITE_MATCH_THRESHOLD)
-            if idx is None:
-                continue
-            mbid = candidates[idx]["id"]
-
-        images = item.get("image") or []
-        image_url = next((img.get("#text") for img in reversed(images) if img.get("#text")), None)
-        results.append(
-            ArtistSearchResult(
-                musicbrainz_id=mbid,
-                name=name,
-                image_url=image_url,
-                already_followed=mbid in followed_ids,
-            )
-        )
-    return results
+        raise HTTPException(422, "Connecte Last.fm dans Reglages pour rafraichir les recommandations")
+    background_tasks.add_task(scheduler.run_refresh_lastfm_recommendations)
+    return TestConnectionResult(ok=True, message="Rafraichissement des recommandations lance")
 
 
 @router.post("/{artist_id}/scan", response_model=TestConnectionResult)

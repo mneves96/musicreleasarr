@@ -72,6 +72,12 @@ class Artist(Base):
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_followed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Recommande par Last.fm et importe automatiquement par le job nocturne
+    # (voir scheduler.refresh_lastfm_recommendations) - stocke comme un Artist
+    # normal (meme table que les suivis) pour reutiliser telle quelle l'UI de
+    # la liste des artistes suivis. Jamais True en meme temps qu'is_followed :
+    # suivre une recommandation la fait sortir du lot supprime/recree chaque nuit.
+    is_recommended: Mapped[bool] = mapped_column(Boolean, default=False)
     # False par defaut : un artiste juste previsualise (pas encore suivi) ne doit
     # pas apparaitre avec les notifications deja activees. Suivre un artiste passe
     # explicitement par cette valeur (voir routers/artists.py:follow_artist).
@@ -243,6 +249,7 @@ class Settings(Base):
     notify_pushbullet_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     scan_cron: Mapped[str] = mapped_column(String, default="0 6 * * *")
+    lastfm_recommendations_cron: Mapped[str] = mapped_column(String, default="0 3 * * *")
 
     calendar_token: Mapped[str | None] = mapped_column(String, nullable=True)
 

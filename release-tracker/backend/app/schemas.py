@@ -63,6 +63,7 @@ class ArtistOut(BaseModel):
     release_count: int
     latest_release_date: date | None
     is_followed: bool
+    is_recommended: bool
     notify_enabled: bool
     auto_download: bool
     followed_release_types: list[str]
@@ -172,6 +173,7 @@ class SettingsOut(BaseModel):
     pushbullet_token: str | None
     notify_pushbullet_enabled: bool
     scan_cron: str
+    lastfm_recommendations_cron: str
     calendar_token: str | None
     tagging_downloads_path: str
     tagging_library_path: str
@@ -195,6 +197,7 @@ class SettingsUpdateIn(BaseModel):
     pushbullet_token: str | None = None
     notify_pushbullet_enabled: bool | None = None
     scan_cron: str | None = None
+    lastfm_recommendations_cron: str | None = None
     tagging_downloads_path: str | None = None
     tagging_library_path: str | None = None
 

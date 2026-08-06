@@ -1,138 +1,65 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ALL_RELEASE_TYPES, api, type ArtistSearchResult } from '../api'
-import Spinner, { LoadingBlock } from '../components/Spinner'
+import { api, type Artist } from '../api'
+import ArtistListView from '../components/ArtistListView'
+import { LoadingBlock } from '../components/Spinner'
 
-interface RowState {
-  artistId: number | null
-  isFollowed: boolean
-  notifyEnabled: boolean
-  autoDownload: boolean
-  busy: boolean
-}
-
-function initialRowState(): RowState {
-  return { artistId: null, isFollowed: false, notifyEnabled: false, autoDownload: false, busy: false }
-}
-
-function RecommendedArtistRow({ result }: { result: ArtistSearchResult }) {
-  const [state, setState] = useState<RowState>(initialRowState)
-
-  async function toggleFollow(checked: boolean) {
-    setState((s) => ({ ...s, busy: true }))
-    try {
-      if (checked) {
-        const artist = await api.followArtist({
-          musicbrainz_id: result.musicbrainz_id,
-          notify_enabled: state.notifyEnabled,
-          auto_download: state.autoDownload,
-          followed_release_types: ALL_RELEASE_TYPES,
-        })
-        setState((s) => ({ ...s, artistId: artist.id, isFollowed: true }))
-      } else if (state.artistId) {
-        await api.updateArtist(state.artistId, { is_followed: false })
-        setState((s) => ({ ...s, isFollowed: false }))
-      } else {
-        setState((s) => ({ ...s, isFollowed: false }))
-      }
-    } finally {
-      setState((s) => ({ ...s, busy: false }))
-    }
-  }
-
-  // Modifiables avant meme de suivre (pris en compte au moment ou "Suivre cet
-  // artiste" est coche) et, une fois suivi, appliques immediatement comme sur
-  // la fiche artiste (parametres de suivi).
-  async function toggleNotify(checked: boolean) {
-    setState((s) => ({ ...s, notifyEnabled: checked }))
-    if (state.artistId) await api.updateArtist(state.artistId, { notify_enabled: checked })
-  }
-
-  async function toggleAutoDownload(checked: boolean) {
-    setState((s) => ({ ...s, autoDownload: checked }))
-    if (state.artistId) await api.updateArtist(state.artistId, { auto_download: checked })
-  }
-
-  return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-neutral-900 border border-neutral-800">
-      {result.image_url ? (
-        <img src={result.image_url} alt="" className="w-10 h-10 rounded-full object-cover bg-neutral-800 shrink-0" />
-      ) : (
-        <div className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-base shrink-0">🎤</div>
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="font-medium truncate">{result.name}</div>
-      </div>
-      <div className="flex flex-col gap-1 text-xs text-neutral-300 shrink-0">
-        <label className="flex items-center gap-1.5">
-          <input
-            type="checkbox"
-            checked={state.isFollowed}
-            disabled={state.busy}
-            onChange={(e) => toggleFollow(e.target.checked)}
-          />
-          Suivre cet artiste
-        </label>
-        <label className="flex items-center gap-1.5">
-          <input
-            type="checkbox"
-            checked={state.notifyEnabled}
-            disabled={state.busy}
-            onChange={(e) => toggleNotify(e.target.checked)}
-          />
-          Me notifier des nouvelles sorties
-        </label>
-        <label className="flex items-center gap-1.5">
-          <input
-            type="checkbox"
-            checked={state.autoDownload}
-            disabled={state.busy}
-            onChange={(e) => toggleAutoDownload(e.target.checked)}
-          />
-          Telecharger automatiquement les sorties manquantes
-        </label>
-      </div>
-      {state.busy && <Spinner className="w-4 h-4 shrink-0" />}
-    </div>
-  )
-}
-
-// Certaines recommandations Last.fm sans MusicBrainz id declenchent une
-// resolution par nom cote backend (limitee a 1 req/s MusicBrainz) - la
-// reponse peut donc legitimement prendre plusieurs secondes, sans que ce soit
-// bloque pour autant. Au-dela de ce delai, on le signale plutot que de
-// laisser un loader tourner sans explication.
-const SLOW_HINT_MS = 8000
+const POLL_INTERVAL_MS = 4000
+const POLL_MAX_TICKS = 15 // ~1 minute
 
 export default function RecommendedArtistsPage() {
-  const [results, setResults] = useState<ArtistSearchResult[] | null>(null)
+  const [artists, setArtists] = useState<Artist[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [slow, setSlow] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
+  const pollRef = useRef<number | null>(null)
+
+  const load = useCallback(
+    () =>
+      api
+        .getRecommendedArtists()
+        .then((data) => {
+          setArtists(data)
+          setError(null)
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : 'Erreur')),
+    []
+  )
 
   useEffect(() => {
-    let cancelled = false
-    const slowTimer = window.setTimeout(() => {
-      if (!cancelled) setSlow(true)
-    }, SLOW_HINT_MS)
-
-    api
-      .getRecommendedArtists()
-      .then((data) => {
-        if (cancelled) return
-        setResults(data)
-        setError(null)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Erreur')
-      })
-      .finally(() => window.clearTimeout(slowTimer))
-
+    load()
     return () => {
-      cancelled = true
-      window.clearTimeout(slowTimer)
+      if (pollRef.current) window.clearInterval(pollRef.current)
     }
-  }, [])
+  }, [load])
+
+  // Stockees comme de vrais Artist en base et rafraichies chaque nuit par le
+  // scheduler (voir Reglages > Last.fm) - ce bouton lance le meme
+  // rafraichissement a la demande. Il tourne en tache de fond cote serveur
+  // (appels Last.fm + resolutions MusicBrainz limitees a 1 req/s), donc on
+  // sonde la liste plutot que d'attendre une reponse synchrone.
+  async function refresh() {
+    setRefreshing(true)
+    setRefreshMessage(null)
+    try {
+      const result = await api.refreshRecommendedArtists()
+      setRefreshMessage(result.message)
+
+      let ticks = 0
+      pollRef.current = window.setInterval(() => {
+        ticks += 1
+        load()
+        if (ticks >= POLL_MAX_TICKS && pollRef.current) {
+          window.clearInterval(pollRef.current)
+          pollRef.current = null
+        }
+      }, POLL_INTERVAL_MS)
+    } catch (err) {
+      setRefreshMessage(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   if (error) {
     return (
@@ -149,36 +76,33 @@ export default function RecommendedArtistsPage() {
     )
   }
 
-  if (results === null) {
-    return (
-      <div>
-        <LoadingBlock />
-        {slow && (
-          <p className="text-xs text-neutral-500 mt-2">
-            Ca prend plus longtemps que prevu (resolution de certains artistes cote MusicBrainz, limitee a 1
-            requete/seconde) - encore quelques secondes...
-          </p>
-        )}
-      </div>
-    )
-  }
-
-  const toShow = results.filter((r) => !r.already_followed)
+  if (artists === null) return <LoadingBlock />
 
   return (
     <div>
-      {toShow.length === 0 ? (
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h1 className="text-xl font-semibold">Recommandations Last.fm ({artists.length})</h1>
+        <button
+          onClick={refresh}
+          disabled={refreshing}
+          className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+        >
+          {refreshing ? 'Rafraichissement...' : 'Rafraichir'}
+        </button>
+      </div>
+      {refreshMessage && <p className="text-sm text-neutral-400 mb-4">{refreshMessage}</p>}
+
+      {artists.length === 0 ? (
         <p className="text-neutral-400 text-sm">
-          {results.length === 0
-            ? 'Aucune recommandation disponible pour le moment.'
-            : 'Tu suis deja tous les artistes recommandes en ce moment.'}
+          Aucune recommandation disponible pour le moment - reessaie apres un rafraichissement, ou attends le
+          prochain rafraichissement automatique planifie dans Reglages.
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {toShow.map((r) => (
-            <RecommendedArtistRow key={r.musicbrainz_id} result={r} />
-          ))}
-        </div>
+        <ArtistListView
+          artists={artists}
+          storageKeyPrefix="recommendedList"
+          emptyFilterMessage="Aucune recommandation ne correspond au filtre."
+        />
       )}
     </div>
   )

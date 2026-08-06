@@ -4,10 +4,33 @@ suivis auxquels il manque des informations (voir scheduler.backfill_artist_metad
 
 import logging
 
+from sqlalchemy.orm import Session
+
 from .models import Artist
 from .services import deezer, lastfm, musicbrainz, ytmusic
 
 logger = logging.getLogger("dedieufy.enrichment")
+
+
+def get_or_create_artist(db: Session, musicbrainz_id: str, lastfm_api_key: str | None) -> Artist:
+    """Recupere l'Artist existant pour ce musicbrainz_id ou en cree un nouveau
+    (fiche MusicBrainz + enrichissement) - partage entre le suivi/previsualisation
+    manuels (routers/artists.py) et les imports automatiques (favoris Navidrome,
+    recommandations Last.fm, voir scheduler.py) pour eviter que ces chemins ne
+    divergent. Laisse remonter les exceptions MusicBrainz telles quelles ; c'est
+    a l'appelant de decider comment les reporter (HTTPException cote routeur,
+    simple log cote job planifie)."""
+    artist = db.query(Artist).filter(Artist.musicbrainz_id == musicbrainz_id).first()
+    if artist is not None:
+        return artist
+
+    mb_artist = musicbrainz.get_artist(musicbrainz_id)
+    artist = Artist(name=mb_artist["name"], musicbrainz_id=musicbrainz_id)
+    enrich_artist(artist, lastfm_api_key, mb_artist=mb_artist)
+    db.add(artist)
+    db.commit()
+    db.refresh(artist)
+    return artist
 
 
 def enrich_artist(artist: Artist, lastfm_api_key: str | None, mb_artist: dict | None = None) -> None:

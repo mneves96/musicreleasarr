@@ -42,6 +42,7 @@ export interface Artist {
   release_count: number
   latest_release_date: string | null
   is_followed: boolean
+  is_recommended: boolean
   notify_enabled: boolean
   auto_download: boolean
   followed_release_types: ReleaseType[]
@@ -151,6 +152,7 @@ export interface Settings {
   pushbullet_token: string | null
   notify_pushbullet_enabled: boolean
   scan_cron: string
+  lastfm_recommendations_cron: string
   calendar_token: string | null
   tagging_downloads_path: string
   tagging_library_path: string
@@ -235,7 +237,8 @@ export const api = {
 
   listFollowedArtists: () => request<Artist[]>('/artists'),
 
-  getRecommendedArtists: () => request<ArtistSearchResult[]>('/artists/recommended'),
+  getRecommendedArtists: () => request<Artist[]>('/artists/recommended'),
+  refreshRecommendedArtists: () => request<TestConnectionResult>('/artists/recommended/refresh', { method: 'POST' }),
 
   followArtist: (payload: {
     musicbrainz_id: string
