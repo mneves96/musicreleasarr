@@ -103,6 +103,9 @@ export default function Layout() {
                 )}
               </span>
             </NavLink>
+            <NavLink to="/navidrome" className={navLinkClass}>
+              Navidrome
+            </NavLink>
             <NavLink to="/settings" className={navLinkClass}>
               Reglages
             </NavLink>

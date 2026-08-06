@@ -169,6 +169,30 @@ export interface Settings {
   tagging_library_path: string
 }
 
+export interface NavidromeStats {
+  artist_count: number
+  album_count: number
+  scanning: boolean
+  last_scan_count: number | null
+}
+
+export interface NowPlayingEntry {
+  username: string | null
+  title: string | null
+  artist: string | null
+  album: string | null
+  minutes_ago: number | null
+  player_name: string | null
+}
+
+export interface RecentlyPlayedAlbum {
+  id: string
+  name: string
+  artist: string | null
+  play_count: number | null
+  played: string | null
+}
+
 export interface AuthStatus {
   needs_setup: boolean
   authenticated: boolean
@@ -316,6 +340,12 @@ export const api = {
     request<{ status: string }>('/metube/start', { method: 'POST', body: JSON.stringify({ ids }) }),
 
   regenerateCalendarToken: () => request<Settings>('/settings/regenerate-calendar-token', { method: 'POST' }),
+
+  navidromeStats: () => request<NavidromeStats>('/navidrome/stats'),
+  navidromeNowPlaying: () => request<NowPlayingEntry[]>('/navidrome/now-playing'),
+  navidromeRecentlyPlayed: () => request<RecentlyPlayedAlbum[]>('/navidrome/recently-played'),
+  navidromeScan: (full: boolean) =>
+    request<TestConnectionResult>('/navidrome/scan', { method: 'POST', body: JSON.stringify({ full }) }),
 
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),

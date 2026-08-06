@@ -225,6 +225,34 @@ class SettingsUpdateIn(BaseModel):
     tagging_library_path: str | None = None
 
 
+class NavidromeStatsOut(BaseModel):
+    artist_count: int
+    album_count: int
+    scanning: bool
+    last_scan_count: int | None = None
+
+
+class NowPlayingEntryOut(BaseModel):
+    username: str | None = None
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    minutes_ago: int | None = None
+    player_name: str | None = None
+
+
+class RecentlyPlayedAlbumOut(BaseModel):
+    id: str
+    name: str
+    artist: str | None = None
+    play_count: int | None = None
+    played: datetime | None = None
+
+
+class NavidromeScanIn(BaseModel):
+    full: bool = False
+
+
 class TestConnectionResult(BaseModel):
     ok: bool
     message: str

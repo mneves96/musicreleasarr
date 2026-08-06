@@ -8,6 +8,7 @@ import ArtistPage from './pages/ArtistPage'
 import SettingsPage from './pages/SettingsPage'
 import MetubePage from './pages/MetubePage'
 import BacklogPage from './pages/BacklogPage'
+import NavidromePage from './pages/NavidromePage'
 import { PlayerProvider } from './context/PlayerContext'
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
               <Route path="artists/:id" element={<ArtistPage />} />
               <Route path="metube" element={<MetubePage />} />
               <Route path="backlog" element={<BacklogPage />} />
+              <Route path="navidrome" element={<NavidromePage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Routes>
