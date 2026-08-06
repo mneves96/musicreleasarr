@@ -2,9 +2,11 @@
 (lecture seule, cle API seule suffit - reutilisable depuis celle deja
 configuree pour Navidrome), et pour les recommandations personnalisees, qui
 necessitent en plus une connexion complete au compte Last.fm de
-l'utilisateur (voir get_recommended_artists : reconstruites a partir de
-user.getTopArtists + artist.getSimilar, Last.fm ayant retire la methode
-dediee user.getRecommendedArtists de son API).
+l'utilisateur (voir get_similar_to_followed : reconstruites a partir des
+artistes suivis dans l'app + artist.getSimilar, plutot que de
+user.getRecommendedArtists, retiree de l'API Last.fm, ou de
+user.getTopArtists, qui reflete l'historique d'ecoute Last.fm - pas
+forcement les artistes effectivement suivis dans musicreleasarr).
 
 Le flux de connexion suit le schema "desktop application" de Last.fm (pas
 besoin d'URL de callback publique, adapte a une app self-hosted derriere
@@ -111,17 +113,8 @@ def get_session(api_key: str, api_secret: str, token: str) -> dict:
     return data["session"]
 
 
-def get_top_artists(api_key: str, api_secret: str, session_key: str, period: str = "overall", limit: int = 10) -> list[dict]:
-    data = _signed_get(
-        {"method": "user.getTopArtists", "api_key": api_key, "sk": session_key, "period": period, "limit": str(limit)},
-        api_secret,
-    )
-    return data.get("topartists", {}).get("artist", [])
-
-
 def get_similar_artists(name: str, api_key: str, limit: int = 15) -> list[dict]:
-    """Publique (cle API seule, pas de session) - contrairement a
-    user.getRecommendedArtists (voir get_recommended_artists)."""
+    """Publique (cle API seule, pas de session)."""
     resp = httpx.get(
         BASE_URL,
         params={"method": "artist.getsimilar", "artist": name, "api_key": api_key, "limit": str(limit), "format": "json"},
@@ -133,33 +126,32 @@ def get_similar_artists(name: str, api_key: str, limit: int = 15) -> list[dict]:
     return data.get("similarartists", {}).get("artist", [])
 
 
-def get_recommended_artists(api_key: str, api_secret: str, session_key: str, limit: int = 50) -> list[dict]:
-    """Last.fm a retire user.getRecommendedArtists de son API (confirme par un
-    400 Bad Request en production, methode authentifiee historiquement
-    utilisee ici) - reconstruit une recommandation personnalisee equivalente a
-    partir de ce qui fonctionne encore : les artistes les plus ecoutes de
-    l'utilisateur (user.getTopArtists, authentifie) puis, pour chacun, ses
-    artistes similaires (artist.getSimilar, public). Les scores de similarite
-    sont cumules par artiste candidat (recommande par plusieurs artistes
-    ecoutes = mieux classe), et les artistes deja dans le top de l'utilisateur
-    sont exclus. Chaque entree a potentiellement un "mbid" vide (artiste peu
-    connu - voir routers/artists.py qui retente une resolution MusicBrainz par
-    nom dans ce cas)."""
-    top_artists = get_top_artists(api_key, api_secret, session_key, limit=10)
-    top_names_lower = {a["name"].lower() for a in top_artists if a.get("name")}
+def get_similar_to_followed(followed: list[tuple[int, str]], api_key: str, limit: int = 50, per_artist_limit: int = 15) -> list[dict]:
+    """Recommandations basees sur les artistes reellement suivis dans l'app
+    (pas sur l'historique d'ecoute Last.fm, qui peut diverger) : pour chaque
+    artiste suivi, recupere ses artistes similaires (artist.getSimilar,
+    public) et agrege les scores par candidat (recommande par plusieurs
+    artistes suivis = mieux classe). Chaque entree garde la trace des
+    artistes suivis qui l'ont fait remonter (cle "sources", triee par
+    contribution decroissante) pour affichage ("Base sur : ..." cote
+    frontend, voir scheduler.refresh_lastfm_recommendations) et exclut tout
+    candidat dont le nom correspond deja a un artiste suivi (en plus du
+    controle par mbid fait cote appelant, qui reste la verification fiable -
+    une simple comparaison de noms peut rater des variantes/alias). Chaque
+    entree a potentiellement un "mbid" vide (artiste peu connu - voir
+    scheduler.py qui retente une resolution MusicBrainz par nom dans ce
+    cas)."""
+    followed_names_lower = {name.lower() for _id, name in followed}
 
     aggregated: dict[str, dict] = {}
-    for artist in top_artists:
-        name = artist.get("name")
-        if not name:
-            continue
+    for followed_id, name in followed:
         try:
-            similar = get_similar_artists(name, api_key, limit=15)
+            similar = get_similar_artists(name, api_key, limit=per_artist_limit)
         except Exception:
             continue
         for candidate in similar:
             cand_name = candidate.get("name")
-            if not cand_name or cand_name.lower() in top_names_lower:
+            if not cand_name or cand_name.lower() in followed_names_lower:
                 continue
             try:
                 match_score = float(candidate.get("match") or 0)
@@ -167,9 +159,18 @@ def get_recommended_artists(api_key: str, api_secret: str, session_key: str, lim
                 match_score = 0.0
             entry = aggregated.setdefault(
                 cand_name.lower(),
-                {"name": cand_name, "mbid": candidate.get("mbid"), "image": candidate.get("image"), "score": 0.0},
+                {
+                    "name": cand_name,
+                    "mbid": candidate.get("mbid"),
+                    "image": candidate.get("image"),
+                    "score": 0.0,
+                    "sources": [],
+                },
             )
             entry["score"] += match_score
+            entry["sources"].append({"id": followed_id, "name": name, "score": match_score})
 
     ranked = sorted(aggregated.values(), key=lambda e: e["score"], reverse=True)
+    for entry in ranked:
+        entry["sources"].sort(key=lambda s: s["score"], reverse=True)
     return ranked[:limit]

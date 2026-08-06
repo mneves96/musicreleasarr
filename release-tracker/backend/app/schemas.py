@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from .models import DownloadStatus, OwnershipStatus, ReleaseType, TaggingStatus
 
@@ -21,6 +21,11 @@ class ArtistSearchPage(BaseModel):
     total: int
     offset: int
     limit: int
+
+
+class RecommendedSource(BaseModel):
+    id: int
+    name: str
 
 
 class ReleaseOut(BaseModel):
@@ -64,9 +69,17 @@ class ArtistOut(BaseModel):
     latest_release_date: date | None
     is_followed: bool
     is_recommended: bool
+    recommended_because: list[RecommendedSource] = []
     notify_enabled: bool
     auto_download: bool
     followed_release_types: list[str]
+
+    # La colonne DB est nullable (None pour un artiste normal, non recommande) -
+    # normalise en liste vide pour eviter un `null` cote frontend.
+    @field_validator("recommended_because", mode="before")
+    @classmethod
+    def _default_recommended_because(cls, v):
+        return v or []
 
 
 class ArtistWithReleases(ArtistOut):

@@ -66,6 +66,12 @@ def follow_artist(payload: FollowArtistIn, background_tasks: BackgroundTasks, db
     artist = _get_or_create_artist(db, payload.musicbrainz_id)
 
     artist.is_followed = True
+    # Suivre une recommandation la fait sortir de la liste des recommandations
+    # (voir GET /recommended, filtre sur is_followed=False) - on nettoie aussi
+    # le flag lui-meme pour ne pas laisser une fiche "suivie" ET "recommandee"
+    # en meme temps (invariant documente sur Artist.is_recommended).
+    artist.is_recommended = False
+    artist.recommended_because = None
     artist.notify_enabled = payload.notify_enabled
     artist.auto_download = payload.auto_download
     artist.followed_release_types = [
@@ -167,6 +173,13 @@ def update_artist(artist_id: int, payload: ArtistUpdateIn, db: Session = Depends
         ]
     for key, value in data.items():
         setattr(artist, key, value)
+
+    if data.get("is_followed") is True:
+        # Meme invariant que follow_artist() : une fiche suivie ne doit pas
+        # rester marquee comme recommandation (ex: coche "Suivre cet artiste"
+        # depuis la fiche d'un artiste recommande, voir ArtistPage.tsx).
+        artist.is_recommended = False
+        artist.recommended_because = None
 
     db.commit()
     db.refresh(artist)

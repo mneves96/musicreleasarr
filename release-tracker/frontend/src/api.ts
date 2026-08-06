@@ -43,6 +43,7 @@ export interface Artist {
   latest_release_date: string | null
   is_followed: boolean
   is_recommended: boolean
+  recommended_because: { id: number; name: string }[]
   notify_enabled: boolean
   auto_download: boolean
   followed_release_types: ReleaseType[]

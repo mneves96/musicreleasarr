@@ -78,6 +78,12 @@ class Artist(Base):
     # la liste des artistes suivis. Jamais True en meme temps qu'is_followed :
     # suivre une recommandation la fait sortir du lot supprime/recree chaque nuit.
     is_recommended: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Artistes suivis dont la similarite (Last.fm artist.getSimilar) a fait
+    # remonter cette recommandation, ex: [{"id": 12, "name": "Radiohead"}] -
+    # affiche cote frontend ("Base sur : ..."), voir
+    # scheduler.refresh_lastfm_recommendations. None/vide pour un artiste
+    # normal (non recommande).
+    recommended_because: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     # False par defaut : un artiste juste previsualise (pas encore suivi) ne doit
     # pas apparaitre avec les notifications deja activees. Suivre un artiste passe
     # explicitement par cette valeur (voir routers/artists.py:follow_artist).

@@ -21,6 +21,12 @@ export default function ArtistCard({ artist }: { artist: Artist }) {
 
       {artist.bio && <p className="text-xs text-neutral-400 line-clamp-2">{artist.bio}</p>}
 
+      {artist.recommended_because.length > 0 && (
+        <p className="text-xs text-purple-300/80 truncate">
+          Base sur : {artist.recommended_because.map((s) => s.name).join(', ')}
+        </p>
+      )}
+
       <div className="flex items-center justify-between text-xs text-neutral-400 mt-1 flex-wrap gap-1">
         <span>
           {artist.album_count} album{artist.album_count > 1 ? 's' : ''}

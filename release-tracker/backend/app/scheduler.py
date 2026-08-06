@@ -322,29 +322,37 @@ def refresh_lastfm_recommendations(db: Session) -> None:
     table que les artistes suivis, pour que l'onglet Recommandations
     reutilise telle quelle l'UI/le code de l'onglet Suivis (meme composants
     ArtistCard/ArtistListRow, meme fiche artiste pour les parametres de
-    suivi)."""
+    suivi). Base sur les artistes reellement suivis dans l'app (pas
+    l'historique d'ecoute Last.fm) : chaque recommandation garde la trace du
+    ou des artiste(s) suivi(s) qui l'ont fait remonter (recommended_because,
+    affiche cote frontend "Base sur : ...")."""
     settings = get_settings(db)
     if not (settings.lastfm_api_key and settings.lastfm_api_secret and settings.lastfm_session_key):
         logger.info("Last.fm non connecte, rafraichissement des recommandations ignore")
         return
 
+    followed = db.query(Artist).filter(Artist.is_followed.is_(True)).all()
+    if not followed:
+        logger.info("Aucun artiste suivi, rafraichissement des recommandations Last.fm ignore")
+        return
+
     try:
-        raw = lastfm.get_recommended_artists(
-            settings.lastfm_api_key, settings.lastfm_api_secret, settings.lastfm_session_key
+        raw = lastfm.get_similar_to_followed(
+            [(a.id, a.name) for a in followed], settings.lastfm_api_key
         )
     except Exception:
         logger.exception("Echec de la recuperation des recommandations Last.fm")
         return
 
-    # Un artiste suivi ne doit jamais etre supprime, meme s'il ressort de
-    # Last.fm comme recommandation - is_recommended reste False pour lui plus
-    # bas (le check `if not artist.is_followed` avant de le marquer).
+    # Un artiste suivi ne doit jamais etre supprime, meme s'il ressort comme
+    # similaire a un autre artiste suivi - is_recommended reste False pour lui
+    # plus bas (le check `if artist.is_followed: continue` avant de le marquer).
     stale = db.query(Artist).filter(Artist.is_recommended.is_(True), Artist.is_followed.is_(False)).all()
     for artist in stale:
         db.delete(artist)
     db.commit()
 
-    followed_ids = {a.musicbrainz_id for a in db.query(Artist).filter(Artist.is_followed.is_(True)).all()}
+    followed_ids = {a.musicbrainz_id for a in followed}
     resolutions_used = 0
 
     for item in raw:
@@ -368,6 +376,10 @@ def refresh_lastfm_recommendations(db: Session) -> None:
                 continue
             mbid = candidates[idx]["id"]
 
+        # Filtre de securite en plus de l'exclusion par nom faite cote
+        # lastfm.get_similar_to_followed : le mbid est la source de verite,
+        # fiable meme si Last.fm renvoie un nom legerement different (alias,
+        # feat., ponctuation...) de celui suivi dans l'app.
         if mbid in followed_ids:
             continue
 
@@ -377,8 +389,13 @@ def refresh_lastfm_recommendations(db: Session) -> None:
             logger.warning("Impossible de creer l'artiste recommande '%s'", name)
             continue
 
-        if not artist.is_followed:
-            artist.is_recommended = True
+        if artist.is_followed:
+            continue
+
+        artist.is_recommended = True
+        artist.recommended_because = [
+            {"id": s["id"], "name": s["name"]} for s in item.get("sources", [])[:3]
+        ]
 
     db.commit()
 
