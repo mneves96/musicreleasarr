@@ -1,38 +1,59 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { Artist } from '../api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Artist, ArtistSortBy } from '../api'
 import ArtistCard from './ArtistCard'
 import ArtistListRow from './ArtistListRow'
+import Spinner, { LoadingBlock } from './Spinner'
 
 type ViewMode = 'grid' | 'list'
-type SortBy = 'name' | 'albums' | 'latest'
+
+const PAGE_SIZE = 30
+const SEARCH_DEBOUNCE_MS = 300
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   const stored = localStorage.getItem(key)
   return (allowed as readonly string[]).includes(stored ?? '') ? (stored as T) : fallback
 }
 
-// Grille/liste triable et filtrable partagee entre l'onglet Suivis
-// (FollowedListPage) et l'onglet Recommandations Last.fm (RecommendedArtistsPage) -
-// les deux listent le meme type Artist, seule la source des donnees (et l'action
-// d'en-tete : importer des favoris vs rafraichir les recommandations) differe,
-// donc ce qui reste ici (recherche, tri, bascule grille/liste, persistance du
-// choix) n'a pas de raison d'exister en deux versions.
+export interface ArtistPageResult {
+  results: Artist[]
+  total: number
+}
+
+// Grille/liste triable, filtrable et a defilement infini, partagee entre
+// l'onglet Suivis (FollowedListPage) et l'onglet Recommandations Last.fm
+// (RecommendedArtistsPage) - les deux listent le meme type Artist, seule la
+// source des donnees differe. La pagination cote serveur (voir
+// routers/artists.py) evite de charger + trier des centaines d'artistes en
+// une fois, source de lenteur signalee sur de grosses bibliotheques.
 export default function ArtistListView({
-  artists,
   storageKeyPrefix,
+  fetchPage,
   emptyFilterMessage = 'Aucun artiste ne correspond au filtre.',
+  reloadToken,
+  onTotalChange,
+  onError,
 }: {
-  artists: Artist[]
   storageKeyPrefix: string
+  fetchPage: (params: { offset: number; limit: number; q: string; sort: ArtistSortBy }) => Promise<ArtistPageResult>
   emptyFilterMessage?: string
+  reloadToken?: unknown
+  onTotalChange?: (total: number) => void
+  onError?: (err: unknown) => void
 }) {
   const [view, setView] = useState<ViewMode>(() =>
     readStored(`${storageKeyPrefix}.view`, ['grid', 'list'] as const, 'grid')
   )
-  const [sortBy, setSortBy] = useState<SortBy>(() =>
+  const [sortBy, setSortBy] = useState<ArtistSortBy>(() =>
     readStored(`${storageKeyPrefix}.sortBy`, ['name', 'albums', 'latest'] as const, 'name')
   )
+  const [queryInput, setQueryInput] = useState('')
   const [query, setQuery] = useState('')
+  const [items, setItems] = useState<Artist[]>([])
+  const [total, setTotal] = useState(0)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const requestSeq = useRef(0)
 
   useEffect(() => {
     localStorage.setItem(`${storageKeyPrefix}.view`, view)
@@ -42,35 +63,74 @@ export default function ArtistListView({
     localStorage.setItem(`${storageKeyPrefix}.sortBy`, sortBy)
   }, [sortBy, storageKeyPrefix])
 
-  const visibleArtists = useMemo(() => {
-    let list = artists
-    if (query.trim()) {
-      const q = query.trim().toLowerCase()
-      list = list.filter((a) => a.name.toLowerCase().includes(q))
-    }
-    const sorted = [...list]
-    if (sortBy === 'name') {
-      sorted.sort((a, b) => a.name.localeCompare(b.name))
-    } else if (sortBy === 'albums') {
-      sorted.sort((a, b) => b.album_count - a.album_count)
-    } else if (sortBy === 'latest') {
-      sorted.sort((a, b) => (b.latest_release_date ?? '').localeCompare(a.latest_release_date ?? ''))
-    }
-    return sorted
-  }, [artists, query, sortBy])
+  // Debounce de la recherche : evite une requete par frappe.
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setQuery(queryInput.trim()), SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [queryInput])
+
+  // Recharge depuis le debut des que le tri, la recherche ou reloadToken
+  // change - la pagination accumulee jusque-la n'est plus valide.
+  useEffect(() => {
+    const seq = ++requestSeq.current
+    setInitialLoading(true)
+    fetchPage({ offset: 0, limit: PAGE_SIZE, q: query, sort: sortBy })
+      .then((page) => {
+        if (seq !== requestSeq.current) return
+        setItems(page.results)
+        setTotal(page.total)
+        onTotalChange?.(page.total)
+      })
+      .catch((err) => {
+        if (seq !== requestSeq.current) return
+        onError?.(err)
+      })
+      .finally(() => {
+        if (seq === requestSeq.current) setInitialLoading(false)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchPage/onTotalChange/onError sont stables par convention d'appel
+  }, [query, sortBy, reloadToken])
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || initialLoading || items.length >= total) return
+    const seq = requestSeq.current
+    setLoadingMore(true)
+    fetchPage({ offset: items.length, limit: PAGE_SIZE, q: query, sort: sortBy })
+      .then((page) => {
+        if (seq !== requestSeq.current) return
+        setItems((prev) => [...prev, ...page.results])
+        setTotal(page.total)
+      })
+      .finally(() => setLoadingMore(false))
+  }, [fetchPage, initialLoading, items.length, loadingMore, query, sortBy, total])
+
+  // Scroll infini : declenche loadMore() quand la sentinelle en bas de liste
+  // devient visible, avec une marge pour anticiper avant d'atteindre le bas exact.
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore()
+      },
+      { rootMargin: '600px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [loadMore])
 
   return (
     <div>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={queryInput}
+          onChange={(e) => setQueryInput(e.target.value)}
           placeholder="Filtrer par nom..."
           className="bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
         />
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortBy)}
+          onChange={(e) => setSortBy(e.target.value as ArtistSortBy)}
           className="bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
         >
           <option value="name">Trier : Nom (A-Z)</option>
@@ -93,20 +153,32 @@ export default function ArtistListView({
         </div>
       </div>
 
-      {visibleArtists.length === 0 && <p className="text-neutral-400 text-sm">{emptyFilterMessage}</p>}
-
-      {view === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {visibleArtists.map((a) => (
-            <ArtistCard key={a.id} artist={a} />
-          ))}
-        </div>
+      {initialLoading ? (
+        <LoadingBlock />
+      ) : items.length === 0 ? (
+        <p className="text-neutral-400 text-sm">{emptyFilterMessage}</p>
       ) : (
-        <div className="flex flex-col gap-1">
-          {visibleArtists.map((a) => (
-            <ArtistListRow key={a.id} artist={a} />
-          ))}
-        </div>
+        <>
+          {view === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {items.map((a) => (
+                <ArtistCard key={a.id} artist={a} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {items.map((a) => (
+                <ArtistListRow key={a.id} artist={a} />
+              ))}
+            </div>
+          )}
+          <div ref={sentinelRef} className="h-1" />
+          {loadingMore && (
+            <div className="flex justify-center py-4">
+              <Spinner className="w-5 h-5" />
+            </div>
+          )}
+        </>
       )}
     </div>
   )

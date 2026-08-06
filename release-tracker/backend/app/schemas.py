@@ -50,6 +50,13 @@ class ReleaseOut(BaseModel):
     notified_at: datetime | None
 
 
+class ReleasePageOut(BaseModel):
+    results: list[ReleaseOut]
+    total: int
+    offset: int
+    limit: int
+
+
 class ArtistOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -80,6 +87,13 @@ class ArtistOut(BaseModel):
     @classmethod
     def _default_recommended_because(cls, v):
         return v or []
+
+
+class ArtistPageOut(BaseModel):
+    results: list[ArtistOut]
+    total: int
+    offset: int
+    limit: int
 
 
 class ArtistWithReleases(ArtistOut):

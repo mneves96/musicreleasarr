@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, RELEASE_TYPE_LABELS, type Release } from '../api'
 import { DownloadBadge, OwnershipBadge } from '../components/StatusBadge'
-import { LoadingBlock } from '../components/Spinner'
+import Spinner, { LoadingBlock } from '../components/Spinner'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const MONTH_NAMES = [
@@ -70,8 +70,8 @@ export default function CalendarPage() {
     const from = toISODate(grid[0])
     const to = toISODate(grid[grid.length - 1])
     api
-      .listReleases(from, to)
-      .then(setMonthReleases)
+      .listReleases({ from, to, limit: 500 })
+      .then((page) => setMonthReleases(page.results))
       .finally(() => setLoading(false))
   }, [grid, tab])
 
@@ -191,41 +191,81 @@ export default function CalendarPage() {
   )
 }
 
+const EVENTS_PAGE_SIZE = 40
+const EVENTS_SEARCH_DEBOUNCE_MS = 300
+
 function EventsView() {
   const navigate = useNavigate()
   const [releases, setReleases] = useState<Release[]>([])
-  const [loading, setLoading] = useState(true)
+  const [total, setTotal] = useState(0)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [sortDesc, setSortDesc] = useState(() => localStorage.getItem(EVENTS_SORT_STORAGE_KEY) !== 'false')
+  const [queryInput, setQueryInput] = useState('')
   const [query, setQuery] = useState('')
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const requestSeq = useRef(0)
 
   useEffect(() => {
     localStorage.setItem(EVENTS_SORT_STORAGE_KEY, String(sortDesc))
   }, [sortDesc])
 
+  // Debounce de la recherche : evite une requete par frappe.
   useEffect(() => {
-    setLoading(true)
+    const timeout = window.setTimeout(() => setQuery(queryInput.trim()), EVENTS_SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [queryInput])
+
+  // Recharge depuis le debut des que le tri ou la recherche change - la
+  // pagination accumulee jusque-la n'est plus valide.
+  useEffect(() => {
+    const seq = ++requestSeq.current
+    setInitialLoading(true)
     api
-      .listReleases()
-      .then(setReleases)
-      .finally(() => setLoading(false))
-  }, [])
+      .listReleases({ offset: 0, limit: EVENTS_PAGE_SIZE, q: query, order: sortDesc ? 'desc' : 'asc' })
+      .then((page) => {
+        if (seq !== requestSeq.current) return
+        setReleases(page.results)
+        setTotal(page.total)
+      })
+      .finally(() => {
+        if (seq === requestSeq.current) setInitialLoading(false)
+      })
+  }, [query, sortDesc])
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || initialLoading || releases.length >= total) return
+    const seq = requestSeq.current
+    setLoadingMore(true)
+    api
+      .listReleases({ offset: releases.length, limit: EVENTS_PAGE_SIZE, q: query, order: sortDesc ? 'desc' : 'asc' })
+      .then((page) => {
+        if (seq !== requestSeq.current) return
+        setReleases((prev) => [...prev, ...page.results])
+        setTotal(page.total)
+      })
+      .finally(() => setLoadingMore(false))
+  }, [initialLoading, loadingMore, sortDesc, query, releases.length, total])
+
+  // Scroll infini : declenche loadMore() quand la sentinelle en bas de liste devient visible.
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore()
+      },
+      { rootMargin: '600px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [loadMore])
 
   const groups = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    let filtered = releases.filter((r) => r.release_date)
-    if (q) {
-      filtered = filtered.filter(
-        (r) => r.title.toLowerCase().includes(q) || r.artist_name.toLowerCase().includes(q)
-      )
-    }
-    filtered = [...filtered].sort((a, b) => {
-      const cmp = a.release_date!.localeCompare(b.release_date!)
-      return sortDesc ? -cmp : cmp
-    })
-
     const result: { key: string; label: string; items: Release[] }[] = []
-    for (const release of filtered) {
-      const { key, label } = monthKeyAndLabel(release.release_date!)
+    for (const release of releases) {
+      if (!release.release_date) continue
+      const { key, label } = monthKeyAndLabel(release.release_date)
       const lastGroup = result[result.length - 1]
       if (lastGroup && lastGroup.key === key) {
         lastGroup.items.push(release)
@@ -234,14 +274,14 @@ function EventsView() {
       }
     }
     return result
-  }, [releases, query, sortDesc])
+  }, [releases])
 
   return (
     <div>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={queryInput}
+          onChange={(e) => setQueryInput(e.target.value)}
           placeholder="Filtrer par titre ou artiste..."
           className="bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
         />
@@ -254,8 +294,8 @@ function EventsView() {
         </button>
       </div>
 
-      {loading && <LoadingBlock />}
-      {!loading && groups.length === 0 && (
+      {initialLoading && <LoadingBlock />}
+      {!initialLoading && groups.length === 0 && (
         <p className="text-neutral-400 text-sm">Aucune sortie ne correspond au filtre.</p>
       )}
 
@@ -271,6 +311,13 @@ function EventsView() {
           </div>
         </div>
       ))}
+
+      {!initialLoading && groups.length > 0 && <div ref={sentinelRef} className="h-1" />}
+      {loadingMore && (
+        <div className="flex justify-center py-4">
+          <Spinner className="w-5 h-5" />
+        </div>
+      )}
     </div>
   )
 }

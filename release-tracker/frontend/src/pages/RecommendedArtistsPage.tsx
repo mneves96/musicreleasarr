@@ -1,37 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type Artist } from '../api'
+import { api, type ArtistSortBy } from '../api'
 import ArtistListView from '../components/ArtistListView'
-import { LoadingBlock } from '../components/Spinner'
 
 const POLL_INTERVAL_MS = 4000
 const POLL_MAX_TICKS = 15 // ~1 minute
 
 export default function RecommendedArtistsPage() {
-  const [artists, setArtists] = useState<Artist[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [total, setTotal] = useState<number | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+  const [configError, setConfigError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
 
-  const load = useCallback(
-    () =>
-      api
-        .getRecommendedArtists()
-        .then((data) => {
-          setArtists(data)
-          setError(null)
-        })
-        .catch((err) => setError(err instanceof Error ? err.message : 'Erreur')),
+  const fetchPage = useCallback(
+    (params: { offset: number; limit: number; q: string; sort: ArtistSortBy }) => api.getRecommendedArtists(params),
     []
   )
-
-  useEffect(() => {
-    load()
-    return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current)
-    }
-  }, [load])
 
   // Stockees comme de vrais Artist en base et rafraichies chaque nuit par le
   // scheduler (voir Reglages > Last.fm) - ce bouton lance le meme
@@ -48,7 +34,7 @@ export default function RecommendedArtistsPage() {
       let ticks = 0
       pollRef.current = window.setInterval(() => {
         ticks += 1
-        load()
+        setReloadToken((t) => t + 1)
         if (ticks >= POLL_MAX_TICKS && pollRef.current) {
           window.clearInterval(pollRef.current)
           pollRef.current = null
@@ -61,10 +47,10 @@ export default function RecommendedArtistsPage() {
     }
   }
 
-  if (error) {
+  if (configError) {
     return (
       <div className="text-neutral-400">
-        <p>{error}</p>
+        <p>{configError}</p>
         <p className="mt-2">
           Renseigne une cle API + secret Last.fm et connecte ton compte dans{' '}
           <Link to="/settings" className="text-purple-400 hover:underline">
@@ -76,12 +62,10 @@ export default function RecommendedArtistsPage() {
     )
   }
 
-  if (artists === null) return <LoadingBlock />
-
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h1 className="text-xl font-semibold">Recommandations Last.fm ({artists.length})</h1>
+        <h1 className="text-xl font-semibold">Recommandations Last.fm{total !== null ? ` (${total})` : ''}</h1>
         <button
           onClick={refresh}
           disabled={refreshing}
@@ -92,16 +76,19 @@ export default function RecommendedArtistsPage() {
       </div>
       {refreshMessage && <p className="text-sm text-neutral-400 mb-4">{refreshMessage}</p>}
 
-      {artists.length === 0 ? (
+      {total === 0 ? (
         <p className="text-neutral-400 text-sm">
           Aucune recommandation disponible pour le moment - reessaie apres un rafraichissement, ou attends le
           prochain rafraichissement automatique planifie dans Reglages.
         </p>
       ) : (
         <ArtistListView
-          artists={artists}
           storageKeyPrefix="recommendedList"
+          fetchPage={fetchPage}
+          reloadToken={reloadToken}
+          onTotalChange={setTotal}
           emptyFilterMessage="Aucune recommandation ne correspond au filtre."
+          onError={(err) => setConfigError(err instanceof Error ? err.message : 'Erreur')}
         />
       )}
     </div>

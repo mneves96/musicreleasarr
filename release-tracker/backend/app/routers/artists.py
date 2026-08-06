@@ -1,15 +1,16 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import ColumnElement, func, select
+from sqlalchemy.orm import Session, selectinload
 
 from ..db import SessionLocal, get_db
 from ..enrichment import get_or_create_artist
 from ..matching import best_match
-from ..models import ALL_RELEASE_TYPES, Artist
-from ..schemas import ArtistOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult, TopTrackOut
+from ..models import ALL_RELEASE_TYPES, Artist, Release, ReleaseType
+from ..schemas import ArtistOut, ArtistPageOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult, TopTrackOut
 from ..services import lastfm, navidrome, ytmusic
 from .. import scheduler
 
@@ -18,6 +19,55 @@ logger = logging.getLogger("dedieufy.artists")
 router = APIRouter(prefix="/api/artists", tags=["artists"])
 
 TOP_TRACKS_LIMIT = 5
+ARTISTS_DEFAULT_LIMIT = 30
+ARTISTS_MAX_LIMIT = 100
+
+
+def _album_count_subquery():
+    return (
+        select(func.count(Release.id))
+        .where(Release.artist_id == Artist.id, Release.release_type == ReleaseType.album)
+        .correlate(Artist)
+        .scalar_subquery()
+    )
+
+
+def _latest_release_date_subquery():
+    return (
+        select(func.max(Release.release_date))
+        .where(Release.artist_id == Artist.id)
+        .correlate(Artist)
+        .scalar_subquery()
+    )
+
+
+def _paginated_artists(
+    db: Session, base_filter: ColumnElement, offset: int, limit: int, q: str | None, sort: str
+) -> tuple[list[Artist], int]:
+    """Pagination + tri partages entre la liste des suivis et celle des
+    recommandations Last.fm - le tri "albums"/"latest" est calcule en SQL
+    (sous-requetes correlees) pour rester correct a travers les pages, pas
+    juste au sein de la page courante. selectinload() charge les releases de
+    la page en 1 requete groupee (IN ...) au lieu d'un aller-retour par
+    artiste : sans ca, chaque acces a ArtistOut.album_count/release_count/
+    latest_release_date (proprietes Python lisant artist.releases) declenchait
+    une requete individuelle - un N+1 qui dominait largement le temps de
+    reponse sur une liste de plusieurs dizaines d'artistes."""
+    query = db.query(Artist).filter(base_filter)
+    if q:
+        query = query.filter(Artist.name.ilike(f"%{q}%"))
+
+    total = query.count()
+
+    if sort == "albums":
+        query = query.order_by(_album_count_subquery().desc(), Artist.name)
+    elif sort == "latest":
+        query = query.order_by(_latest_release_date_subquery().desc().nullslast(), Artist.name)
+    else:
+        query = query.order_by(Artist.name)
+
+    artists = query.options(selectinload(Artist.releases)).offset(offset).limit(limit).all()
+    return artists, total
 
 
 def _safe_track_info(artist_name: str, track_name: str, api_key: str) -> dict | None:
@@ -41,9 +91,16 @@ def _as_int(value) -> int | None:
         return None
 
 
-@router.get("", response_model=list[ArtistOut])
-def list_followed(db: Session = Depends(get_db)):
-    return db.query(Artist).filter(Artist.is_followed.is_(True)).order_by(Artist.name).all()
+@router.get("", response_model=ArtistPageOut)
+def list_followed(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=ARTISTS_DEFAULT_LIMIT, ge=1, le=ARTISTS_MAX_LIMIT),
+    q: str | None = Query(default=None),
+    sort: str = Query(default="name", pattern="^(name|albums|latest)$"),
+    db: Session = Depends(get_db),
+):
+    artists, total = _paginated_artists(db, Artist.is_followed.is_(True), offset, limit, q, sort)
+    return ArtistPageOut(results=artists, total=total, offset=offset, limit=limit)
 
 
 def _get_or_create_artist(db: Session, musicbrainz_id: str) -> Artist:
@@ -132,8 +189,14 @@ def import_favorites(background_tasks: BackgroundTasks, db: Session = Depends(ge
     )
 
 
-@router.get("/recommended", response_model=list[ArtistOut])
-def recommended_artists(db: Session = Depends(get_db)):
+@router.get("/recommended", response_model=ArtistPageOut)
+def recommended_artists(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=ARTISTS_DEFAULT_LIMIT, ge=1, le=ARTISTS_MAX_LIMIT),
+    q: str | None = Query(default=None),
+    sort: str = Query(default="name", pattern="^(name|albums|latest)$"),
+    db: Session = Depends(get_db),
+):
     """Recommandations personnalisees Last.fm, stockees comme de vraies lignes
     Artist (is_recommended=True) - meme table que les artistes suivis, meme
     schema de sortie, rafraichies chaque nuit par le scheduler (voir
@@ -142,12 +205,10 @@ def recommended_artists(db: Session = Depends(get_db)):
 
     IMPORTANT : cette route doit rester declaree AVANT /{artist_id} ci-dessous,
     sinon Starlette la fait matcher comme artist_id="recommended" (404/422)."""
-    return (
-        db.query(Artist)
-        .filter(Artist.is_recommended.is_(True), Artist.is_followed.is_(False))
-        .order_by(Artist.name)
-        .all()
+    artists, total = _paginated_artists(
+        db, (Artist.is_recommended.is_(True)) & (Artist.is_followed.is_(False)), offset, limit, q, sort
     )
+    return ArtistPageOut(results=artists, total=total, offset=offset, limit=limit)
 
 
 @router.post("/recommended/refresh", response_model=TestConnectionResult)

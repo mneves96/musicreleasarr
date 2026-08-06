@@ -1,27 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type Artist } from '../api'
+import { api, type ArtistSortBy } from '../api'
 import ArtistListView from '../components/ArtistListView'
-import { LoadingBlock } from '../components/Spinner'
 
 const POLL_INTERVAL_MS = 4000
 const POLL_MAX_TICKS = 15 // ~1 minute
 
 export default function FollowedListPage() {
-  const [artists, setArtists] = useState<Artist[]>([])
-  const [loading, setLoading] = useState(true)
+  const [total, setTotal] = useState<number | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
 
-  const load = useCallback(() => api.listFollowedArtists().then(setArtists), [])
-
-  useEffect(() => {
-    load().finally(() => setLoading(false))
-    return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current)
-    }
-  }, [load])
+  const fetchPage = useCallback(
+    (params: { offset: number; limit: number; q: string; sort: ArtistSortBy }) => api.listFollowedArtists(params),
+    []
+  )
 
   async function importFavorites() {
     setImporting(true)
@@ -33,7 +28,7 @@ export default function FollowedListPage() {
       let ticks = 0
       pollRef.current = window.setInterval(() => {
         ticks += 1
-        load()
+        setReloadToken((t) => t + 1)
         if (ticks >= POLL_MAX_TICKS && pollRef.current) {
           window.clearInterval(pollRef.current)
           pollRef.current = null
@@ -46,12 +41,10 @@ export default function FollowedListPage() {
     }
   }
 
-  if (loading) return <LoadingBlock />
-
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h1 className="text-xl font-semibold">Artistes suivis ({artists.length})</h1>
+        <h1 className="text-xl font-semibold">Artistes suivis{total !== null ? ` (${total})` : ''}</h1>
         <button
           onClick={importFavorites}
           disabled={importing}
@@ -62,7 +55,7 @@ export default function FollowedListPage() {
       </div>
       {importMessage && <p className="text-sm text-neutral-400 mb-4">{importMessage}</p>}
 
-      {artists.length === 0 ? (
+      {total === 0 ? (
         <div className="text-neutral-400">
           <p>Tu ne suis encore aucun artiste.</p>
           <p className="mt-2">
@@ -71,7 +64,7 @@ export default function FollowedListPage() {
           </p>
         </div>
       ) : (
-        <ArtistListView artists={artists} storageKeyPrefix="followedList" />
+        <ArtistListView storageKeyPrefix="followedList" fetchPage={fetchPage} reloadToken={reloadToken} onTotalChange={setTotal} />
       )}
     </div>
   )

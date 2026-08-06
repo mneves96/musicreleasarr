@@ -73,6 +73,22 @@ export interface ArtistWithReleases extends Artist {
   releases: Release[]
 }
 
+export type ArtistSortBy = 'name' | 'albums' | 'latest'
+
+export interface ArtistPage {
+  results: Artist[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export interface ReleasePage {
+  results: Release[]
+  total: number
+  offset: number
+  limit: number
+}
+
 export interface Track {
   title: string
   video_id: string
@@ -270,9 +286,23 @@ export const api = {
     return request<ArtistSearchPage>(`/search/artists?${params.toString()}`)
   },
 
-  listFollowedArtists: () => request<Artist[]>('/artists'),
+  listFollowedArtists: (params: { offset?: number; limit?: number; q?: string; sort?: ArtistSortBy } = {}) => {
+    const qs = new URLSearchParams()
+    qs.set('offset', String(params.offset ?? 0))
+    qs.set('limit', String(params.limit ?? 30))
+    if (params.q) qs.set('q', params.q)
+    if (params.sort) qs.set('sort', params.sort)
+    return request<ArtistPage>(`/artists?${qs.toString()}`)
+  },
 
-  getRecommendedArtists: () => request<Artist[]>('/artists/recommended'),
+  getRecommendedArtists: (params: { offset?: number; limit?: number; q?: string; sort?: ArtistSortBy } = {}) => {
+    const qs = new URLSearchParams()
+    qs.set('offset', String(params.offset ?? 0))
+    qs.set('limit', String(params.limit ?? 30))
+    if (params.q) qs.set('q', params.q)
+    if (params.sort) qs.set('sort', params.sort)
+    return request<ArtistPage>(`/artists/recommended?${qs.toString()}`)
+  },
   refreshRecommendedArtists: () => request<TestConnectionResult>('/artists/recommended/refresh', { method: 'POST' }),
 
   followArtist: (payload: {
@@ -296,12 +326,17 @@ export const api = {
 
   importFavorites: () => request<TestConnectionResult>('/artists/import-favorites', { method: 'POST' }),
 
-  listReleases: (from?: string, to?: string) => {
-    const params = new URLSearchParams()
-    if (from) params.set('from', from)
-    if (to) params.set('to', to)
-    const qs = params.toString()
-    return request<Release[]>(`/releases${qs ? `?${qs}` : ''}`)
+  listReleases: (
+    params: { from?: string; to?: string; offset?: number; limit?: number; q?: string; order?: 'asc' | 'desc' } = {}
+  ) => {
+    const qs = new URLSearchParams()
+    if (params.from) qs.set('from', params.from)
+    if (params.to) qs.set('to', params.to)
+    qs.set('offset', String(params.offset ?? 0))
+    qs.set('limit', String(params.limit ?? 40))
+    if (params.q) qs.set('q', params.q)
+    if (params.order) qs.set('order', params.order)
+    return request<ReleasePage>(`/releases?${qs.toString()}`)
   },
 
   downloadRelease: (id: number) =>
