@@ -64,12 +64,18 @@ function formatTime(seconds: number): string {
 // deplacant tout le tracé d'exactement une periode via transform: translateX,
 // ce qui boucle sans a-coup (contrairement a l'animation de background-position
 // d'une image carrelee).
-const WAVE_PERIOD = 26
-const WAVE_AMPLITUDE = 5
+const WAVE_PERIOD = 32
+const WAVE_AMPLITUDE = 3
 const WAVE_CYCLES = 100
 const WAVE_WIDTH = WAVE_PERIOD * WAVE_CYCLES
-const WAVE_HEIGHT = 16
+const WAVE_HEIGHT = 12
 const WAVE_CENTER = WAVE_HEIGHT / 2
+// Constante d'approximation des arcs circulaires (kappa) : positionne les
+// points de controle pour que la tangente soit bien verticale (pente max) au
+// croisement du centre et bien horizontale (pente nulle) a la crete - d'ou
+// des sommets ronds et pleins plutot que pinces, contrairement a un simple
+// controle unique place directement sur la crete.
+const WAVE_KAPPA = 0.5523
 
 // Le temps courant n'est mis a jour que toutes les 500ms (PlayerContext.tsx
 // interroge le lecteur YouTube a cet intervalle, pas plus souvent) : sans
@@ -81,15 +87,36 @@ const WAVE_CENTER = WAVE_HEIGHT / 2
 const PROGRESS_UPDATE_MS = 500
 
 function buildWavePath(): string {
+  const q = WAVE_PERIOD / 4
+  const top = WAVE_CENTER - WAVE_AMPLITUDE
+  const bottom = WAVE_CENTER + WAVE_AMPLITUDE
+
+  // x0 -> x1 : part d'un croisement du centre (pente max) vers une crete
+  // (pente nulle) a hauteur peakY.
+  function quarterToPeak(x0: number, x1: number, peakY: number): string {
+    const c1y = WAVE_CENTER + (peakY - WAVE_CENTER) * WAVE_KAPPA
+    const c2x = x1 - q * WAVE_KAPPA
+    return `C${x0},${c1y} ${c2x},${peakY} ${x1},${peakY}`
+  }
+  // x0 -> x1 : part d'une crete (pente nulle) a hauteur peakY vers un
+  // croisement du centre (pente max).
+  function quarterFromPeak(x0: number, x1: number, peakY: number): string {
+    const c1x = x0 + q * WAVE_KAPPA
+    const c2y = WAVE_CENTER + (peakY - WAVE_CENTER) * WAVE_KAPPA
+    return `C${c1x},${peakY} ${x1},${c2y} ${x1},${WAVE_CENTER}`
+  }
+
   const segments: string[] = [`M0,${WAVE_CENTER}`]
   for (let i = 0; i < WAVE_CYCLES; i++) {
     const x0 = i * WAVE_PERIOD
-    const qx = x0 + WAVE_PERIOD * 0.25
-    const hx = x0 + WAVE_PERIOD * 0.5
-    const tx = x0 + WAVE_PERIOD * 0.75
-    const ex = x0 + WAVE_PERIOD
-    segments.push(`C${qx},${WAVE_CENTER - WAVE_AMPLITUDE} ${qx},${WAVE_CENTER - WAVE_AMPLITUDE} ${hx},${WAVE_CENTER}`)
-    segments.push(`C${tx},${WAVE_CENTER + WAVE_AMPLITUDE} ${tx},${WAVE_CENTER + WAVE_AMPLITUDE} ${ex},${WAVE_CENTER}`)
+    const xPeak1 = x0 + q
+    const xMid = x0 + 2 * q
+    const xPeak2 = x0 + 3 * q
+    const xEnd = x0 + 4 * q
+    segments.push(quarterToPeak(x0, xPeak1, top))
+    segments.push(quarterFromPeak(xPeak1, xMid, top))
+    segments.push(quarterToPeak(xMid, xPeak2, bottom))
+    segments.push(quarterFromPeak(xPeak2, xEnd, bottom))
   }
   return segments.join(' ')
 }
@@ -104,7 +131,7 @@ function ProgressWave({ playing }: { playing: boolean }) {
       style={{ animationPlayState: playing ? 'running' : 'paused' }}
       aria-hidden="true"
     >
-      <path d={WAVE_PATH} fill="none" stroke="#c084fc" strokeWidth="2.5" strokeLinecap="round" />
+      <path d={WAVE_PATH} fill="none" stroke="#c084fc" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
