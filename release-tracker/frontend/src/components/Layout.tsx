@@ -75,12 +75,35 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-neutral-800 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">
-        <div className="max-w-5xl mx-auto flex items-center gap-4 px-4 py-3">
-          <span className="flex items-center gap-2 font-semibold text-lg whitespace-nowrap">
-            <img src="/favicon.svg" alt="" className="w-6 h-6" />
-            MusicReleasarr
-          </span>
-          <nav className="flex gap-1">
+        <div className="max-w-5xl mx-auto px-4">
+          {/* Barre du haut : logo + recherche + deconnexion, sur sa propre ligne
+              pour que la recherche garde une largeur correcte quelle que soit la
+              taille de la nav en dessous - avec tout sur une seule ligne, le
+              min-width:auto par defaut de la nav (elle ne retrecit jamais en
+              dessous de la largeur de ses onglets) faisait porter tout le
+              retrecissement sur le champ de recherche. */}
+          <div className="flex items-center gap-4 py-3">
+            <span className="flex items-center gap-2 font-semibold text-lg whitespace-nowrap shrink-0">
+              <img src="/favicon.svg" alt="" className="w-6 h-6" />
+              MusicReleasarr
+            </span>
+            <form onSubmit={onSubmit} className="flex-1 max-w-md">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Rechercher un artiste..."
+                className="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </form>
+            <button
+              onClick={logout}
+              title="Se deconnecter"
+              className="text-xs px-3 py-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-900 whitespace-nowrap shrink-0 ml-auto"
+            >
+              Deconnexion
+            </button>
+          </div>
+          <nav className="flex gap-1 pb-2 overflow-x-auto">
             <NavLink to="/" end className={navLinkClass}>
               Tableau de bord
             </NavLink>
@@ -113,21 +136,6 @@ export default function Layout() {
               Reglages
             </NavLink>
           </nav>
-          <form onSubmit={onSubmit} className="flex-1 max-w-sm ml-auto">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Rechercher un artiste..."
-              className="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-          </form>
-          <button
-            onClick={logout}
-            title="Se deconnecter"
-            className="text-xs px-3 py-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-900 whitespace-nowrap"
-          >
-            Deconnexion
-          </button>
         </div>
       </header>
       <main className={`flex-1 max-w-5xl mx-auto w-full px-4 py-6 ${queue.length > 0 ? 'pb-24' : ''}`}>
