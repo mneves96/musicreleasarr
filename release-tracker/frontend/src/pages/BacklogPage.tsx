@@ -521,6 +521,24 @@ export default function BacklogPage() {
           }
           return next
         })
+        // Regroupe les fichiers nouvellement trouves par album et alimente
+        // leur pre-clustering (piste <- fichier) - sans ca, une recherche qui
+        // matche des fichiers vers un album deja ouvert (dont la tracklist a
+        // deja ete chargee lors d'une recherche precedente) les laissait
+        // bloques indefiniment en "Sans correspondance", jamais repris par
+        // "Confirmer l'album" : l'effet de chargement de tracklist n'appelle
+        // initialAssignment() qu'une seule fois par album, a la toute
+        // premiere fois qu'il s'ouvre.
+        const byRelease = new Map<number, TaggingItem[]>()
+        for (const m of matched) {
+          if (m.release_id == null) continue
+          const list = byRelease.get(m.release_id) ?? []
+          list.push(m)
+          byRelease.set(m.release_id, list)
+        }
+        for (const [releaseId, releaseItems] of byRelease) {
+          mergeAssignmentFromItems(releaseId, releaseItems)
+        }
         const matchedIds = matched.map((m) => m.id)
         setSelectedIds((prev) => {
           const next = new Set(prev)
