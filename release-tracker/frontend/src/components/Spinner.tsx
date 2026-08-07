@@ -13,7 +13,7 @@ export default function Spinner({ className = 'w-4 h-4' }: { className?: string 
 
 export function LoadingBlock({ label = 'Chargement...' }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2 text-neutral-400 py-4">
+    <div className="flex items-center gap-2 text-app-text-muted py-4">
       <Spinner />
       <span>{label}</span>
     </div>

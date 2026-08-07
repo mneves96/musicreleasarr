@@ -10,6 +10,25 @@ const common = {
   'aria-hidden': true,
 }
 
+export function MenuIcon({ className = 'w-5 h-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </svg>
+  )
+}
+
+export function CloseIcon({ className = 'w-5 h-5' }: IconProps) {
+  return (
+    <svg {...common} className={className}>
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  )
+}
+
 export function DashboardIcon({ className = 'w-4 h-4' }: IconProps) {
   return (
     <svg {...common} className={className}>

@@ -6,7 +6,7 @@ type Tab = 'followed' | 'recommended'
 
 const tabClass = (active: boolean) =>
   `px-3 py-1.5 rounded-md text-sm font-medium ${
-    active ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+    active ? 'bg-app-surface-hover text-app-text' : 'text-app-text-muted hover:text-app-text hover:bg-app-surface'
   }`
 
 export default function ArtistsPage() {
@@ -22,7 +22,7 @@ export default function ArtistsPage() {
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 border-b border-neutral-800 pb-2">
+      <div className="flex gap-1 mb-4 border-b border-app-border pb-2">
         <button onClick={() => setTab('followed')} className={tabClass(tab === 'followed')}>
           Suivis
         </button>

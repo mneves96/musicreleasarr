@@ -107,9 +107,9 @@ export default function ArtistPage() {
     <div>
       <div className="flex items-center gap-4 mb-6">
         {artist.image_url ? (
-          <img src={artist.image_url} alt="" className="w-20 h-20 rounded-full object-cover bg-neutral-800" />
+          <img src={artist.image_url} alt="" className="w-20 h-20 rounded-full object-cover bg-app-surface-hover" />
         ) : (
-          <div className="w-20 h-20 rounded-full bg-neutral-800 flex items-center justify-center text-2xl">🎤</div>
+          <div className="w-20 h-20 rounded-full bg-app-surface-hover flex items-center justify-center text-2xl">🎤</div>
         )}
         <div className="flex-1">
           <div className="flex items-center gap-3">
@@ -117,12 +117,12 @@ export default function ArtistPage() {
             <button
               onClick={refresh}
               disabled={scanning}
-              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 whitespace-nowrap"
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50 whitespace-nowrap"
             >
               {scanning && <Spinner className="w-3 h-3" />}
               {scanning ? 'Scan en cours...' : '↻ Actualiser'}
             </button>
-            {scanMessage && <span className="text-xs text-neutral-400">{scanMessage}</span>}
+            {scanMessage && <span className="text-xs text-app-text-muted">{scanMessage}</span>}
           </div>
           <div className="flex gap-2 mt-2 flex-wrap">
             <ServiceLink
@@ -141,7 +141,7 @@ export default function ArtistPage() {
         </div>
       </div>
 
-      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 mb-6">
+      <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
         <h2 className="font-medium mb-3">Parametres de suivi</h2>
         <div className="flex flex-col gap-3">
           <label className="flex items-center gap-2 text-sm">
@@ -172,7 +172,7 @@ export default function ArtistPage() {
             Telecharger automatiquement les sorties manquantes
           </label>
           <div>
-            <div className="text-sm text-neutral-400 mb-1">Types de sortie suivis :</div>
+            <div className="text-sm text-app-text-muted mb-1">Types de sortie suivis :</div>
             <div className="flex gap-2 flex-wrap">
               {ALL_RELEASE_TYPES.map((type) => (
                 <button
@@ -181,8 +181,8 @@ export default function ArtistPage() {
                   disabled={saving}
                   className={`text-xs px-3 py-1.5 rounded-full border ${
                     artist.followed_release_types.includes(type)
-                      ? 'bg-purple-700 border-purple-600'
-                      : 'bg-neutral-800 border-neutral-700 text-neutral-400'
+                      ? 'bg-app-accent border-app-accent'
+                      : 'bg-app-surface-hover border-app-border-strong text-app-text-muted'
                   }`}
                 >
                   {RELEASE_TYPE_LABELS[type]}
@@ -196,7 +196,7 @@ export default function ArtistPage() {
       <TopTracksSection artistId={artist.id} artistName={artist.name} />
 
       {awaitingScan && (
-        <div className="flex items-center gap-2 text-sm text-neutral-400 mb-4 bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 text-sm text-app-text-muted mb-4 bg-app-surface border border-app-border rounded-lg px-3 py-2">
           <Spinner className="w-4 h-4" />
           Scan en cours, ca peut prendre jusqu'a une minute pour un catalogue important...
         </div>
@@ -228,12 +228,12 @@ export default function ArtistPage() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Rechercher un titre (release ou piste deja consultee)..."
-                  className="bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
                 />
                 <button
                   onClick={() => setSortDesc((v) => !v)}
                   title={sortDesc ? 'Plus recentes en premier' : 'Plus anciennes en premier'}
-                  className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 whitespace-nowrap"
+                  className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover border border-app-border-strong hover:bg-app-border-strong whitespace-nowrap"
                 >
                   Date {sortDesc ? '↓' : '↑'}
                 </button>
@@ -243,8 +243,8 @@ export default function ArtistPage() {
                     onClick={() => setTypeFilter(type)}
                     className={`text-xs px-3 py-1.5 rounded-full border ${
                       typeFilter === type
-                        ? 'bg-purple-700 border-purple-600'
-                        : 'bg-neutral-800 border-neutral-700 text-neutral-400'
+                        ? 'bg-app-accent border-app-accent'
+                        : 'bg-app-surface-hover border-app-border-strong text-app-text-muted'
                     }`}
                   >
                     {type === 'all' ? 'Toutes' : RELEASE_TYPE_LABELS[type]}
@@ -254,7 +254,7 @@ export default function ArtistPage() {
             </div>
             <div>
               {filtered.length === 0 && (
-                <p className="text-neutral-400 text-sm">
+                <p className="text-app-text-muted text-sm">
                   {artist.releases.length === 0
                     ? artist.is_recommended
                       ? 'Aucune sortie chargee pour le moment - clique sur "Actualiser" pour decouvrir la discographie de cet artiste.'

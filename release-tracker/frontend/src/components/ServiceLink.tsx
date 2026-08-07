@@ -20,7 +20,7 @@ export default function ServiceLink({
   if (!available) {
     return (
       <span
-        className={`${base} ${compact ? '' : 'border-neutral-800'} text-neutral-600 opacity-40 cursor-not-allowed`}
+        className={`${base} ${compact ? '' : 'border-app-border'} text-app-text-faint opacity-40 cursor-not-allowed`}
         title={`${label} : lien non disponible`}
       >
         <span className={`${compact ? 'w-4 h-4' : 'w-3.5 h-3.5'} grayscale`}>{icon}</span>
@@ -35,7 +35,7 @@ export default function ServiceLink({
       target="_blank"
       rel="noreferrer"
       title={label}
-      className={`${base} ${compact ? 'hover:bg-neutral-800' : 'border-neutral-700 text-neutral-200 hover:border-neutral-500 hover:bg-neutral-800'}`}
+      className={`${base} ${compact ? 'hover:bg-app-surface-hover' : 'border-app-border-strong text-app-text hover:border-app-text-faint hover:bg-app-surface-hover'}`}
     >
       <span className={compact ? 'w-4 h-4' : 'w-3.5 h-3.5'}>{icon}</span>
       {!compact && label}

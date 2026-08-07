@@ -99,7 +99,7 @@ function ProgressWave({ playing }: { playing: boolean }) {
       style={{ animationPlayState: playing ? 'running' : 'paused' }}
       aria-hidden="true"
     >
-      <path d={WAVE_PATH} fill="none" stroke="#c084fc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={WAVE_PATH} fill="none" stroke="var(--app-accent-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -129,8 +129,8 @@ export default function PlayerBar() {
   const smoothTransition = seeking ? 'none' : `width ${PROGRESS_UPDATE_MS}ms linear, left ${PROGRESS_UPDATE_MS}ms linear`
 
   return (
-    <div className="fixed bottom-0 left-56 right-0 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 z-20">
-      <div className="flex items-center gap-2 px-6 pt-1.5 text-[10px] text-neutral-500 tabular-nums">
+    <div className="fixed bottom-0 left-0 lg:left-56 right-0 bg-app-bg/95 backdrop-blur border-t border-app-border z-20">
+      <div className="flex items-center gap-2 px-4 sm:px-6 pt-1.5 text-[10px] text-app-text-faint tabular-nums">
         <span className="w-9 text-right shrink-0">{formatTime(currentTime)}</span>
         <div className="relative flex-1 h-4">
           {/* Piste (a jouer) + vague animee (deja joue, comme les notifications
@@ -141,7 +141,7 @@ export default function PlayerBar() {
               transitionnent sur la meme duree pour glisser en continu plutot
               que sauter - desactive pendant un glisser actif pour rester
               reactif au geste de l'utilisateur. */}
-          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 rounded-full bg-neutral-800 pointer-events-none" />
+          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 rounded-full bg-app-border pointer-events-none" />
           <div
             className="absolute left-0 top-1/2 -translate-y-1/2 overflow-hidden pointer-events-none"
             style={{ width: `${progressPercent}%`, height: WAVE_HEIGHT, transition: smoothTransition }}
@@ -149,13 +149,13 @@ export default function PlayerBar() {
             <ProgressWave playing={isPlaying} />
           </div>
           <div
-            className="absolute top-1/2 w-3 h-3 rounded-full bg-purple-400 pointer-events-none"
+            className="absolute top-1/2 w-3 h-3 rounded-full bg-app-accent-text pointer-events-none"
             style={{
               left: `${progressPercent}%`,
               marginLeft: '-6px',
               transform: 'translateY(-50%)',
               transition: smoothTransition,
-              boxShadow: '0 0 0 2px var(--color-neutral-950)',
+              boxShadow: '0 0 0 2px var(--app-bg)',
             }}
           />
           <input
@@ -173,16 +173,16 @@ export default function PlayerBar() {
         </div>
         <span className="w-9 shrink-0">{formatTime(duration)}</span>
       </div>
-      <div className="flex items-center gap-4 px-6 pb-2.5 pt-1">
+      <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 pb-2.5 pt-1">
         {track.cover_url ? (
-          <img src={track.cover_url} alt="" className="w-10 h-10 rounded object-cover bg-neutral-800 shrink-0" />
+          <img src={track.cover_url} alt="" className="w-10 h-10 rounded object-cover bg-app-surface-hover shrink-0" />
         ) : (
-          <div className="w-10 h-10 rounded bg-neutral-800 flex items-center justify-center text-base shrink-0">🎧</div>
+          <div className="w-10 h-10 rounded bg-app-surface-hover flex items-center justify-center text-base shrink-0">🎧</div>
         )}
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{track.title}</div>
-          <div className="text-xs text-neutral-400 truncate">
-            <Link to={`/artists/${track.artist_id}`} className="hover:underline hover:text-neutral-200" title="Voir la fiche artiste">
+          <div className="text-xs text-app-text-muted truncate">
+            <Link to={`/artists/${track.artist_id}`} className="hover:underline hover:text-app-text" title="Voir la fiche artiste">
               {track.artist_name}
             </Link>{' '}
             - {track.album_title}
@@ -193,14 +193,14 @@ export default function PlayerBar() {
           <button
             onClick={previous}
             disabled={currentIndex === 0}
-            className="p-1.5 rounded-md text-neutral-300 hover:text-white hover:bg-neutral-800 disabled:opacity-30 disabled:hover:bg-transparent"
+            className="hidden sm:inline-flex p-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover disabled:opacity-30 disabled:hover:bg-transparent"
             title="Piste precedente"
           >
             <PreviousIcon />
           </button>
           <button
             onClick={togglePlayPause}
-            className="p-2 rounded-full bg-purple-700 hover:bg-purple-600 text-white"
+            className="p-2 rounded-full bg-app-accent hover:bg-app-accent-hover text-white"
             title={isPlaying ? 'Pause' : 'Lecture'}
           >
             <PlayPauseIcon playing={isPlaying} />
@@ -208,14 +208,14 @@ export default function PlayerBar() {
           <button
             onClick={next}
             disabled={currentIndex >= queue.length - 1}
-            className="p-1.5 rounded-md text-neutral-300 hover:text-white hover:bg-neutral-800 disabled:opacity-30 disabled:hover:bg-transparent"
+            className="hidden sm:inline-flex p-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover disabled:opacity-30 disabled:hover:bg-transparent"
             title="Piste suivante"
           >
             <NextIcon />
           </button>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1.5 shrink-0 w-28">
+        <div className="hidden md:flex items-center gap-1.5 shrink-0 w-28">
           <VolumeIcon />
           <input
             type="range"
@@ -223,14 +223,14 @@ export default function PlayerBar() {
             max={100}
             value={volume}
             onChange={(e) => setVolume(Number(e.target.value))}
-            className="w-full accent-purple-600"
+            className="w-full accent-(--app-accent)"
             title="Volume"
           />
         </div>
 
         <button
           onClick={close}
-          className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 shrink-0"
+          className="p-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover shrink-0"
           title="Fermer le lecteur"
         >
           <CloseIcon />

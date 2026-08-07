@@ -140,12 +140,12 @@ export default function ArtistListView({
           value={queryInput}
           onChange={(e) => setQueryInput(e.target.value)}
           placeholder="Filtrer par nom..."
-          className="bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
         />
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as ArtistSortBy)}
-          className="bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+          className="bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
         >
           <option value="name">Trier : Nom (A-Z)</option>
           <option value="albums">Trier : Nombre d'albums</option>
@@ -154,13 +154,13 @@ export default function ArtistListView({
         <div className="flex gap-1 ml-auto">
           <button
             onClick={() => setView('grid')}
-            className={`text-xs px-3 py-1.5 rounded-md ${view === 'grid' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
+            className={`text-xs px-3 py-1.5 rounded-md ${view === 'grid' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
           >
             Details
           </button>
           <button
             onClick={() => setView('list')}
-            className={`text-xs px-3 py-1.5 rounded-md ${view === 'list' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
+            className={`text-xs px-3 py-1.5 rounded-md ${view === 'list' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
           >
             Liste
           </button>
@@ -170,7 +170,7 @@ export default function ArtistListView({
       {initialLoading ? (
         <LoadingBlock />
       ) : items.length === 0 ? (
-        <p className="text-neutral-400 text-sm">{emptyFilterMessage}</p>
+        <p className="text-app-text-muted text-sm">{emptyFilterMessage}</p>
       ) : (
         <>
           {view === 'grid' ? (

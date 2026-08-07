@@ -11,27 +11,30 @@ import MetubePage from './pages/MetubePage'
 import BacklogPage from './pages/BacklogPage'
 import NavidromePage from './pages/NavidromePage'
 import { PlayerProvider } from './context/PlayerContext'
+import { ThemeProvider } from './context/ThemeContext'
 
 export default function App() {
   return (
-    <AuthGate>
-      <PlayerProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index element={<DashboardPage />} />
-              <Route path="artists" element={<ArtistsPage />} />
-              <Route path="search" element={<SearchPage />} />
-              <Route path="calendar" element={<CalendarPage />} />
-              <Route path="artists/:id" element={<ArtistPage />} />
-              <Route path="metube" element={<MetubePage />} />
-              <Route path="backlog" element={<BacklogPage />} />
-              <Route path="navidrome" element={<NavidromePage />} />
-              <Route path="settings" element={<SettingsPage />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </PlayerProvider>
-    </AuthGate>
+    <ThemeProvider>
+      <AuthGate>
+        <PlayerProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route index element={<DashboardPage />} />
+                <Route path="artists" element={<ArtistsPage />} />
+                <Route path="search" element={<SearchPage />} />
+                <Route path="calendar" element={<CalendarPage />} />
+                <Route path="artists/:id" element={<ArtistPage />} />
+                <Route path="metube" element={<MetubePage />} />
+                <Route path="backlog" element={<BacklogPage />} />
+                <Route path="navidrome" element={<NavidromePage />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </PlayerProvider>
+      </AuthGate>
+    </ThemeProvider>
   )
 }

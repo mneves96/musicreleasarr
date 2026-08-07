@@ -154,14 +154,14 @@ export default function SearchPage() {
       <h1 className="text-xl font-semibold mb-4">
         {query ? `Resultats pour "${query}"` : 'Recherche d\'artistes'}
       </h1>
-      {!query && <p className="text-neutral-400">Utilise la barre de recherche en haut de page.</p>}
+      {!query && <p className="text-app-text-muted">Utilise la barre de recherche en haut de page.</p>}
 
       {query && (
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <select
             value={country}
             onChange={(e) => setCountry(e.target.value)}
-            className="bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+            className="bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
           >
             <option value="">Tous les pays</option>
             {COUNTRY_OPTIONS.map(([code, label]) => (
@@ -173,7 +173,7 @@ export default function SearchPage() {
           <select
             value={artistType}
             onChange={(e) => setArtistType(e.target.value)}
-            className="bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+            className="bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
           >
             <option value="">Tous les types</option>
             {TYPE_OPTIONS.map(([value, label]) => (
@@ -186,23 +186,23 @@ export default function SearchPage() {
             value={tag}
             onChange={(e) => setTag(e.target.value)}
             placeholder="Genre (ex: rock, synth-pop)..."
-            className="bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
           />
-          {total > 0 && <span className="text-xs text-neutral-500 ml-auto">{total} resultat(s)</span>}
+          {total > 0 && <span className="text-xs text-app-text-faint ml-auto">{total} resultat(s)</span>}
         </div>
       )}
 
       {loading && <LoadingBlock label="Recherche en cours..." />}
       {error && <p className="text-red-400">{error}</p>}
       {query && !loading && !error && results.length === 0 && (
-        <p className="text-neutral-400">Aucun artiste ne correspond a cette recherche.</p>
+        <p className="text-app-text-muted">Aucun artiste ne correspond a cette recherche.</p>
       )}
 
       <div className="flex flex-col gap-2">
         {results.map((r) => (
           <div
             key={r.musicbrainz_id}
-            className="flex items-center gap-3 p-3 rounded-lg bg-neutral-900 border border-neutral-800"
+            className="flex items-center gap-3 p-3 rounded-lg bg-app-surface border border-app-border"
           >
             <button
               onClick={() => view(r)}
@@ -211,25 +211,25 @@ export default function SearchPage() {
               title="Voir la fiche de l'artiste"
             >
               {r.image_url ? (
-                <img src={r.image_url} alt="" className="w-10 h-10 rounded-full object-cover bg-neutral-800 shrink-0" />
+                <img src={r.image_url} alt="" className="w-10 h-10 rounded-full object-cover bg-app-surface-hover shrink-0" />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-base shrink-0">🎤</div>
+                <div className="w-10 h-10 rounded-full bg-app-surface-hover flex items-center justify-center text-base shrink-0">🎤</div>
               )}
               <div className="min-w-0 flex-1">
                 <div className="font-medium truncate hover:underline">{r.name}</div>
-                <div className="text-xs text-neutral-400 truncate">
+                <div className="text-xs text-app-text-muted truncate">
                   {[r.area_name, typeLabel(r.artist_type)].filter(Boolean).join(' · ')}
                   {r.disambiguation && ` - ${r.disambiguation}`}
                 </div>
               </div>
             </button>
             {r.already_followed ? (
-              <span className="text-xs text-neutral-500 whitespace-nowrap">Deja suivi</span>
+              <span className="text-xs text-app-text-faint whitespace-nowrap">Deja suivi</span>
             ) : (
               <button
                 onClick={() => follow(r)}
                 disabled={busyId === r.musicbrainz_id}
-                className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+                className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
               >
                 {busyId === r.musicbrainz_id && <Spinner className="w-3 h-3" />}
                 Suivre

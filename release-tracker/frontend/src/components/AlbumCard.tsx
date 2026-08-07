@@ -42,14 +42,14 @@ function FileChip({ item, onDiscard }: { item: TaggingItem; onDiscard: () => voi
         e.dataTransfer.setData('application/json', JSON.stringify({ type: 'file', itemId: item.id }))
         e.dataTransfer.effectAllowed = 'move'
       }}
-      className="flex items-center justify-between gap-2 bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+      className="flex items-center justify-between gap-2 bg-app-bg border border-app-border-strong rounded-md px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
       title={item.original_filename}
     >
       <span className="truncate flex-1">{item.original_filename}</span>
       {item.match_score != null && (
-        <span className="text-[10px] text-neutral-500 whitespace-nowrap">{Math.round(item.match_score * 100)}%</span>
+        <span className="text-[10px] text-app-text-faint whitespace-nowrap">{Math.round(item.match_score * 100)}%</span>
       )}
-      <button onClick={onDiscard} className="text-neutral-500 hover:text-red-400 text-xs px-1" title="Ignorer ce fichier">
+      <button onClick={onDiscard} className="text-app-text-faint hover:text-red-400 text-xs px-1" title="Ignorer ce fichier">
         ✕
       </button>
     </div>
@@ -88,20 +88,20 @@ function TrackSlot({
       }}
       className={`rounded-md border px-2 py-1.5 text-sm flex items-center gap-2 ${
         isDragOver
-          ? 'border-purple-500 bg-purple-950/30'
+          ? 'border-app-accent bg-app-accent-soft/30'
           : assignedItem
             ? 'border-green-800 bg-green-950/20'
-            : 'border-dashed border-neutral-700 bg-neutral-950/40'
+            : 'border-dashed border-app-border-strong bg-app-bg/40'
       }`}
     >
       <span className="flex-1 min-w-0">
-        <span className="text-neutral-200 truncate block">{label}</span>
+        <span className="text-app-text truncate block">{label}</span>
         {assignedItem ? (
           <span className="text-xs text-green-400 truncate block" title={assignedItem.original_filename}>
             ← {assignedItem.original_filename}
           </span>
         ) : (
-          <span className="text-xs text-neutral-600">Glisse un fichier ici...</span>
+          <span className="text-xs text-app-text-faint">Glisse un fichier ici...</span>
         )}
       </span>
       {assignedItem && (
@@ -109,7 +109,7 @@ function TrackSlot({
           <button
             onClick={onConfirm}
             disabled={busy}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
             title="Taguer et ranger cette piste"
           >
             {busy && <Spinner className="w-3 h-3" />}
@@ -118,7 +118,7 @@ function TrackSlot({
           <button
             onClick={onUnassign}
             disabled={busy}
-            className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+            className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
             title="Detacher ce fichier"
           >
             ✕
@@ -145,14 +145,14 @@ function FallbackRow({
   busy: boolean
 }) {
   return (
-    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 flex flex-col gap-2">
+    <div className="bg-app-bg border border-app-border rounded-lg p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm text-neutral-300 truncate" title={item.original_filename}>
+        <span className="text-sm text-app-text-muted truncate" title={item.original_filename}>
           {item.original_filename}
         </span>
         <TaggingBadge status={item.status} error={item.error_message} />
       </div>
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-app-text-faint">
         Tracklist MusicBrainz indisponible pour cet album - saisis les informations a la main.
       </p>
       <div className="flex gap-2">
@@ -160,28 +160,28 @@ function FallbackRow({
           value={edit.trackTitle}
           onChange={(e) => onEditChange({ ...edit, trackTitle: e.target.value })}
           placeholder="Titre de la piste"
-          className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+          className="flex-1 bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
         />
         <input
           value={edit.trackNumber}
           onChange={(e) => onEditChange({ ...edit, trackNumber: e.target.value })}
           placeholder="N°"
           type="number"
-          className="w-16 bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+          className="w-16 bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
         />
         <input
           value={edit.discNumber}
           onChange={(e) => onEditChange({ ...edit, discNumber: e.target.value })}
           placeholder="Disque"
           type="number"
-          className="w-20 bg-neutral-900 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+          className="w-20 bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
         />
       </div>
       <div className="flex gap-2">
         <button
           onClick={onConfirm}
           disabled={busy || !edit.trackTitle.trim()}
-          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
         >
           {busy && <Spinner className="w-3 h-3" />}
           Confirmer (taguer + ranger)
@@ -189,7 +189,7 @@ function FallbackRow({
         <button
           onClick={onDiscard}
           disabled={busy}
-          className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
+          className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50"
         >
           Ignorer
         </button>
@@ -200,16 +200,16 @@ function FallbackRow({
 
 function ErrorRow({ item, onRescan, onDiscard, busy }: { item: TaggingItem; onRescan: () => void; onDiscard: () => void; busy: boolean }) {
   return (
-    <div className="bg-neutral-950 border border-red-900/60 rounded-lg p-3 flex items-center justify-between gap-3">
+    <div className="bg-app-bg border border-red-900/60 rounded-lg p-3 flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <div className="text-sm text-neutral-300 truncate">{item.original_filename}</div>
+        <div className="text-sm text-app-text-muted truncate">{item.original_filename}</div>
         <div className="text-xs text-red-400">{item.error_message}</div>
       </div>
       <div className="flex gap-2 shrink-0">
-        <button onClick={onRescan} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50">
+        <button onClick={onRescan} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50">
           Reessayer
         </button>
-        <button onClick={onDiscard} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50">
+        <button onClick={onDiscard} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50">
           Ignorer
         </button>
       </div>
@@ -284,19 +284,19 @@ export default function AlbumCard({
         const payload = parseDragPayload(e)
         if (payload) onDrop(payload)
       }}
-      className={`mb-6 bg-neutral-900 border rounded-lg p-3 ${cardDragOver ? 'border-purple-500 bg-purple-950/10' : 'border-neutral-800'}`}
+      className={`mb-6 bg-app-surface border rounded-lg p-3 ${cardDragOver ? 'border-app-accent bg-app-accent-soft/10' : 'border-app-border'}`}
     >
       <div className="flex items-center gap-3 mb-3">
         {release.cover_url ? (
-          <img src={release.cover_url} alt="" className="w-12 h-12 rounded object-cover bg-neutral-800 shrink-0" />
+          <img src={release.cover_url} alt="" className="w-12 h-12 rounded object-cover bg-app-surface-hover shrink-0" />
         ) : (
-          <div className="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-lg shrink-0">🎧</div>
+          <div className="w-12 h-12 rounded bg-app-surface-hover flex items-center justify-center text-lg shrink-0">🎧</div>
         )}
         <div className="min-w-0 flex-1 cursor-grab active:cursor-grabbing">
-          <h2 className="font-medium text-neutral-200 truncate">
+          <h2 className="font-medium text-app-text truncate">
             {release.artist_name} - {release.release_title}
           </h2>
-          <div className="text-xs text-neutral-500">
+          <div className="text-xs text-app-text-faint">
             {year && <span>{year} · </span>}
             {tracklist && tracklist.length > 0 ? (
               <span>{assignedCount}/{tracklist.length} pistes assignees</span>
@@ -310,7 +310,7 @@ export default function AlbumCard({
             <button
               onClick={onConfirmAlbum}
               disabled={busy}
-              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
             >
               {busy && <Spinner className="w-3 h-3" />}
               Confirmer l'album
@@ -318,7 +318,7 @@ export default function AlbumCard({
           )}
           <button
             onClick={onDelete}
-            className="text-neutral-500 hover:text-red-400 text-sm px-1"
+            className="text-app-text-faint hover:text-red-400 text-sm px-1"
             title="Retirer cet album (les fichiers redeviennent non identifies)"
           >
             ✕
@@ -326,19 +326,19 @@ export default function AlbumCard({
         </div>
       </div>
 
-      {tracklist === undefined && <p className="text-xs text-neutral-500">Chargement de la tracklist...</p>}
+      {tracklist === undefined && <p className="text-xs text-app-text-faint">Chargement de la tracklist...</p>}
 
       {tracklist && tracklist.length > 0 ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
-            <div className="text-xs text-neutral-500 mb-1">Sans correspondance ({unmatched.length})</div>
+            <div className="text-xs text-app-text-faint mb-1">Sans correspondance ({unmatched.length})</div>
             {unmatched.map((item) => (
               <FileChip key={item.id} item={item} onDiscard={() => onDiscard(item)} />
             ))}
-            {unmatched.length === 0 && <p className="text-xs text-neutral-600 italic">Tous les fichiers sont assignes.</p>}
+            {unmatched.length === 0 && <p className="text-xs text-app-text-faint italic">Tous les fichiers sont assignes.</p>}
           </div>
           <div className="flex flex-col gap-1.5">
-            <div className="text-xs text-neutral-500 mb-1">Pistes ({tracklist.length})</div>
+            <div className="text-xs text-app-text-faint mb-1">Pistes ({tracklist.length})</div>
             {[...tracklist]
               .sort((a, b) => a.disc_number - b.disc_number || a.position - b.position)
               .map((track) => {

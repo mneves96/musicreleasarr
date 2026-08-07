@@ -17,8 +17,8 @@ function formatEta(s: number | null): string {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: 'bg-neutral-800 text-neutral-400',
-  scheduled: 'bg-neutral-800 text-neutral-400',
+  pending: 'bg-app-surface-hover text-app-text-muted',
+  scheduled: 'bg-app-surface-hover text-app-text-muted',
   preparing: 'bg-blue-900/50 text-blue-300',
   downloading: 'bg-blue-900/50 text-blue-300',
   finished: 'bg-green-900/50 text-green-300',
@@ -37,15 +37,15 @@ const STATUS_LABELS: Record<string, string> = {
 function ProgressBar({ percent }: { percent: number }) {
   return (
     <div className="mt-2 flex items-center gap-2">
-      <div className="relative flex-1 h-2.5 rounded-full bg-neutral-800 overflow-hidden">
+      <div className="relative flex-1 h-2.5 rounded-full bg-app-surface-hover overflow-hidden">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-purple-600 to-fuchsia-500 transition-[width] duration-500 ease-out"
+          className="h-full rounded-full bg-gradient-to-r from-app-accent to-app-accent-text transition-[width] duration-500 ease-out"
           style={{ width: `${percent}%` }}
         >
           <div className="w-full h-full opacity-40 animate-pulse bg-white/30" />
         </div>
       </div>
-      <span className="text-xs font-medium text-neutral-300 tabular-nums w-9 text-right">{percent}%</span>
+      <span className="text-xs font-medium text-app-text-muted tabular-nums w-9 text-right">{percent}%</span>
     </div>
   )
 }
@@ -74,25 +74,25 @@ export default function MetubeItemRow({
   }
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-neutral-900 border border-neutral-800">
+    <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-app-surface border border-app-border">
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate" title={item.url}>
           {item.title || item.url}
         </div>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status] ?? 'bg-neutral-800 text-neutral-400'}`}>
+          <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status] ?? 'bg-app-surface-hover text-app-text-muted'}`}>
             {STATUS_LABELS[item.status] ?? item.status}
           </span>
           {item.status === 'downloading' && percent != null && (
-            <span className="text-[11px] text-neutral-400">
+            <span className="text-[11px] text-app-text-muted">
               {item.speed != null && `${formatBytes(item.speed)}/s`}
               {item.eta != null && ` - reste ${formatEta(item.eta)}`}
             </span>
           )}
           {item.status === 'finished' && item.size != null && (
-            <span className="text-[11px] text-neutral-400">{formatBytes(item.size)}</span>
+            <span className="text-[11px] text-app-text-muted">{formatBytes(item.size)}</span>
           )}
-          {item.folder && <span className="text-[11px] text-neutral-500">dossier: {item.folder}</span>}
+          {item.folder && <span className="text-[11px] text-app-text-faint">dossier: {item.folder}</span>}
         </div>
         {item.status === 'downloading' && percent != null && <ProgressBar percent={percent} />}
         {item.status === 'error' && (item.error || item.msg) && (
@@ -106,7 +106,7 @@ export default function MetubeItemRow({
           <button
             onClick={() => run('start', onStart)}
             disabled={busyAction !== null}
-            className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+            className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
           >
             {busyAction === 'start' ? '...' : 'Demarrer'}
           </button>
@@ -115,7 +115,7 @@ export default function MetubeItemRow({
           <button
             onClick={() => run('retry', onRetry)}
             disabled={busyAction !== null}
-            className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+            className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
           >
             {busyAction === 'retry' ? '...' : 'Reessayer'}
           </button>
@@ -123,7 +123,7 @@ export default function MetubeItemRow({
         <button
           onClick={() => run('delete', onDelete)}
           disabled={busyAction !== null}
-          className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-red-900/50 disabled:opacity-50"
+          className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50"
           title="Supprimer"
         >
           {busyAction === 'delete' ? '...' : '✕'}

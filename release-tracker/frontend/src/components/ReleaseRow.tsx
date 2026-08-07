@@ -121,12 +121,12 @@ export default function ReleaseRow({
   const downloadLabel = release.ownership_status === 'owned' ? 'Retelecharger' : 'Telecharger'
 
   return (
-    <div className="py-2 border-b border-neutral-800 last:border-0">
+    <div className="py-2 border-b border-app-border last:border-0">
       <div className="flex items-center gap-3">
         <button
           onClick={() => play(0)}
           disabled={playLoading}
-          className="group/cover relative w-12 h-12 rounded overflow-hidden shrink-0 bg-neutral-800"
+          className="group/cover relative w-12 h-12 rounded overflow-hidden shrink-0 bg-app-surface-hover"
           title="Ecouter cette release avant de telecharger"
         >
           {release.cover_url ? (
@@ -154,7 +154,7 @@ export default function ReleaseRow({
         </button>
         <div className="flex-1 min-w-0">
           <div className="font-medium truncate">{release.title}</div>
-          <div className="text-sm text-neutral-400 truncate">
+          <div className="text-sm text-app-text-muted truncate">
             {showArtist && (
               <Link to={`/artists/${release.artist_id}`} className="hover:underline">
                 {release.artist_name}
@@ -187,20 +187,20 @@ export default function ReleaseRow({
           onClick={download}
           disabled={busy}
           title={downloadLabel}
-          className="flex items-center justify-center w-8 h-8 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 shrink-0"
+          className="flex items-center justify-center w-8 h-8 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 shrink-0"
         >
           {busy ? <Spinner className="w-4 h-4" /> : <DownloadGlyph className="w-4 h-4" />}
         </button>
         <button
           onClick={toggleTracks}
           disabled={tracksLoading}
-          className="text-xs px-2 py-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800"
+          className="text-xs px-2 py-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover"
           title="Voir les pistes"
         >
           {tracksLoading ? '...' : tracks ? '▾' : '▸'}
         </button>
       </div>
-      {message && <div className="text-xs text-neutral-400 mt-1 ml-16">{message}</div>}
+      {message && <div className="text-xs text-app-text-muted mt-1 ml-16">{message}</div>}
       {!message && release.download_status === 'failed' && release.download_error && (
         <div className="text-xs text-red-400 mt-1 ml-16">{release.download_error}</div>
       )}
@@ -210,7 +210,7 @@ export default function ReleaseRow({
             <button
               onClick={downloadMissingTracks}
               disabled={missingBusy}
-              className="text-xs px-2 py-1 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 mb-2"
+              className="text-xs px-2 py-1 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 mb-2"
             >
               {missingBusy ? '...' : `Telecharger les ${missingTrackCount} piste(s) manquante(s)`}
             </button>
@@ -221,19 +221,19 @@ export default function ReleaseRow({
               return (
                 <li
                   key={t.video_id}
-                  className={`flex items-center justify-between text-sm text-neutral-300 gap-2 px-2 py-1.5 rounded ${
-                    idx % 2 === 1 ? 'bg-neutral-900/60' : ''
+                  className={`flex items-center justify-between text-sm text-app-text-muted gap-2 px-2 py-1.5 rounded ${
+                    idx % 2 === 1 ? 'bg-app-surface/60' : ''
                   }`}
                 >
                   <button
                     onClick={() => play(idx)}
-                    className="flex items-center justify-center w-5 h-5 rounded-full border border-neutral-600 text-neutral-400 text-[10px] hover:text-white hover:border-neutral-400 shrink-0"
+                    className="flex items-center justify-center w-5 h-5 rounded-full border border-app-text-faint text-app-text-muted text-[10px] hover:text-app-text hover:border-app-text-faint shrink-0"
                     title="Ecouter cette piste"
                   >
                     ▶
                   </button>
                   <span className="truncate flex-1">
-                    {t.title} {t.duration && <span className="text-neutral-500">({t.duration})</span>}
+                    {t.title} {t.duration && <span className="text-app-text-faint">({t.duration})</span>}
                   </span>
                   {t.owned === true && (
                     <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-900/50 text-green-300 whitespace-nowrap">
@@ -248,7 +248,7 @@ export default function ReleaseRow({
                   <button
                     onClick={() => downloadTrack(t.video_id)}
                     title={trackDownloadLabel}
-                    className="flex items-center justify-center w-6 h-6 rounded-md bg-neutral-800 hover:bg-neutral-700 shrink-0"
+                    className="flex items-center justify-center w-6 h-6 rounded-md bg-app-surface-hover hover:bg-app-border-strong shrink-0"
                   >
                     <DownloadGlyph className="w-3.5 h-3.5" />
                   </button>

@@ -17,7 +17,7 @@ function toISODate(d: Date): string {
 
 function DashboardCard({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+    <div className="bg-app-surface border border-app-border rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-medium">{title}</h2>
         {action}
@@ -29,9 +29,9 @@ function DashboardCard({ title, action, children }: { title: string; action?: Re
 
 function ConfigHint({ text }: { text: string }) {
   return (
-    <p className="text-sm text-neutral-500">
+    <p className="text-sm text-app-text-faint">
       {text} Configure ca dans{' '}
-      <Link to="/settings" className="text-purple-400 hover:underline">
+      <Link to="/settings" className="text-app-accent-text hover:underline">
         Reglages
       </Link>
       .
@@ -98,18 +98,18 @@ export default function DashboardPage() {
                 <Link
                   key={r.id}
                   to={`/artists/${r.artist_id}`}
-                  className="flex items-center gap-2 hover:bg-neutral-800 rounded-md px-1 py-1 -mx-1"
+                  className="flex items-center gap-2 hover:bg-app-surface-hover rounded-md px-1 py-1 -mx-1"
                 >
                   {r.cover_url ? (
-                    <img src={r.cover_url} alt="" className="w-8 h-8 rounded object-cover bg-neutral-800 shrink-0" />
+                    <img src={r.cover_url} alt="" className="w-8 h-8 rounded object-cover bg-app-surface-hover shrink-0" />
                   ) : (
-                    <div className="w-8 h-8 rounded bg-neutral-800 shrink-0" />
+                    <div className="w-8 h-8 rounded bg-app-surface-hover shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="text-sm truncate">
                       <span className="font-medium">{r.artist_name}</span> - {r.title}
                     </div>
-                    <div className="text-xs text-neutral-500">
+                    <div className="text-xs text-app-text-faint">
                       {RELEASE_TYPE_LABELS[r.release_type]} · {r.release_date}
                     </div>
                   </div>
@@ -117,14 +117,14 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-neutral-500">Aucune sortie prevue cette semaine.</p>
+            <p className="text-sm text-app-text-faint">Aucune sortie prevue cette semaine.</p>
           )}
         </DashboardCard>
 
         <DashboardCard
           title="Backlog"
           action={
-            <Link to="/backlog" className="text-xs text-purple-400 hover:underline">
+            <Link to="/backlog" className="text-xs text-app-accent-text hover:underline">
               Voir tout →
             </Link>
           }
@@ -132,20 +132,20 @@ export default function DashboardPage() {
           {backlogItems.length > 0 ? (
             <div>
               <p className="text-2xl font-semibold">{backlogItems.length}</p>
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-app-text-faint">
                 fichier{backlogItems.length > 1 ? 's' : ''} en attente
                 {errorCount > 0 && <span className="text-red-400"> - {errorCount} en erreur</span>}
               </p>
             </div>
           ) : (
-            <p className="text-sm text-neutral-500">Rien a traiter pour le moment.</p>
+            <p className="text-sm text-app-text-faint">Rien a traiter pour le moment.</p>
           )}
         </DashboardCard>
 
         <DashboardCard
           title="Telechargements recents"
           action={
-            <Link to="/metube" className="text-xs text-purple-400 hover:underline">
+            <Link to="/metube" className="text-xs text-app-accent-text hover:underline">
               Voir tout →
             </Link>
           }
@@ -159,7 +159,7 @@ export default function DashboardPage() {
                   <span className="truncate">{item.title ?? item.filename ?? item.url}</span>
                   <span
                     className={`text-xs whitespace-nowrap ${
-                      item.status === 'finished' ? 'text-green-400' : item.status === 'error' ? 'text-red-400' : 'text-neutral-500'
+                      item.status === 'finished' ? 'text-green-400' : item.status === 'error' ? 'text-red-400' : 'text-app-text-faint'
                     }`}
                   >
                     {item.status}
@@ -168,14 +168,14 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-neutral-500">Aucun telechargement recent.</p>
+            <p className="text-sm text-app-text-faint">Aucun telechargement recent.</p>
           )}
         </DashboardCard>
 
         <DashboardCard
           title="Navidrome"
           action={
-            <Link to="/navidrome" className="text-xs text-purple-400 hover:underline">
+            <Link to="/navidrome" className="text-xs text-app-accent-text hover:underline">
               Voir tout →
             </Link>
           }
@@ -186,11 +186,11 @@ export default function DashboardPage() {
             <div className="flex items-center gap-6">
               <div>
                 <p className="text-2xl font-semibold">{navidromeStats.artist_count}</p>
-                <p className="text-xs text-neutral-500">artistes</p>
+                <p className="text-xs text-app-text-faint">artistes</p>
               </div>
               <div>
                 <p className="text-2xl font-semibold">{navidromeStats.album_count}</p>
-                <p className="text-xs text-neutral-500">albums</p>
+                <p className="text-xs text-app-text-faint">albums</p>
               </div>
               <p className={`text-sm font-medium ${navidromeStats.scanning ? 'text-blue-300' : 'text-green-300'}`}>
                 {navidromeStats.scanning ? 'Scan en cours...' : 'A jour'}
@@ -207,13 +207,13 @@ export default function DashboardPage() {
               {nowPlaying.map((entry, idx) => (
                 <div key={idx} className="text-sm">
                   <span className="font-medium">{entry.title ?? 'Titre inconnu'}</span>
-                  {entry.artist && <span className="text-neutral-400"> - {entry.artist}</span>}
-                  {entry.username && <div className="text-xs text-neutral-500">{entry.username}</div>}
+                  {entry.artist && <span className="text-app-text-muted"> - {entry.artist}</span>}
+                  {entry.username && <div className="text-xs text-app-text-faint">{entry.username}</div>}
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-neutral-500">Personne n'ecoute quoi que ce soit en ce moment.</p>
+            <p className="text-sm text-app-text-faint">Personne n'ecoute quoi que ce soit en ce moment.</p>
           )}
         </DashboardCard>
       </div>

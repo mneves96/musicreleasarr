@@ -15,8 +15,8 @@ function formatPlayedDate(iso: string | null): string {
 
 function StatCard({ label, value }: { label: string; value: number | null | undefined }) {
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-      <div className="text-xs text-neutral-500 mb-1">{label}</div>
+    <div className="bg-app-surface border border-app-border rounded-lg p-4">
+      <div className="text-xs text-app-text-faint mb-1">{label}</div>
       <div className="text-lg font-semibold">{value ?? '-'}</div>
     </div>
   )
@@ -91,11 +91,11 @@ export default function NavidromePage() {
 
   if (error) {
     return (
-      <div className="text-neutral-400">
+      <div className="text-app-text-muted">
         <p>{error}</p>
         <p className="mt-2">
           Configure la connexion Navidrome dans{' '}
-          <Link to="/settings" className="text-purple-400 hover:underline">
+          <Link to="/settings" className="text-app-accent-text hover:underline">
             Reglages
           </Link>{' '}
           pour voir cet onglet.
@@ -112,8 +112,8 @@ export default function NavidromePage() {
         <StatCard label="Artistes" value={stats?.artist_count} />
         <StatCard label="Albums" value={stats?.album_count} />
         <StatCard label="Elements au dernier scan" value={stats?.last_scan_count} />
-        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-          <div className="text-xs text-neutral-500 mb-1">Etat</div>
+        <div className="bg-app-surface border border-app-border rounded-lg p-4">
+          <div className="text-xs text-app-text-faint mb-1">Etat</div>
           <div className={`text-sm font-medium ${stats?.scanning ? 'text-blue-300' : 'text-green-300'}`}>
             {stats?.scanning ? 'Scan en cours...' : 'A jour'}
           </div>
@@ -124,7 +124,7 @@ export default function NavidromePage() {
         <button
           onClick={() => scan(false)}
           disabled={scanBusy !== null}
-          className="flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+          className="flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
         >
           {scanBusy === 'quick' && <Spinner className="w-4 h-4" />}
           Scanner la bibliotheque
@@ -133,18 +133,18 @@ export default function NavidromePage() {
           onClick={() => scan(true)}
           disabled={scanBusy !== null}
           title="Reverifie tous les fichiers et retire de Navidrome ceux qui n'existent plus sur le disque"
-          className="flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+          className="flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
         >
           {scanBusy === 'full' && <Spinner className="w-4 h-4" />}
           Nettoyer les fichiers manquants
         </button>
-        {scanMessage && <span className="text-sm text-neutral-400">{scanMessage}</span>}
+        {scanMessage && <span className="text-sm text-app-text-muted">{scanMessage}</span>}
       </div>
 
-      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 mb-6">
+      <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
         <h2 className="font-medium mb-3">Sessions d'ecoute en cours</h2>
         {nowPlaying.length === 0 ? (
-          <p className="text-sm text-neutral-400">Personne n'ecoute quoi que ce soit en ce moment.</p>
+          <p className="text-sm text-app-text-muted">Personne n'ecoute quoi que ce soit en ce moment.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {nowPlaying.map((entry, idx) => (
@@ -152,16 +152,16 @@ export default function NavidromePage() {
                 <div className="min-w-0">
                   <div className="truncate">
                     <span className="font-medium">{entry.title ?? 'Titre inconnu'}</span>
-                    {entry.artist && <span className="text-neutral-400"> - {entry.artist}</span>}
+                    {entry.artist && <span className="text-app-text-muted"> - {entry.artist}</span>}
                   </div>
-                  <div className="text-xs text-neutral-500 truncate">
+                  <div className="text-xs text-app-text-faint truncate">
                     {entry.username && `${entry.username} · `}
                     {entry.album}
                     {entry.player_name && ` · ${entry.player_name}`}
                   </div>
                 </div>
                 {entry.minutes_ago != null && (
-                  <span className="text-xs text-neutral-500 whitespace-nowrap shrink-0">
+                  <span className="text-xs text-app-text-faint whitespace-nowrap shrink-0">
                     {entry.minutes_ago === 0 ? "a l'instant" : `il y a ${entry.minutes_ago} min`}
                   </span>
                 )}
@@ -171,24 +171,24 @@ export default function NavidromePage() {
         )}
       </div>
 
-      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+      <div className="bg-app-surface border border-app-border rounded-lg p-4">
         <h2 className="font-medium mb-3">Ecoutes recentes</h2>
         {recentlyPlayed.length === 0 ? (
-          <p className="text-sm text-neutral-400">Aucun historique d'ecoute pour le moment.</p>
+          <p className="text-sm text-app-text-muted">Aucun historique d'ecoute pour le moment.</p>
         ) : (
           <ul className="flex flex-col">
             {recentlyPlayed.map((album, idx) => (
               <li
                 key={album.id}
                 className={`flex items-center justify-between text-sm gap-2 px-2 py-1.5 rounded ${
-                  idx % 2 === 1 ? 'bg-neutral-800/40' : ''
+                  idx % 2 === 1 ? 'bg-app-surface-hover/40' : ''
                 }`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{album.name}</div>
-                  {album.artist && <div className="truncate text-xs text-neutral-400">{album.artist}</div>}
+                  {album.artist && <div className="truncate text-xs text-app-text-muted">{album.artist}</div>}
                 </div>
-                <div className="text-xs text-neutral-500 whitespace-nowrap text-right shrink-0">
+                <div className="text-xs text-app-text-faint whitespace-nowrap text-right shrink-0">
                   {album.play_count != null && <div>{album.play_count} lecture{album.play_count > 1 ? 's' : ''}</div>}
                   {album.played && <div>{formatPlayedDate(album.played)}</div>}
                 </div>

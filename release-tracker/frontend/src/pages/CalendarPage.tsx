@@ -93,13 +93,13 @@ export default function CalendarPage() {
         <div className="flex gap-1">
           <button
             onClick={() => setTab('month')}
-            className={`text-xs px-3 py-1.5 rounded-md ${tab === 'month' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
+            className={`text-xs px-3 py-1.5 rounded-md ${tab === 'month' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
           >
             Mois
           </button>
           <button
             onClick={() => setTab('events')}
-            className={`text-xs px-3 py-1.5 rounded-md ${tab === 'events' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
+            className={`text-xs px-3 py-1.5 rounded-md ${tab === 'events' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
           >
             Evenements
           </button>
@@ -115,19 +115,19 @@ export default function CalendarPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
-                className="px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-sm"
+                className="px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong text-sm"
               >
                 ← Precedent
               </button>
               <button
                 onClick={() => setMonth(startOfMonth(new Date()))}
-                className="px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-sm"
+                className="px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong text-sm"
               >
                 Aujourd'hui
               </button>
               <button
                 onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
-                className="px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-sm"
+                className="px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong text-sm"
               >
                 Suivant →
               </button>
@@ -136,52 +136,56 @@ export default function CalendarPage() {
 
           {loading && <div className="mb-2"><LoadingBlock /></div>}
 
-          <div className="grid grid-cols-7 gap-1 text-xs text-neutral-500 mb-1">
-            {WEEKDAYS.map((w) => (
-              <div key={w} className="text-center py-1">
-                {w}
+          <div className="overflow-x-auto">
+            <div className="min-w-[560px]">
+              <div className="grid grid-cols-7 gap-1 text-xs text-app-text-faint mb-1">
+                {WEEKDAYS.map((w) => (
+                  <div key={w} className="text-center py-1">
+                    {w}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {grid.map((day) => {
-              const iso = toISODate(day)
-              const inMonth = day.getMonth() === month.getMonth()
-              const dayReleases = releasesByDate.get(iso) ?? []
-              return (
-                <div
-                  key={iso}
-                  className={`min-h-32 rounded-md border p-1 flex flex-col gap-1 ${
-                    inMonth ? 'border-neutral-800 bg-neutral-900' : 'border-neutral-900 bg-neutral-950 opacity-40'
-                  } ${iso === today ? 'ring-1 ring-purple-500' : ''}`}
-                >
-                  <div className="text-xs text-neutral-500">{day.getDate()}</div>
-                  {dayReleases.slice(0, 2).map((r) => (
-                    <Link
-                      key={r.id}
-                      to={`/artists/${r.artist_id}`}
-                      className="flex items-center gap-1 bg-neutral-800 hover:bg-neutral-700 rounded px-1 py-0.5"
-                      title={`${r.artist_name} - ${r.title} (${RELEASE_TYPE_LABELS[r.release_type]})`}
+              <div className="grid grid-cols-7 gap-1">
+                {grid.map((day) => {
+                  const iso = toISODate(day)
+                  const inMonth = day.getMonth() === month.getMonth()
+                  const dayReleases = releasesByDate.get(iso) ?? []
+                  return (
+                    <div
+                      key={iso}
+                      className={`min-h-24 sm:min-h-32 rounded-md border p-1 flex flex-col gap-1 ${
+                        inMonth ? 'border-app-border bg-app-surface' : 'border-app-border bg-app-bg opacity-40'
+                      } ${iso === today ? 'ring-1 ring-app-accent' : ''}`}
                     >
-                      {r.cover_url ? (
-                        <img src={r.cover_url} alt="" className="w-5 h-5 rounded object-cover bg-neutral-700 shrink-0" />
-                      ) : (
-                        <div className="w-5 h-5 rounded bg-neutral-700 shrink-0" />
+                      <div className="text-xs text-app-text-faint">{day.getDate()}</div>
+                      {dayReleases.slice(0, 2).map((r) => (
+                        <Link
+                          key={r.id}
+                          to={`/artists/${r.artist_id}`}
+                          className="flex items-center gap-1 bg-app-surface-hover hover:bg-app-border-strong rounded px-1 py-0.5"
+                          title={`${r.artist_name} - ${r.title} (${RELEASE_TYPE_LABELS[r.release_type]})`}
+                        >
+                          {r.cover_url ? (
+                            <img src={r.cover_url} alt="" className="w-5 h-5 rounded object-cover bg-app-border-strong shrink-0" />
+                          ) : (
+                            <div className="w-5 h-5 rounded bg-app-border-strong shrink-0" />
+                          )}
+                          <div className="min-w-0 leading-tight">
+                            <div className="text-[11px] font-medium truncate">{r.artist_name}</div>
+                            <div className="text-[10px] text-app-text-muted truncate">
+                              {r.title} · {RELEASE_TYPE_LABELS[r.release_type]}
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                      {dayReleases.length > 2 && (
+                        <span className="text-[11px] text-app-text-faint">+{dayReleases.length - 2} autres</span>
                       )}
-                      <div className="min-w-0 leading-tight">
-                        <div className="text-[11px] font-medium truncate">{r.artist_name}</div>
-                        <div className="text-[10px] text-neutral-400 truncate">
-                          {r.title} · {RELEASE_TYPE_LABELS[r.release_type]}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                  {dayReleases.length > 2 && (
-                    <span className="text-[11px] text-neutral-500">+{dayReleases.length - 2} autres</span>
-                  )}
-                </div>
-              )
-            })}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </>
       ) : (
@@ -283,12 +287,12 @@ function EventsView() {
           value={queryInput}
           onChange={(e) => setQueryInput(e.target.value)}
           placeholder="Filtrer par titre ou artiste..."
-          className="bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
         />
         <button
           onClick={() => setSortDesc((v) => !v)}
           title={sortDesc ? 'Plus recentes en premier' : 'Plus anciennes en premier'}
-          className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 whitespace-nowrap"
+          className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover border border-app-border-strong hover:bg-app-border-strong whitespace-nowrap"
         >
           Date {sortDesc ? '↓' : '↑'}
         </button>
@@ -296,12 +300,12 @@ function EventsView() {
 
       {initialLoading && <LoadingBlock />}
       {!initialLoading && groups.length === 0 && (
-        <p className="text-neutral-400 text-sm">Aucune sortie ne correspond au filtre.</p>
+        <p className="text-app-text-muted text-sm">Aucune sortie ne correspond au filtre.</p>
       )}
 
       {groups.map((group) => (
         <div key={group.key} className="mb-6">
-          <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wide mb-2 sticky top-[3.25rem] bg-neutral-950/90 backdrop-blur py-1">
+          <h2 className="text-sm font-semibold text-app-text-muted uppercase tracking-wide mb-2 sticky top-[3.25rem] bg-app-bg/90 backdrop-blur py-1">
             {group.label}
           </h2>
           <div className="flex flex-col gap-2">
@@ -345,19 +349,19 @@ function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigat
   return (
     <div
       onClick={onNavigate}
-      className="flex items-center gap-3 p-3 rounded-lg bg-neutral-900 border border-neutral-800 hover:border-neutral-700 cursor-pointer"
+      className="flex items-center gap-3 p-3 rounded-lg bg-app-surface border border-app-border hover:border-app-border-strong cursor-pointer"
     >
       {release.cover_url ? (
-        <img src={release.cover_url} alt="" className="w-12 h-12 rounded object-cover bg-neutral-800 shrink-0" />
+        <img src={release.cover_url} alt="" className="w-12 h-12 rounded object-cover bg-app-surface-hover shrink-0" />
       ) : (
-        <div className="w-12 h-12 rounded bg-neutral-800 flex items-center justify-center text-lg shrink-0">🎧</div>
+        <div className="w-12 h-12 rounded bg-app-surface-hover flex items-center justify-center text-lg shrink-0">🎧</div>
       )}
       <div className="flex-1 min-w-0">
         <div className="font-medium truncate">{release.title}</div>
-        <div className="text-sm text-neutral-400 truncate">
+        <div className="text-sm text-app-text-muted truncate">
           {release.artist_name} - {RELEASE_TYPE_LABELS[release.release_type]} - {release.release_date}
         </div>
-        {message && <div className="text-xs text-neutral-400 mt-1">{message}</div>}
+        {message && <div className="text-xs text-app-text-muted mt-1">{message}</div>}
       </div>
       <OwnershipBadge status={release.ownership_status} />
       <DownloadBadge status={release.download_status} error={release.download_error} />
@@ -365,7 +369,7 @@ function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigat
         <button
           onClick={download}
           disabled={busy}
-          className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+          className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
         >
           {busy ? '...' : downloadLabel}
         </button>

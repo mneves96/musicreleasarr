@@ -31,15 +31,15 @@ function Section({
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-2">
-        <button onClick={onToggle} className="flex items-center gap-2 font-medium hover:text-neutral-300">
-          <span className="text-neutral-500 text-xs">{collapsed ? '▸' : '▾'}</span>
+        <button onClick={onToggle} className="flex items-center gap-2 font-medium hover:text-app-text-muted">
+          <span className="text-app-text-faint text-xs">{collapsed ? '▸' : '▾'}</span>
           {title} ({items.length})
         </button>
         {!collapsed && actions}
       </div>
       {!collapsed &&
         (items.length === 0 ? (
-          <p className="text-sm text-neutral-500">Rien ici.</p>
+          <p className="text-sm text-app-text-faint">Rien ici.</p>
         ) : (
           <div className="flex flex-col gap-1.5">{children}</div>
         ))}
@@ -269,10 +269,10 @@ export default function MetubePage() {
 
   if (notConfigured) {
     return (
-      <div className="text-neutral-400">
+      <div className="text-app-text-muted">
         <p>URL MeTube non configuree.</p>
         <p className="mt-2">
-          Renseigne-la dans <span className="text-neutral-300">Reglages</span> (section MeTube) pour gerer tes
+          Renseigne-la dans <span className="text-app-text-muted">Reglages</span> (section MeTube) pour gerer tes
           telechargements ici.
         </p>
       </div>
@@ -288,7 +288,7 @@ export default function MetubePage() {
           <button
             onClick={() => refresh(true)}
             disabled={refreshing}
-            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+            className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
           >
             {refreshing ? 'Actualisation...' : '↻ Actualiser'}
           </button>
@@ -297,7 +297,7 @@ export default function MetubePage() {
               href={publicUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-neutral-400 hover:text-white"
+              className="text-xs text-app-text-muted hover:text-app-text"
               title="Fonctionnalites avancees (cookies, abonnements...) non reprises ici"
             >
               Interface complete ↗
@@ -306,18 +306,18 @@ export default function MetubePage() {
         </div>
       </div>
 
-      <form onSubmit={addDownload} className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 mb-6">
+      <form onSubmit={addDownload} className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
         <div className="flex gap-2">
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="Colle un lien YouTube / YouTube Music..."
-            className="flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="flex-1 bg-app-bg border border-app-border-strong rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
           />
           <button
             type="submit"
             disabled={adding || !url.trim()}
-            className="px-4 py-2 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-sm whitespace-nowrap"
+            className="px-4 py-2 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 text-sm whitespace-nowrap"
           >
             {adding ? 'Ajout...' : 'Telecharger'}
           </button>
@@ -326,19 +326,19 @@ export default function MetubePage() {
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
-          className="text-xs text-neutral-400 hover:text-white mt-2"
+          className="text-xs text-app-text-muted hover:text-app-text mt-2"
         >
           {advancedOpen ? '▾' : '▸'} Options avancees
         </button>
 
         {advancedOpen && (
           <div className="flex gap-3 mt-2 flex-wrap items-end">
-            <label className="flex flex-col gap-1 text-xs text-neutral-400">
+            <label className="flex flex-col gap-1 text-xs text-app-text-muted">
               Type
               <select
                 value={downloadType}
                 onChange={(e) => onTypeChange(e.target.value as DownloadType)}
-                className="bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+                className="bg-app-bg border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
               >
                 <option value="audio">Audio</option>
                 <option value="video">Video</option>
@@ -348,12 +348,12 @@ export default function MetubePage() {
             </label>
             {(downloadType === 'audio' || downloadType === 'video') && (
               <>
-                <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                <label className="flex flex-col gap-1 text-xs text-app-text-muted">
                   Format
                   <select
                     value={format}
                     onChange={(e) => setFormat(e.target.value)}
-                    className="bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+                    className="bg-app-bg border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
                   >
                     {(downloadType === 'audio' ? AUDIO_FORMATS : VIDEO_FORMATS).map((f) => (
                       <option key={f} value={f}>
@@ -362,12 +362,12 @@ export default function MetubePage() {
                     ))}
                   </select>
                 </label>
-                <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                <label className="flex flex-col gap-1 text-xs text-app-text-muted">
                   Qualite
                   <select
                     value={quality}
                     onChange={(e) => setQuality(e.target.value)}
-                    className="bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+                    className="bg-app-bg border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
                   >
                     {(downloadType === 'audio' ? AUDIO_QUALITIES : VIDEO_QUALITIES).map((q) => (
                       <option key={q} value={q}>
@@ -378,13 +378,13 @@ export default function MetubePage() {
                 </label>
               </>
             )}
-            <label className="flex flex-col gap-1 text-xs text-neutral-400">
+            <label className="flex flex-col gap-1 text-xs text-app-text-muted">
               Dossier (optionnel)
               <input
                 value={folder}
                 onChange={(e) => setFolder(e.target.value)}
                 placeholder="ex: artiste"
-                className="bg-neutral-950 border border-neutral-700 rounded-md px-2 py-1.5 text-sm"
+                className="bg-app-bg border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
               />
             </label>
           </div>
@@ -431,25 +431,25 @@ export default function MetubePage() {
               <div className="flex gap-1.5">
                 <button
                   onClick={retryAllErrors}
-                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700"
+                  className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong"
                 >
                   Reessayer les echecs
                 </button>
                 <button
                   onClick={() => clearDone('finished')}
-                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700"
+                  className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong"
                 >
                   Effacer les reussis
                 </button>
                 <button
                   onClick={() => clearDone('error')}
-                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700"
+                  className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong"
                 >
                   Effacer les echecs
                 </button>
                 <button
                   onClick={() => clearDone('all')}
-                  className="text-xs px-2 py-1 rounded-md bg-neutral-800 hover:bg-red-900/50"
+                  className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-red-900/50"
                 >
                   Tout effacer
                 </button>

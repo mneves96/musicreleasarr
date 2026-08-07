@@ -49,11 +49,11 @@ export default function RecommendedArtistsPage() {
 
   if (configError) {
     return (
-      <div className="text-neutral-400">
+      <div className="text-app-text-muted">
         <p>{configError}</p>
         <p className="mt-2">
           Renseigne une cle API + secret Last.fm et connecte ton compte dans{' '}
-          <Link to="/settings" className="text-purple-400 hover:underline">
+          <Link to="/settings" className="text-app-accent-text hover:underline">
             Reglages
           </Link>{' '}
           pour voir des recommandations personnalisees.
@@ -69,12 +69,12 @@ export default function RecommendedArtistsPage() {
         <button
           onClick={refresh}
           disabled={refreshing}
-          className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+          className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
         >
           {refreshing ? 'Rafraichissement...' : 'Rafraichir'}
         </button>
       </div>
-      {refreshMessage && <p className="text-sm text-neutral-400 mb-4">{refreshMessage}</p>}
+      {refreshMessage && <p className="text-sm text-app-text-muted mb-4">{refreshMessage}</p>}
 
       <ArtistListView
         storageKeyPrefix="recommendedList"
@@ -82,7 +82,7 @@ export default function RecommendedArtistsPage() {
         reloadToken={reloadToken}
         onTotalChange={setTotal}
         emptyMessage={
-          <p className="text-neutral-400 text-sm">
+          <p className="text-app-text-muted text-sm">
             Aucune recommandation disponible pour le moment - reessaie apres un rafraichissement, ou attends le
             prochain rafraichissement automatique planifie dans Reglages.
           </p>

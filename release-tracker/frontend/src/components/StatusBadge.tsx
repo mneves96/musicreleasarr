@@ -3,7 +3,7 @@ import type { DownloadStatus, OwnershipStatus, TaggingStatus } from '../api'
 const OWNERSHIP_STYLES: Record<OwnershipStatus, string> = {
   owned: 'bg-green-900/50 text-green-300 border-green-700',
   missing: 'bg-amber-900/50 text-amber-300 border-amber-700',
-  unknown: 'bg-neutral-800 text-neutral-400 border-neutral-700',
+  unknown: 'bg-app-surface-hover text-app-text-muted border-app-border-strong',
 }
 
 const OWNERSHIP_LABELS: Record<OwnershipStatus, string> = {

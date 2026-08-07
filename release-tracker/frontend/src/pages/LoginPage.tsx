@@ -24,39 +24,39 @@ export default function LoginPage({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <form onSubmit={submit} className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-lg p-6 flex flex-col gap-4">
+      <form onSubmit={submit} className="w-full max-w-sm bg-app-surface border border-app-border rounded-lg p-6 flex flex-col gap-4">
         <div className="flex items-center gap-2 justify-center mb-2">
           <img src="/favicon.svg" alt="" className="w-8 h-8" />
           <h1 className="text-lg font-semibold">MusicReleasarr</h1>
         </div>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-neutral-400">Nom d'utilisateur</span>
+          <span className="text-app-text-muted">Nom d'utilisateur</span>
           <input
             autoFocus
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="bg-app-bg border border-app-border-strong rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-app-accent"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-neutral-400">Mot de passe</span>
+          <span className="text-app-text-muted">Mot de passe</span>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="bg-neutral-950 border border-neutral-700 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="bg-app-bg border border-app-border-strong rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-app-accent"
           />
         </label>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <button
           type="submit"
           disabled={busy || !username || !password}
-          className="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50"
+          className="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
         >
           {busy && <Spinner />}
           Se connecter
         </button>
-        <p className="text-xs text-neutral-500 text-center">
+        <p className="text-xs text-app-text-faint text-center">
           Mot de passe perdu ? Voir la commande <code>reset-password</code> dans le README.
         </p>
       </form>

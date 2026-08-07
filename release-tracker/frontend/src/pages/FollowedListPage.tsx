@@ -48,12 +48,12 @@ export default function FollowedListPage() {
         <button
           onClick={importFavorites}
           disabled={importing}
-          className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+          className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
         >
           {importing ? 'Import en cours...' : 'Importer mes favoris Navidrome'}
         </button>
       </div>
-      {importMessage && <p className="text-sm text-neutral-400 mb-4">{importMessage}</p>}
+      {importMessage && <p className="text-sm text-app-text-muted mb-4">{importMessage}</p>}
 
       <ArtistListView
         storageKeyPrefix="followedList"
@@ -61,10 +61,10 @@ export default function FollowedListPage() {
         reloadToken={reloadToken}
         onTotalChange={setTotal}
         emptyMessage={
-          <div className="text-neutral-400">
+          <div className="text-app-text-muted">
             <p>Tu ne suis encore aucun artiste.</p>
             <p className="mt-2">
-              Utilise la barre de recherche en haut, <Link to="/search" className="text-purple-400 hover:underline">clique ici</Link>{' '}
+              Utilise la barre de recherche en haut, <Link to="/search" className="text-app-accent-text hover:underline">clique ici</Link>{' '}
               pour en trouver un, ou importe tes favoris Navidrome ci-dessus.
             </p>
           </div>

@@ -16,6 +16,13 @@ import Spinner, { LoadingBlock } from '../components/Spinner'
 const POLL_MS = 15000
 const COLUMN_HEIGHT = 'calc(100vh - 15rem)'
 
+type MobileColumn = 'files' | 'albums'
+
+const mobileTabClass = (active: boolean) =>
+  `flex-1 px-3 py-1.5 rounded-md text-sm font-medium ${
+    active ? 'bg-app-surface-hover text-app-text' : 'text-app-text-muted hover:text-app-text hover:bg-app-surface'
+  }`
+
 // Pre-clustering initial a partir des suggestions du scan/de la recherche
 // (voir services/tagging.py) : purement indicatif, rien n'est confirme tant
 // que l'utilisateur n'a pas valide (glisser-deposer ou bouton Confirmer).
@@ -129,52 +136,52 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
           }}
           onKeyDown={(e) => e.key === 'Enter' && searchArtists()}
           placeholder="Ajouter un album (recherche artiste)..."
-          className="flex-1 bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="flex-1 bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
         />
         <button
           onClick={searchArtists}
           disabled={busy || !query.trim()}
-          className="text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+          className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
         >
           {busy ? '...' : 'Rechercher'}
         </button>
       </div>
 
       {open && (
-        <div className="absolute z-20 left-0 right-0 mt-1 bg-neutral-950 border border-neutral-700 rounded-md p-2 shadow-lg max-h-80 overflow-y-auto">
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-app-bg border border-app-border-strong rounded-md p-2 shadow-lg max-h-80 overflow-y-auto">
           {error && <p className="text-xs text-red-400 mb-1">{error}</p>}
           {step === 'artists' && (
             <div className="flex flex-col gap-1">
-              {busy && <p className="text-xs text-neutral-500">Chargement...</p>}
-              {!busy && artists.length === 0 && <p className="text-xs text-neutral-500">Aucun resultat.</p>}
+              {busy && <p className="text-xs text-app-text-faint">Chargement...</p>}
+              {!busy && artists.length === 0 && <p className="text-xs text-app-text-faint">Aucun resultat.</p>}
               {artists.map((a) => (
                 <button
                   key={a.musicbrainz_id}
                   onClick={() => pickArtist(a)}
                   disabled={busy}
-                  className="text-left text-sm px-2 py-1.5 rounded-md hover:bg-neutral-900 disabled:opacity-50"
+                  className="text-left text-sm px-2 py-1.5 rounded-md hover:bg-app-surface disabled:opacity-50"
                 >
-                  {a.name} {a.disambiguation && <span className="text-neutral-500">({a.disambiguation})</span>}
+                  {a.name} {a.disambiguation && <span className="text-app-text-faint">({a.disambiguation})</span>}
                 </button>
               ))}
             </div>
           )}
           {step === 'releases' && (
             <div className="flex flex-col gap-1">
-              <button onClick={() => setStep('artists')} className="text-xs text-neutral-500 hover:text-white self-start">
+              <button onClick={() => setStep('artists')} className="text-xs text-app-text-faint hover:text-app-text self-start">
                 ← Autre artiste
               </button>
-              {busy && <p className="text-xs text-neutral-500">Chargement...</p>}
-              {!busy && releaseGroups.length === 0 && <p className="text-xs text-neutral-500">Aucune release trouvee.</p>}
+              {busy && <p className="text-xs text-app-text-faint">Chargement...</p>}
+              {!busy && releaseGroups.length === 0 && <p className="text-xs text-app-text-faint">Aucune release trouvee.</p>}
               {releaseGroups.map((rg) => (
                 <button
                   key={rg.musicbrainz_id}
                   onClick={() => pickRelease(rg)}
                   disabled={busy}
-                  className="text-left text-sm px-2 py-1.5 rounded-md hover:bg-neutral-900 disabled:opacity-50 flex items-center justify-between gap-2"
+                  className="text-left text-sm px-2 py-1.5 rounded-md hover:bg-app-surface disabled:opacity-50 flex items-center justify-between gap-2"
                 >
                   <span className="truncate">{rg.title}</span>
-                  <span className="text-xs text-neutral-500 whitespace-nowrap">
+                  <span className="text-xs text-app-text-faint whitespace-nowrap">
                     {RELEASE_TYPE_LABELS[rg.release_type]}
                     {rg.release_date ? ` - ${rg.release_date.slice(0, 4)}` : ''}
                   </span>
@@ -182,7 +189,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
               ))}
             </div>
           )}
-          <button onClick={() => setOpen(false)} className="text-xs text-neutral-500 hover:text-white mt-2">
+          <button onClick={() => setOpen(false)} className="text-xs text-app-text-faint hover:text-app-text mt-2">
             Fermer
           </button>
         </div>
@@ -209,6 +216,7 @@ export default function BacklogPage() {
   const [assignments, setAssignments] = useState<Record<number, Record<number, number>>>({})
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set())
   const [busyReleaseIds, setBusyReleaseIds] = useState<Set<number>>(new Set())
+  const [mobileColumn, setMobileColumn] = useState<MobileColumn>('files')
 
   const refresh = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true)
@@ -662,11 +670,11 @@ export default function BacklogPage() {
         <h1 className="text-xl font-semibold">Backlog</h1>
         <div className="flex items-center gap-3">
           {loadError && <span className="text-xs text-red-400">{loadError}</span>}
-          {scanMessage && <span className="text-xs text-neutral-400">{scanMessage}</span>}
+          {scanMessage && <span className="text-xs text-app-text-muted">{scanMessage}</span>}
           <button
             onClick={scanNow}
             disabled={scanning}
-            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+            className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
             title="Relit le contenu du dossier de telechargements (aucun appel a MusicBrainz), sans attendre le job planifie (5 min)"
           >
             {scanning ? 'Actualisation...' : 'Actualiser les fichiers'}
@@ -674,31 +682,40 @@ export default function BacklogPage() {
           <button
             onClick={() => refresh(true)}
             disabled={refreshing}
-            className="text-xs px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50"
+            className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
           >
             {refreshing ? 'Actualisation...' : '↻ Actualiser'}
           </button>
         </div>
       </div>
 
-      <p className="text-sm text-neutral-400 mb-4">
+      <p className="text-sm text-app-text-muted mb-4">
         Selectionne des fichiers/dossiers a gauche pour les rechercher sur MusicBrainz, ou glisse-les directement sur
         un album a droite (comme dans Picard) - rien n'est ecrit sur le disque avant confirmation.
       </p>
 
-      <div className="flex gap-4" style={{ height: COLUMN_HEIGHT }}>
-        <div className="w-1/2 flex flex-col min-h-0">
+      <div className="flex lg:hidden items-center gap-2 mb-3">
+        <button onClick={() => setMobileColumn('files')} className={mobileTabClass(mobileColumn === 'files')}>
+          Fichiers ({unclusteredItems.length})
+        </button>
+        <button onClick={() => setMobileColumn('albums')} className={mobileTabClass(mobileColumn === 'albums')}>
+          Albums ({openReleases.size})
+        </button>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-4" style={{ height: COLUMN_HEIGHT }}>
+        <div className={`${mobileColumn === 'files' ? 'flex' : 'hidden'} lg:flex w-full lg:w-1/2 h-full flex-col min-h-0`}>
           <div className="flex items-center gap-2 mb-2 flex-wrap shrink-0">
-            <div className="flex rounded-md overflow-hidden border border-neutral-700 shrink-0">
+            <div className="flex rounded-md overflow-hidden border border-app-border-strong shrink-0">
               <button
                 onClick={() => setSearchScope('followed')}
-                className={`text-xs px-3 py-1.5 ${searchScope === 'followed' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
+                className={`text-xs px-3 py-1.5 ${searchScope === 'followed' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
               >
                 Artistes suivis
               </button>
               <button
                 onClick={() => setSearchScope('musicbrainz')}
-                className={`text-xs px-3 py-1.5 ${searchScope === 'musicbrainz' ? 'bg-neutral-700' : 'bg-neutral-900 text-neutral-400'}`}
+                className={`text-xs px-3 py-1.5 ${searchScope === 'musicbrainz' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
               >
                 Tout MusicBrainz
               </button>
@@ -706,19 +723,19 @@ export default function BacklogPage() {
             <button
               onClick={searchSelected}
               disabled={selectedIds.size === 0 || searching}
-              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-purple-700 hover:bg-purple-600 disabled:opacity-50 whitespace-nowrap"
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
             >
               {searching && <Spinner className="w-3 h-3" />}
               Rechercher ({selectedIds.size})
             </button>
-            {searchMessage && <span className="text-xs text-neutral-500">{searchMessage}</span>}
+            {searchMessage && <span className="text-xs text-app-text-faint">{searchMessage}</span>}
           </div>
-          <div className="flex-1 overflow-y-auto min-h-0 pr-1 border border-neutral-800 rounded-lg bg-neutral-950/40 p-2">
+          <div className="flex-1 overflow-y-auto min-h-0 pr-1 border border-app-border rounded-lg bg-app-bg/40 p-2">
             <FileTree items={unclusteredItems} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
           </div>
         </div>
 
-        <div className="w-1/2 flex flex-col min-h-0">
+        <div className={`${mobileColumn === 'albums' ? 'flex' : 'hidden'} lg:flex w-full lg:w-1/2 h-full flex-col min-h-0`}>
           <ReleaseSearchBar
             onAdded={(card) =>
               setOpenReleases((prev) => {
@@ -730,7 +747,7 @@ export default function BacklogPage() {
           />
           <div className="flex-1 overflow-y-auto min-h-0 pr-1">
             {openReleases.size === 0 ? (
-              <p className="text-sm text-neutral-500">Aucun album ouvert - selectionne des fichiers a gauche et lance une recherche.</p>
+              <p className="text-sm text-app-text-faint">Aucun album ouvert - selectionne des fichiers a gauche et lance une recherche.</p>
             ) : (
               [...openReleases.values()].map((release) => (
                 <AlbumCard

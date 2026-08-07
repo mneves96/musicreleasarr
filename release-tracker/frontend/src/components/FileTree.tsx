@@ -65,7 +65,7 @@ export default function FileTree({ items, selectedIds, onToggleSelect }: FileTre
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-neutral-500">Aucun fichier en attente.</p>
+    return <p className="text-sm text-app-text-faint">Aucun fichier en attente.</p>
   }
 
   return (
@@ -117,12 +117,12 @@ function FolderRow({
           e.dataTransfer.setData('application/json', JSON.stringify({ type: 'folder', itemIds: descendantIds }))
           e.dataTransfer.effectAllowed = 'move'
         }}
-        className="flex items-center gap-2 py-1 px-1 rounded hover:bg-neutral-900 cursor-grab active:cursor-grabbing"
+        className="flex items-center gap-2 py-1 px-1 rounded hover:bg-app-surface cursor-grab active:cursor-grabbing"
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
       >
         <button
           onClick={() => onToggleExpand(node.path)}
-          className="text-neutral-500 w-4 shrink-0 text-xs"
+          className="text-app-text-faint w-4 shrink-0 text-xs"
           title={isOpen ? 'Replier' : 'Deplier'}
         >
           {isOpen ? '▾' : '▸'}
@@ -136,8 +136,8 @@ function FolderRow({
           onChange={(e) => onToggleSelect(descendantIds, e.target.checked)}
           onClick={(e) => e.stopPropagation()}
         />
-        <span className="truncate flex-1 text-sm text-neutral-200">{node.name}</span>
-        <span className="text-xs text-neutral-600 shrink-0">{descendantIds.length}</span>
+        <span className="truncate flex-1 text-sm text-app-text">{node.name}</span>
+        <span className="text-xs text-app-text-faint shrink-0">{descendantIds.length}</span>
       </div>
       {isOpen && (
         <div>
@@ -180,12 +180,12 @@ function FileRow({
         e.dataTransfer.setData('application/json', JSON.stringify({ type: 'file', itemId: item.id }))
         e.dataTransfer.effectAllowed = 'move'
       }}
-      className="flex items-center gap-2 py-1 px-1 rounded hover:bg-neutral-900 cursor-grab active:cursor-grabbing text-sm"
+      className="flex items-center gap-2 py-1 px-1 rounded hover:bg-app-surface cursor-grab active:cursor-grabbing text-sm"
       style={{ paddingLeft: `${depth * 16 + 24}px` }}
       title={item.original_filename}
     >
       <input type="checkbox" checked={checked} onChange={(e) => onToggleSelect([item.id], e.target.checked)} />
-      <span className="truncate flex-1 text-neutral-300">{item.original_filename}</span>
+      <span className="truncate flex-1 text-app-text-muted">{item.original_filename}</span>
       {item.status === 'error' && (
         <span className="text-[10px] text-red-400 shrink-0" title={item.error_message ?? undefined}>
           ⚠

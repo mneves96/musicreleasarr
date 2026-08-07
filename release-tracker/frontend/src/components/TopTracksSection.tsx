@@ -57,7 +57,7 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-neutral-400 mb-6">
+      <div className="flex items-center gap-2 text-sm text-app-text-muted mb-6">
         <Spinner className="w-4 h-4" />
         Chargement des titres populaires...
       </div>
@@ -67,7 +67,7 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
   if (!tracks || tracks.length === 0) return null
 
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 mb-6">
+    <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
       <h2 className="font-medium mb-3">Titres populaires</h2>
       <ul className="flex flex-col gap-1">
         {tracks.map((t) => (
@@ -75,7 +75,7 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
             <button
               onClick={() => play(t)}
               disabled={!t.video_id}
-              className="group/cover relative w-10 h-10 rounded overflow-hidden shrink-0 bg-neutral-800 disabled:cursor-default"
+              className="group/cover relative w-10 h-10 rounded overflow-hidden shrink-0 bg-app-surface-hover disabled:cursor-default"
               title={t.video_id ? 'Ecouter ce titre' : 'Aucune source audio trouvee'}
             >
               {t.cover_url ? (
@@ -91,14 +91,14 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
             </button>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">{t.title}</div>
-              <div className="truncate text-xs text-neutral-400">
+              <div className="truncate text-xs text-app-text-muted">
                 {t.album_title}
                 {t.album_title && t.release_date && ' · '}
                 {t.release_date}
               </div>
             </div>
             {t.playcount != null && (
-              <span className="text-xs text-neutral-500 whitespace-nowrap shrink-0">
+              <span className="text-xs text-app-text-faint whitespace-nowrap shrink-0">
                 {t.playcount.toLocaleString('fr-FR')} lectures
               </span>
             )}

@@ -36,13 +36,112 @@
   --font-sans: "Geom", ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Theme clair/sombre + 8 accents au choix (voir context/ThemeContext.tsx,
+   qui pose data-theme/data-accent sur <html> et persiste le choix en
+   localStorage) - :root fixe les valeurs par defaut (sombre + violet,
+   comportement historique de l'app), [data-theme="light"] les remplace.
+   Les variables neutres/accent pointent vers la palette Tailwind deja
+   generee (--color-neutral-*, --color-violet-*...) plutot que de
+   dupliquer des valeurs hex, pour rester coherentes avec elle. */
+:root {
+  --app-bg: var(--color-neutral-950);
+  --app-surface: var(--color-neutral-900);
+  --app-surface-hover: var(--color-neutral-800);
+  --app-border: var(--color-neutral-800);
+  --app-border-strong: var(--color-neutral-700);
+  --app-text: var(--color-neutral-100);
+  --app-text-muted: var(--color-neutral-400);
+  --app-text-faint: var(--color-neutral-500);
+
+  --app-accent: var(--color-violet-600);
+  --app-accent-hover: var(--color-violet-500);
+  --app-accent-soft: var(--color-violet-900);
+  --app-accent-text: var(--color-violet-400);
+}
+
+[data-theme="light"] {
+  --app-bg: var(--color-neutral-50);
+  --app-surface: var(--color-white);
+  --app-surface-hover: var(--color-neutral-100);
+  --app-border: var(--color-neutral-200);
+  --app-border-strong: var(--color-neutral-300);
+  --app-text: var(--color-neutral-900);
+  --app-text-muted: var(--color-neutral-600);
+  --app-text-faint: var(--color-neutral-400);
+}
+
+[data-accent="blue"] {
+  --app-accent: var(--color-blue-600);
+  --app-accent-hover: var(--color-blue-500);
+  --app-accent-soft: var(--color-blue-900);
+  --app-accent-text: var(--color-blue-400);
+}
+[data-accent="sky"] {
+  --app-accent: var(--color-sky-600);
+  --app-accent-hover: var(--color-sky-500);
+  --app-accent-soft: var(--color-sky-900);
+  --app-accent-text: var(--color-sky-400);
+}
+[data-accent="emerald"] {
+  --app-accent: var(--color-emerald-600);
+  --app-accent-hover: var(--color-emerald-500);
+  --app-accent-soft: var(--color-emerald-900);
+  --app-accent-text: var(--color-emerald-400);
+}
+[data-accent="amber"] {
+  --app-accent: var(--color-amber-600);
+  --app-accent-hover: var(--color-amber-500);
+  --app-accent-soft: var(--color-amber-900);
+  --app-accent-text: var(--color-amber-400);
+}
+[data-accent="rose"] {
+  --app-accent: var(--color-rose-600);
+  --app-accent-hover: var(--color-rose-500);
+  --app-accent-soft: var(--color-rose-900);
+  --app-accent-text: var(--color-rose-400);
+}
+[data-accent="pink"] {
+  --app-accent: var(--color-pink-600);
+  --app-accent-hover: var(--color-pink-500);
+  --app-accent-soft: var(--color-pink-900);
+  --app-accent-text: var(--color-pink-400);
+}
+[data-accent="indigo"] {
+  --app-accent: var(--color-indigo-600);
+  --app-accent-hover: var(--color-indigo-500);
+  --app-accent-soft: var(--color-indigo-900);
+  --app-accent-text: var(--color-indigo-400);
+}
+
+/* Fait generer a Tailwind les classes utilitaires bg-app-..., text-app-...,
+   border-app-... a partir des variables ci-dessus, pour les utiliser partout
+   a la place des classes neutral-... / purple-... codees en dur. */
+@theme {
+  --color-app-bg: var(--app-bg);
+  --color-app-surface: var(--app-surface);
+  --color-app-surface-hover: var(--app-surface-hover);
+  --color-app-border: var(--app-border);
+  --color-app-border-strong: var(--app-border-strong);
+  --color-app-text: var(--app-text);
+  --color-app-text-muted: var(--app-text-muted);
+  --color-app-text-faint: var(--app-text-faint);
+  --color-app-accent: var(--app-accent);
+  --color-app-accent-hover: var(--app-accent-hover);
+  --color-app-accent-soft: var(--app-accent-soft);
+  --color-app-accent-text: var(--app-accent-text);
+}
+
 html {
   color-scheme: dark;
+}
+html[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
   margin: 0;
-  @apply bg-neutral-950 text-neutral-100;
+  background-color: var(--app-bg);
+  color: var(--app-text);
 }
 
 /* Barre de progression du lecteur (PlayerBar.tsx) : agrandit la zone
