@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 export interface QueueTrack {
   video_id: string
   title: string
+  artist_id: number
   artist_name: string
   album_title: string
 }

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
 
 function PlayPauseIcon({ playing }: { playing: boolean }) {
@@ -152,7 +153,10 @@ export default function PlayerBar() {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{track.title}</div>
           <div className="text-xs text-neutral-400 truncate">
-            {track.artist_name} - {track.album_title}
+            <Link to={`/artists/${track.artist_id}`} className="hover:underline hover:text-neutral-200" title="Voir la fiche artiste">
+              {track.artist_name}
+            </Link>{' '}
+            - {track.album_title}
           </div>
         </div>
 

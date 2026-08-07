@@ -32,6 +32,7 @@ export default function ReleaseRow({
     return trackList.map((t) => ({
       video_id: t.video_id,
       title: t.title,
+      artist_id: release.artist_id,
       artist_name: release.artist_name,
       album_title: release.title,
     }))
