@@ -56,26 +56,19 @@ function formatTime(seconds: number): string {
 }
 
 // Vague continue (portion deja jouee de la barre de progression, cf. les
-// notifications lecteur audio Samsung/Material Design 3) : un seul chemin SVG
-// (pas une image de fond carrelee, qui laissait des coutures visibles a
-// chaque repetition) construit a partir de paires de courbes de Bezier
-// cubiques dont les tangentes se raccordent exactement d'une periode a
-// l'autre - la courbe reste donc lisse sur toute sa longueur. Anime en
-// deplacant tout le tracé d'exactement une periode via transform: translateX,
-// ce qui boucle sans a-coup (contrairement a l'animation de background-position
-// d'une image carrelee).
-const WAVE_PERIOD = 32
-const WAVE_AMPLITUDE = 3
-const WAVE_CYCLES = 100
+// notifications lecteur audio Samsung/Material Design 3) : un vrai sinus
+// echantillonne point par point (Math.sin), pas une approximation par
+// courbes de Bezier - garantit une sinusoide propre sans risque d'erreur
+// d'approximation. Anime en deplacant tout le trace d'exactement une periode
+// via transform: translateX, ce qui boucle sans aucune couture puisque la
+// fonction est periodique par construction.
+const WAVE_PERIOD = 28
+const WAVE_AMPLITUDE = 2.5
+const WAVE_CYCLES = 60
 const WAVE_WIDTH = WAVE_PERIOD * WAVE_CYCLES
-const WAVE_HEIGHT = 12
+const WAVE_HEIGHT = 10
 const WAVE_CENTER = WAVE_HEIGHT / 2
-// Constante d'approximation des arcs circulaires (kappa) : positionne les
-// points de controle pour que la tangente soit bien verticale (pente max) au
-// croisement du centre et bien horizontale (pente nulle) a la crete - d'ou
-// des sommets ronds et pleins plutot que pinces, contrairement a un simple
-// controle unique place directement sur la crete.
-const WAVE_KAPPA = 0.5523
+const WAVE_SAMPLE_STEP = 1
 
 // Le temps courant n'est mis a jour que toutes les 500ms (PlayerContext.tsx
 // interroge le lecteur YouTube a cet intervalle, pas plus souvent) : sans
@@ -87,38 +80,13 @@ const WAVE_KAPPA = 0.5523
 const PROGRESS_UPDATE_MS = 500
 
 function buildWavePath(): string {
-  const q = WAVE_PERIOD / 4
-  const top = WAVE_CENTER - WAVE_AMPLITUDE
-  const bottom = WAVE_CENTER + WAVE_AMPLITUDE
-
-  // x0 -> x1 : part d'un croisement du centre (pente max) vers une crete
-  // (pente nulle) a hauteur peakY.
-  function quarterToPeak(x0: number, x1: number, peakY: number): string {
-    const c1y = WAVE_CENTER + (peakY - WAVE_CENTER) * WAVE_KAPPA
-    const c2x = x1 - q * WAVE_KAPPA
-    return `C${x0},${c1y} ${c2x},${peakY} ${x1},${peakY}`
+  const points: string[] = []
+  for (let x = 0; x <= WAVE_WIDTH; x += WAVE_SAMPLE_STEP) {
+    const y = WAVE_CENTER + WAVE_AMPLITUDE * Math.sin((x / WAVE_PERIOD) * 2 * Math.PI)
+    const command = points.length === 0 ? 'M' : 'L'
+    points.push(`${command}${x.toFixed(1)},${y.toFixed(2)}`)
   }
-  // x0 -> x1 : part d'une crete (pente nulle) a hauteur peakY vers un
-  // croisement du centre (pente max).
-  function quarterFromPeak(x0: number, x1: number, peakY: number): string {
-    const c1x = x0 + q * WAVE_KAPPA
-    const c2y = WAVE_CENTER + (peakY - WAVE_CENTER) * WAVE_KAPPA
-    return `C${c1x},${peakY} ${x1},${c2y} ${x1},${WAVE_CENTER}`
-  }
-
-  const segments: string[] = [`M0,${WAVE_CENTER}`]
-  for (let i = 0; i < WAVE_CYCLES; i++) {
-    const x0 = i * WAVE_PERIOD
-    const xPeak1 = x0 + q
-    const xMid = x0 + 2 * q
-    const xPeak2 = x0 + 3 * q
-    const xEnd = x0 + 4 * q
-    segments.push(quarterToPeak(x0, xPeak1, top))
-    segments.push(quarterFromPeak(xPeak1, xMid, top))
-    segments.push(quarterToPeak(xMid, xPeak2, bottom))
-    segments.push(quarterFromPeak(xPeak2, xEnd, bottom))
-  }
-  return segments.join(' ')
+  return points.join(' ')
 }
 const WAVE_PATH = buildWavePath()
 
@@ -131,7 +99,7 @@ function ProgressWave({ playing }: { playing: boolean }) {
       style={{ animationPlayState: playing ? 'running' : 'paused' }}
       aria-hidden="true"
     >
-      <path d={WAVE_PATH} fill="none" stroke="#c084fc" strokeWidth="2" strokeLinecap="round" />
+      <path d={WAVE_PATH} fill="none" stroke="#c084fc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -206,6 +174,11 @@ export default function PlayerBar() {
         <span className="w-9 shrink-0">{formatTime(duration)}</span>
       </div>
       <div className="flex items-center gap-4 px-6 pb-2.5 pt-1">
+        {track.cover_url ? (
+          <img src={track.cover_url} alt="" className="w-10 h-10 rounded object-cover bg-neutral-800 shrink-0" />
+        ) : (
+          <div className="w-10 h-10 rounded bg-neutral-800 flex items-center justify-center text-base shrink-0">🎧</div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{track.title}</div>
           <div className="text-xs text-neutral-400 truncate">

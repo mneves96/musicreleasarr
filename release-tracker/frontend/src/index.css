@@ -92,13 +92,13 @@ body {
    une image de fond carrelee dont l'anti-aliasing laisse des coutures
    visibles a chaque repetition. */
 .progress-wave-svg {
-  animation: progress-wave-scroll 3.2s linear infinite;
+  animation: progress-wave-scroll 2.8s linear infinite;
 }
 @keyframes progress-wave-scroll {
   from {
     transform: translateX(0);
   }
   to {
-    transform: translateX(-32px);
+    transform: translateX(-28px);
   }
 }
