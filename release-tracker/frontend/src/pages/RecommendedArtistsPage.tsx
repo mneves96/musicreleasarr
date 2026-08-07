@@ -76,21 +76,20 @@ export default function RecommendedArtistsPage() {
       </div>
       {refreshMessage && <p className="text-sm text-neutral-400 mb-4">{refreshMessage}</p>}
 
-      {total === 0 ? (
-        <p className="text-neutral-400 text-sm">
-          Aucune recommandation disponible pour le moment - reessaie apres un rafraichissement, ou attends le
-          prochain rafraichissement automatique planifie dans Reglages.
-        </p>
-      ) : (
-        <ArtistListView
-          storageKeyPrefix="recommendedList"
-          fetchPage={fetchPage}
-          reloadToken={reloadToken}
-          onTotalChange={setTotal}
-          emptyFilterMessage="Aucune recommandation ne correspond au filtre."
-          onError={(err) => setConfigError(err instanceof Error ? err.message : 'Erreur')}
-        />
-      )}
+      <ArtistListView
+        storageKeyPrefix="recommendedList"
+        fetchPage={fetchPage}
+        reloadToken={reloadToken}
+        onTotalChange={setTotal}
+        emptyMessage={
+          <p className="text-neutral-400 text-sm">
+            Aucune recommandation disponible pour le moment - reessaie apres un rafraichissement, ou attends le
+            prochain rafraichissement automatique planifie dans Reglages.
+          </p>
+        }
+        emptyFilterMessage="Aucune recommandation ne correspond au filtre."
+        onError={(err) => setConfigError(err instanceof Error ? err.message : 'Erreur')}
+      />
     </div>
   )
 }

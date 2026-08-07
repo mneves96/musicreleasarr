@@ -55,17 +55,21 @@ export default function FollowedListPage() {
       </div>
       {importMessage && <p className="text-sm text-neutral-400 mb-4">{importMessage}</p>}
 
-      {total === 0 ? (
-        <div className="text-neutral-400">
-          <p>Tu ne suis encore aucun artiste.</p>
-          <p className="mt-2">
-            Utilise la barre de recherche en haut, <Link to="/search" className="text-purple-400 hover:underline">clique ici</Link>{' '}
-            pour en trouver un, ou importe tes favoris Navidrome ci-dessus.
-          </p>
-        </div>
-      ) : (
-        <ArtistListView storageKeyPrefix="followedList" fetchPage={fetchPage} reloadToken={reloadToken} onTotalChange={setTotal} />
-      )}
+      <ArtistListView
+        storageKeyPrefix="followedList"
+        fetchPage={fetchPage}
+        reloadToken={reloadToken}
+        onTotalChange={setTotal}
+        emptyMessage={
+          <div className="text-neutral-400">
+            <p>Tu ne suis encore aucun artiste.</p>
+            <p className="mt-2">
+              Utilise la barre de recherche en haut, <Link to="/search" className="text-purple-400 hover:underline">clique ici</Link>{' '}
+              pour en trouver un, ou importe tes favoris Navidrome ci-dessus.
+            </p>
+          </div>
+        }
+      />
     </div>
   )
 }

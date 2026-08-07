@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Artist, ArtistSortBy } from '../api'
 import ArtistCard from './ArtistCard'
 import ArtistListRow from './ArtistListRow'
@@ -28,6 +28,7 @@ export interface ArtistPageResult {
 export default function ArtistListView({
   storageKeyPrefix,
   fetchPage,
+  emptyMessage,
   emptyFilterMessage = 'Aucun artiste ne correspond au filtre.',
   reloadToken,
   onTotalChange,
@@ -35,6 +36,15 @@ export default function ArtistListView({
 }: {
   storageKeyPrefix: string
   fetchPage: (params: { offset: number; limit: number; q: string; sort: ArtistSortBy }) => Promise<ArtistPageResult>
+  // Affiche a la place de la liste (recherche/tri/vue masques aussi, rien a
+  // filtrer/trier) quand il n'y a vraiment aucun artiste, filtre vide -
+  // distinct de emptyFilterMessage (liste non vide au total, juste aucune
+  // correspondance pour le filtre en cours) : sans cette distinction, le
+  // parent ne pouvait pas savoir si total=0 venait d'un filtre actif ou d'une
+  // liste reellement vide, et masquait toute la vue (barre de recherche
+  // comprise) des qu'un filtre ne matchait rien - le seul moyen de revenir
+  // en arriere etait de recharger la page.
+  emptyMessage?: ReactNode
   emptyFilterMessage?: string
   reloadToken?: unknown
   onTotalChange?: (total: number) => void
@@ -118,6 +128,10 @@ export default function ArtistListView({
     observer.observe(el)
     return () => observer.disconnect()
   }, [loadMore])
+
+  if (!initialLoading && total === 0 && query.trim() === '' && emptyMessage) {
+    return <>{emptyMessage}</>
+  }
 
   return (
     <div>
