@@ -141,7 +141,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     loadYouTubeApi().then(() => {
       if (cancelled || !containerRef.current || playerRef.current || !window.YT) return
       playerRef.current = new window.YT.Player(containerRef.current, {
-        playerVars: { autoplay: 0, controls: 0 },
+        playerVars: { autoplay: 0, controls: 0, playsinline: 1 },
         events: {
           onReady: () => {
             readyRef.current = true
@@ -239,9 +239,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     <PlayerContext.Provider value={value}>
       {children}
       {/* Player YouTube reel mais invisible : notre UI (PlayerBar) pilote tout via
-          le contexte, seul l'audio de l'iframe est rendu (pas display:none, qui
-          peut faire jeter/throttle la lecture par certains navigateurs). */}
-      <div ref={containerRef} className="fixed -left-[9999px] -top-[9999px] w-px h-px" aria-hidden="true" />
+          le contexte, seul l'audio de l'iframe est rendu. Ni display:none ni un
+          positionnement hors-ecran (l'ancien -left-[9999px]) : les navigateurs
+          mobiles (Safari iOS, Chrome Android) suspendent/throttlent la lecture
+          video des qu'un element sort du viewport visible, meme dans une iframe
+          - casse silencieusement la lecture sur telephone tout en fonctionnant
+          sur desktop. Certains navigateurs mobiles refusent aussi d'initialiser
+          correctement un lecteur a peu pres nul en taille (1x1px) - on lui garde
+          donc une taille reelle, mais invisible via opacity plutot que via la
+          position ou la taille. */}
+      <div
+        ref={containerRef}
+        className="fixed bottom-0 right-0 w-40 h-24 opacity-0 pointer-events-none overflow-hidden"
+        aria-hidden="true"
+      />
     </PlayerContext.Provider>
   )
 }
