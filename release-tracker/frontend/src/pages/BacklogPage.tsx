@@ -324,6 +324,33 @@ export default function BacklogPage() {
     })
   }
 
+  // Glisser-deposer d'un fichier sur un slot de piste precis : si le fichier
+  // appartient deja a cet album (reassignation entre "sans correspondance" et
+  // un slot, ou entre deux slots), purement local comme assign() ci-dessus.
+  // S'il vient d'ailleurs (arborescence de gauche = non identifie, ou un
+  // autre album), il faut d'abord le rattacher a cet album cote serveur
+  // (TaggingItem.release_id) - sans ca, /confirm renvoie 422 "fichier pas
+  // encore identifie", puisque rien n'avait jamais appele l'API pour lier
+  // release_id : seul le drop sur le corps de la carte (onDrop plus bas)
+  // passait par assignItemsToRelease. Le choix explicite de l'utilisateur (ce
+  // slot precis) prime ensuite sur la correspondance auto calculee cote
+  // serveur, d'ou l'appel a assign() apres coup pour l'imposer.
+  async function assignFileToSlot(releaseId: number, key: number, itemId: number) {
+    const item = itemsById.get(itemId)
+    if (item && item.release_id === releaseId) {
+      assign(releaseId, key, itemId)
+      return
+    }
+    try {
+      const updated = await api.tagging.assignItemsToRelease(releaseId, [itemId])
+      mergeUpdatedItems(updated)
+      removeFromAssignments([itemId], releaseId)
+      assign(releaseId, key, itemId)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Erreur lors du glisser-deposer')
+    }
+  }
+
   function unassign(releaseId: number, key: number) {
     setAssignments((prev) => {
       const current = { ...(prev[releaseId] ?? {}) }
@@ -716,7 +743,7 @@ export default function BacklogPage() {
                   busy={busyReleaseIds.has(release.release_id)}
                   busyIds={busyIds}
                   edits={edits}
-                  onAssign={(key, itemId) => assign(release.release_id, key, itemId)}
+                  onAssign={(key, itemId) => assignFileToSlot(release.release_id, key, itemId)}
                   onUnassign={(key) => unassign(release.release_id, key)}
                   onConfirmPair={(item, track, key) => confirmPair(item, track, release.release_id, key)}
                   onConfirmAlbum={() => confirmAlbum(release.release_id)}
