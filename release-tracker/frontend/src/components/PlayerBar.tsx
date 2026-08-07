@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
 
@@ -63,12 +64,21 @@ function formatTime(seconds: number): string {
 // deplacant tout le tracé d'exactement une periode via transform: translateX,
 // ce qui boucle sans a-coup (contrairement a l'animation de background-position
 // d'une image carrelee).
-const WAVE_PERIOD = 24
-const WAVE_AMPLITUDE = 3.5
+const WAVE_PERIOD = 26
+const WAVE_AMPLITUDE = 5
 const WAVE_CYCLES = 100
 const WAVE_WIDTH = WAVE_PERIOD * WAVE_CYCLES
-const WAVE_HEIGHT = 12
+const WAVE_HEIGHT = 16
 const WAVE_CENTER = WAVE_HEIGHT / 2
+
+// Le temps courant n'est mis a jour que toutes les 500ms (PlayerContext.tsx
+// interroge le lecteur YouTube a cet intervalle, pas plus souvent) : sans
+// lissage, le point et le bord de la vague sautaient d'une position a l'autre
+// toutes les 500ms au lieu de glisser. Une transition CSS sur la meme duree
+// fait glisser en continu entre deux mises a jour - desactivee pendant un
+// glisser-deposer actif de l'utilisateur pour rester reactif au clic/glisser
+// plutot que de trainer derriere la souris.
+const PROGRESS_UPDATE_MS = 500
 
 function buildWavePath(): string {
   const segments: string[] = [`M0,${WAVE_CENTER}`]
@@ -94,7 +104,7 @@ function ProgressWave({ playing }: { playing: boolean }) {
       style={{ animationPlayState: playing ? 'running' : 'paused' }}
       aria-hidden="true"
     >
-      <path d={WAVE_PATH} fill="none" stroke="#c084fc" strokeWidth="2" strokeLinecap="round" />
+      <path d={WAVE_PATH} fill="none" stroke="#c084fc" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   )
 }
@@ -115,10 +125,13 @@ export default function PlayerBar() {
     close,
   } = usePlayer()
 
+  const [seeking, setSeeking] = useState(false)
+
   if (queue.length === 0) return null
 
   const track = queue[currentIndex]
   const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
+  const smoothTransition = seeking ? 'none' : `width ${PROGRESS_UPDATE_MS}ms linear, left ${PROGRESS_UPDATE_MS}ms linear`
 
   return (
     <div className="fixed bottom-0 left-56 right-0 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 z-20">
@@ -128,14 +141,28 @@ export default function PlayerBar() {
           {/* Piste (a jouer) + vague animee (deja joue, comme les notifications
               lecteur audio de Samsung) - purement decoratif, en dessous du vrai
               <input type="range"> qui gere le clic/glisser/clavier avec une
-              piste transparente (voir .seek-slider). */}
+              piste transparente (voir .seek-slider). Le temps courant n'etant
+              mis a jour que toutes les PROGRESS_UPDATE_MS, la largeur/position
+              transitionnent sur la meme duree pour glisser en continu plutot
+              que sauter - desactive pendant un glisser actif pour rester
+              reactif au geste de l'utilisateur. */}
           <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 rounded-full bg-neutral-800 pointer-events-none" />
           <div
             className="absolute left-0 top-1/2 -translate-y-1/2 overflow-hidden pointer-events-none"
-            style={{ width: `${progressPercent}%`, height: WAVE_HEIGHT }}
+            style={{ width: `${progressPercent}%`, height: WAVE_HEIGHT, transition: smoothTransition }}
           >
             <ProgressWave playing={isPlaying} />
           </div>
+          <div
+            className="absolute top-1/2 w-3 h-3 rounded-full bg-purple-400 pointer-events-none"
+            style={{
+              left: `${progressPercent}%`,
+              marginLeft: '-6px',
+              transform: 'translateY(-50%)',
+              transition: smoothTransition,
+              boxShadow: '0 0 0 2px var(--color-neutral-950)',
+            }}
+          />
           <input
             type="range"
             min={0}
@@ -143,7 +170,9 @@ export default function PlayerBar() {
             step={1}
             value={Math.min(currentTime, duration || 0)}
             onChange={(e) => seekTo(Number(e.target.value))}
-            className="seek-slider relative z-10 w-full"
+            onPointerDown={() => setSeeking(true)}
+            onPointerUp={() => setSeeking(false)}
+            className="seek-slider seek-slider-hidden-thumb relative z-10 w-full"
             title="Avancer/reculer dans la piste"
           />
         </div>
