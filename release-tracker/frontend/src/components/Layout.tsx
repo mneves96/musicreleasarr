@@ -1,16 +1,23 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { DownloadingIcon } from './Spinner'
 import PlayerBar from './PlayerBar'
 import { usePlayer } from '../context/PlayerContext'
+import DownloadGlyph from './DownloadGlyph'
+import { ArtistsIcon, BacklogIcon, CalendarIcon, DashboardIcon, LogoutIcon, NavidromeNavIcon, SettingsIcon } from './NavIcons'
 
 const METUBE_POLL_MS = 6000
 const BACKLOG_POLL_MS = 20000
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `px-3 py-2 rounded-md text-sm font-medium ${
+  `flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium ${
     isActive ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+  }`
+
+const settingsLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-2 px-3 py-2 rounded-md text-xs ${
+    isActive ? 'bg-neutral-900 text-neutral-300' : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900'
   }`
 
 export default function Layout() {
@@ -73,21 +80,60 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b border-neutral-800 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">
-        <div className="max-w-5xl mx-auto px-4">
-          {/* Barre du haut : logo + recherche + deconnexion, sur sa propre ligne
-              pour que la recherche garde une largeur correcte quelle que soit la
-              taille de la nav en dessous - avec tout sur une seule ligne, le
-              min-width:auto par defaut de la nav (elle ne retrecit jamais en
-              dessous de la largeur de ses onglets) faisait porter tout le
-              retrecissement sur le champ de recherche. */}
-          <div className="flex items-center gap-4 py-3">
-            <span className="flex items-center gap-2 font-semibold text-lg whitespace-nowrap shrink-0">
-              <img src="/favicon.svg" alt="" className="w-6 h-6" />
-              MusicReleasarr
+    <div className="min-h-screen flex">
+      <aside className="w-56 shrink-0 border-r border-neutral-800 flex flex-col">
+        <Link to="/" className="flex items-center gap-2 font-semibold text-lg px-4 py-3 hover:bg-neutral-900 transition-colors">
+          <img src="/favicon.svg" alt="" className="w-6 h-6" />
+          MusicReleasarr
+        </Link>
+        <nav className="flex flex-col gap-1 px-2 py-2 flex-1 overflow-y-auto">
+          <NavLink to="/" end className={navLinkClass}>
+            <DashboardIcon className="w-4 h-4 shrink-0" />
+            Tableau de bord
+          </NavLink>
+          <NavLink to="/artists" className={navLinkClass}>
+            <ArtistsIcon className="w-4 h-4 shrink-0" />
+            Artistes
+          </NavLink>
+          <NavLink to="/calendar" className={navLinkClass}>
+            <CalendarIcon className="w-4 h-4 shrink-0" />
+            Calendrier
+          </NavLink>
+          <NavLink to="/metube" className={navLinkClass}>
+            <DownloadGlyph className="w-4 h-4 shrink-0" />
+            <span className="inline-flex items-center gap-1.5">
+              MeTube
+              {downloading && <DownloadingIcon />}
             </span>
-            <form onSubmit={onSubmit} className="flex-1 max-w-md">
+          </NavLink>
+          <NavLink to="/backlog" className={navLinkClass}>
+            <BacklogIcon className="w-4 h-4 shrink-0" />
+            <span className="inline-flex items-center gap-1.5">
+              Backlog
+              {backlogCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-600 text-white text-[10px] font-semibold">
+                  {backlogCount}
+                </span>
+              )}
+            </span>
+          </NavLink>
+          <NavLink to="/navidrome" className={navLinkClass}>
+            <NavidromeNavIcon className="w-4 h-4 shrink-0" />
+            Navidrome
+          </NavLink>
+        </nav>
+        <div className="px-2 py-2 border-t border-neutral-800">
+          <NavLink to="/settings" className={settingsLinkClass}>
+            <SettingsIcon className="w-4 h-4 shrink-0" />
+            Reglages
+          </NavLink>
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="border-b border-neutral-800 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">
+          <div className="flex items-center gap-4 px-4 py-3">
+            <form onSubmit={onSubmit} className="flex-1">
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -98,50 +144,18 @@ export default function Layout() {
             <button
               onClick={logout}
               title="Se deconnecter"
-              className="text-xs px-3 py-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-900 whitespace-nowrap shrink-0 ml-auto"
+              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-900 whitespace-nowrap shrink-0"
             >
+              <LogoutIcon className="w-4 h-4" />
               Deconnexion
             </button>
           </div>
-          <nav className="flex gap-1 pb-2 overflow-x-auto">
-            <NavLink to="/" end className={navLinkClass}>
-              Tableau de bord
-            </NavLink>
-            <NavLink to="/artists" className={navLinkClass}>
-              Artistes
-            </NavLink>
-            <NavLink to="/calendar" className={navLinkClass}>
-              Calendrier
-            </NavLink>
-            <NavLink to="/metube" className={navLinkClass}>
-              <span className="inline-flex items-center gap-1.5">
-                MeTube
-                {downloading && <DownloadingIcon />}
-              </span>
-            </NavLink>
-            <NavLink to="/backlog" className={navLinkClass}>
-              <span className="inline-flex items-center gap-1.5">
-                Backlog
-                {backlogCount > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-600 text-white text-[10px] font-semibold">
-                    {backlogCount}
-                  </span>
-                )}
-              </span>
-            </NavLink>
-            <NavLink to="/navidrome" className={navLinkClass}>
-              Navidrome
-            </NavLink>
-            <NavLink to="/settings" className={navLinkClass}>
-              Reglages
-            </NavLink>
-          </nav>
-        </div>
-      </header>
-      <main className={`flex-1 max-w-5xl mx-auto w-full px-4 py-6 ${queue.length > 0 ? 'pb-24' : ''}`}>
-        <Outlet />
-      </main>
-      <PlayerBar />
+        </header>
+        <main className={`flex-1 w-full px-6 py-6 ${queue.length > 0 ? 'pb-24' : ''}`}>
+          <Outlet />
+        </main>
+        <PlayerBar />
+      </div>
     </div>
   )
 }

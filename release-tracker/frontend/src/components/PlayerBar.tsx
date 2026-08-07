@@ -74,8 +74,8 @@ export default function PlayerBar() {
   const track = queue[currentIndex]
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 z-20">
-      <div className="max-w-5xl mx-auto flex items-center gap-2 px-4 pt-1.5 text-[10px] text-neutral-500 tabular-nums">
+    <div className="fixed bottom-0 left-56 right-0 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 z-20">
+      <div className="flex items-center gap-2 px-6 pt-1.5 text-[10px] text-neutral-500 tabular-nums">
         <span className="w-9 text-right shrink-0">{formatTime(currentTime)}</span>
         <input
           type="range"
@@ -89,7 +89,7 @@ export default function PlayerBar() {
         />
         <span className="w-9 shrink-0">{formatTime(duration)}</span>
       </div>
-      <div className="max-w-5xl mx-auto flex items-center gap-4 px-4 pb-2.5 pt-1">
+      <div className="flex items-center gap-4 px-6 pb-2.5 pt-1">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{track.title}</div>
           <div className="text-xs text-neutral-400 truncate">
