@@ -48,8 +48,9 @@ body {
 /* Barre de progression du lecteur (PlayerBar.tsx) : agrandit la zone
    cliquable/glissable bien au-dela du trait visuel, difficile a viser avec un
    simple <input type="range"> tres fin - la hauteur de la boite du input
-   determine sa zone cliquable, la piste/le pouce restent visuellement fins
-   via les pseudo-elements dedies. */
+   determine sa zone cliquable. La piste elle-meme reste transparente : le
+   fond gris et la vague animee (progress-wave ci-dessous) sont dessines par
+   des elements separes en dessous, l'input ne garde qu'un pouce visible. */
 .seek-slider {
   height: 1rem;
   padding: 0;
@@ -58,8 +59,7 @@ body {
 }
 .seek-slider::-webkit-slider-runnable-track {
   height: 4px;
-  border-radius: 9999px;
-  background: var(--color-neutral-700);
+  background: transparent;
 }
 .seek-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -67,18 +67,38 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 9999px;
-  background: var(--color-purple-600);
+  background: var(--color-purple-400);
+  box-shadow: 0 0 0 2px var(--color-neutral-950);
   margin-top: -4px;
 }
 .seek-slider::-moz-range-track {
   height: 4px;
-  border-radius: 9999px;
-  background: var(--color-neutral-700);
+  background: transparent;
 }
 .seek-slider::-moz-range-thumb {
   width: 12px;
   height: 12px;
   border: none;
   border-radius: 9999px;
-  background: var(--color-purple-600);
+  background: var(--color-purple-400);
+  box-shadow: 0 0 0 2px var(--color-neutral-950);
+}
+
+/* Vague animee sur la portion deja jouee de la barre de progression (comme
+   les notifications lecteur audio de Samsung) - motif SVG repete en fond,
+   defile horizontalement en boucle plutot qu'un simple trait plein. */
+.progress-wave {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='16' viewBox='0 0 20 16'%3E%3Cpath d='M0 8 Q5 1 10 8 T20 8' fill='none' stroke='%23c084fc' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: 0 center;
+  background-size: 20px 100%;
+  animation: progress-wave-scroll 0.9s linear infinite;
+}
+@keyframes progress-wave-scroll {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: -20px;
+  }
 }

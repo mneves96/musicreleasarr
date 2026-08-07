@@ -72,21 +72,35 @@ export default function PlayerBar() {
   if (queue.length === 0) return null
 
   const track = queue[currentIndex]
+  const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
 
   return (
     <div className="fixed bottom-0 left-56 right-0 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 z-20">
       <div className="flex items-center gap-2 px-6 pt-1.5 text-[10px] text-neutral-500 tabular-nums">
         <span className="w-9 text-right shrink-0">{formatTime(currentTime)}</span>
-        <input
-          type="range"
-          min={0}
-          max={duration || 0}
-          step={1}
-          value={Math.min(currentTime, duration || 0)}
-          onChange={(e) => seekTo(Number(e.target.value))}
-          className="flex-1 seek-slider"
-          title="Avancer/reculer dans la piste"
-        />
+        <div className="relative flex-1 h-4">
+          {/* Piste (a jouer) + vague animee (deja joue, comme les notifications
+              lecteur audio de Samsung) - purement decoratif, en dessous du vrai
+              <input type="range"> qui gere le clic/glisser/clavier avec une
+              piste transparente (voir .seek-slider). */}
+          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 rounded-full bg-neutral-800 pointer-events-none" />
+          <div
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-1 rounded-full overflow-hidden pointer-events-none"
+            style={{ width: `${progressPercent}%` }}
+          >
+            <div className="progress-wave h-full w-full" style={{ animationPlayState: isPlaying ? 'running' : 'paused' }} />
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={1}
+            value={Math.min(currentTime, duration || 0)}
+            onChange={(e) => seekTo(Number(e.target.value))}
+            className="seek-slider relative z-10 w-full"
+            title="Avancer/reculer dans la piste"
+          />
+        </div>
         <span className="w-9 shrink-0">{formatTime(duration)}</span>
       </div>
       <div className="flex items-center gap-4 px-6 pb-2.5 pt-1">
