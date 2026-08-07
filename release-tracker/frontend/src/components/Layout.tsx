@@ -1,7 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
-import { DownloadingIcon } from './Spinner'
 import PlayerBar from './PlayerBar'
 import { usePlayer } from '../context/PlayerContext'
 import DownloadGlyph from './DownloadGlyph'
@@ -100,11 +99,8 @@ export default function Layout() {
             Calendrier
           </NavLink>
           <NavLink to="/metube" className={navLinkClass}>
-            <DownloadGlyph className="w-4 h-4 shrink-0" />
-            <span className="inline-flex items-center gap-1.5">
-              MeTube
-              {downloading && <DownloadingIcon />}
-            </span>
+            <DownloadGlyph className={`w-4 h-4 shrink-0 ${downloading ? 'animate-bounce' : ''}`} />
+            MeTube
           </NavLink>
           <NavLink to="/backlog" className={navLinkClass}>
             <BacklogIcon className="w-4 h-4 shrink-0" />
