@@ -53,6 +53,51 @@ function formatTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+// Vague continue (portion deja jouee de la barre de progression, cf. les
+// notifications lecteur audio Samsung/Material Design 3) : un seul chemin SVG
+// (pas une image de fond carrelee, qui laissait des coutures visibles a
+// chaque repetition) construit a partir de paires de courbes de Bezier
+// cubiques dont les tangentes se raccordent exactement d'une periode a
+// l'autre - la courbe reste donc lisse sur toute sa longueur. Anime en
+// deplacant tout le tracé d'exactement une periode via transform: translateX,
+// ce qui boucle sans a-coup (contrairement a l'animation de background-position
+// d'une image carrelee).
+const WAVE_PERIOD = 24
+const WAVE_AMPLITUDE = 3.5
+const WAVE_CYCLES = 100
+const WAVE_WIDTH = WAVE_PERIOD * WAVE_CYCLES
+const WAVE_HEIGHT = 12
+const WAVE_CENTER = WAVE_HEIGHT / 2
+
+function buildWavePath(): string {
+  const segments: string[] = [`M0,${WAVE_CENTER}`]
+  for (let i = 0; i < WAVE_CYCLES; i++) {
+    const x0 = i * WAVE_PERIOD
+    const qx = x0 + WAVE_PERIOD * 0.25
+    const hx = x0 + WAVE_PERIOD * 0.5
+    const tx = x0 + WAVE_PERIOD * 0.75
+    const ex = x0 + WAVE_PERIOD
+    segments.push(`C${qx},${WAVE_CENTER - WAVE_AMPLITUDE} ${qx},${WAVE_CENTER - WAVE_AMPLITUDE} ${hx},${WAVE_CENTER}`)
+    segments.push(`C${tx},${WAVE_CENTER + WAVE_AMPLITUDE} ${tx},${WAVE_CENTER + WAVE_AMPLITUDE} ${ex},${WAVE_CENTER}`)
+  }
+  return segments.join(' ')
+}
+const WAVE_PATH = buildWavePath()
+
+function ProgressWave({ playing }: { playing: boolean }) {
+  return (
+    <svg
+      width={WAVE_WIDTH}
+      height={WAVE_HEIGHT}
+      className="progress-wave-svg block"
+      style={{ animationPlayState: playing ? 'running' : 'paused' }}
+      aria-hidden="true"
+    >
+      <path d={WAVE_PATH} fill="none" stroke="#c084fc" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export default function PlayerBar() {
   const {
     queue,
@@ -83,12 +128,12 @@ export default function PlayerBar() {
               lecteur audio de Samsung) - purement decoratif, en dessous du vrai
               <input type="range"> qui gere le clic/glisser/clavier avec une
               piste transparente (voir .seek-slider). */}
-          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 rounded-full bg-neutral-800 pointer-events-none" />
+          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 rounded-full bg-neutral-800 pointer-events-none" />
           <div
-            className="absolute left-0 top-1/2 -translate-y-1/2 h-1 rounded-full overflow-hidden pointer-events-none"
-            style={{ width: `${progressPercent}%` }}
+            className="absolute left-0 top-1/2 -translate-y-1/2 overflow-hidden pointer-events-none"
+            style={{ width: `${progressPercent}%`, height: WAVE_HEIGHT }}
           >
-            <div className="progress-wave h-full w-full" style={{ animationPlayState: isPlaying ? 'running' : 'paused' }} />
+            <ProgressWave playing={isPlaying} />
           </div>
           <input
             type="range"
