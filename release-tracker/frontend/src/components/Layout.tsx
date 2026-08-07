@@ -80,8 +80,8 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-56 shrink-0 border-r border-neutral-800 flex flex-col">
+    <div className="h-screen flex overflow-hidden">
+      <aside className="w-56 shrink-0 border-r border-neutral-800 flex flex-col h-full">
         <Link to="/" className="flex items-center gap-2 font-semibold text-lg px-4 py-3 hover:bg-neutral-900 transition-colors">
           <img src="/favicon.svg" alt="" className="w-6 h-6" />
           MusicReleasarr
@@ -130,7 +130,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
         <header className="border-b border-neutral-800 sticky top-0 bg-neutral-950/90 backdrop-blur z-10">
           <div className="flex items-center gap-4 px-4 py-3">
             <form onSubmit={onSubmit} className="flex-1">
