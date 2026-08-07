@@ -44,3 +44,41 @@ body {
   margin: 0;
   @apply bg-neutral-950 text-neutral-100;
 }
+
+/* Barre de progression du lecteur (PlayerBar.tsx) : agrandit la zone
+   cliquable/glissable bien au-dela du trait visuel, difficile a viser avec un
+   simple <input type="range"> tres fin - la hauteur de la boite du input
+   determine sa zone cliquable, la piste/le pouce restent visuellement fins
+   via les pseudo-elements dedies. */
+.seek-slider {
+  height: 1rem;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.seek-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-neutral-700);
+}
+.seek-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: var(--color-purple-600);
+  margin-top: -4px;
+}
+.seek-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-neutral-700);
+}
+.seek-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--color-purple-600);
+}

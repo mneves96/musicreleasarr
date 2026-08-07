@@ -84,7 +84,7 @@ export default function PlayerBar() {
           step={1}
           value={Math.min(currentTime, duration || 0)}
           onChange={(e) => seekTo(Number(e.target.value))}
-          className="flex-1 accent-purple-600 h-1"
+          className="flex-1 seek-slider"
           title="Avancer/reculer dans la piste"
         />
         <span className="w-9 shrink-0">{formatTime(duration)}</span>
