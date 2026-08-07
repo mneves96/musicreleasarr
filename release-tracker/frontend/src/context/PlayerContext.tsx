@@ -6,6 +6,7 @@ export interface QueueTrack {
   artist_id: number
   artist_name: string
   album_title: string
+  cover_url: string | null
 }
 
 interface YTPlayerInstance {

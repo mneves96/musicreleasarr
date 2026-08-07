@@ -35,6 +35,7 @@ export default function ReleaseRow({
       artist_id: release.artist_id,
       artist_name: release.artist_name,
       album_title: release.title,
+      cover_url: release.cover_url,
     }))
   }
 

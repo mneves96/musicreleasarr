@@ -37,7 +37,14 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
   function toQueue(list: TopTrack[]): QueueTrack[] {
     return list
       .filter((t): t is TopTrack & { video_id: string } => !!t.video_id)
-      .map((t) => ({ video_id: t.video_id, title: t.title, artist_id: artistId, artist_name: artistName, album_title: t.album_title ?? '' }))
+      .map((t) => ({
+        video_id: t.video_id,
+        title: t.title,
+        artist_id: artistId,
+        artist_name: artistName,
+        album_title: t.album_title ?? '',
+        cover_url: t.cover_url,
+      }))
   }
 
   function play(track: TopTrack) {
