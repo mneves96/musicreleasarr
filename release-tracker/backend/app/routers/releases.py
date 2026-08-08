@@ -122,8 +122,11 @@ def list_tracks(release_id: int, db: Session = Depends(get_db)):
             owned_titles = None
 
     tracks = details["tracks"]
-    if owned_titles is not None:
-        for track in tracks:
+    artist_name_normalized = normalize_text(release.artist.name)
+    for track in tracks:
+        credited = track.pop("artists", []) or []
+        track["featured_artists"] = [a for a in credited if normalize_text(a) != artist_name_normalized]
+        if owned_titles is not None:
             track["owned"] = any(similarity(track["title"], t) >= TRACK_TITLE_THRESHOLD for t in owned_titles)
     return tracks
 

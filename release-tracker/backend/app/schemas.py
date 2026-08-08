@@ -123,6 +123,11 @@ class TopTrackOut(BaseModel):
     release_date: date | None = None
     cover_url: str | None = None
     video_id: str | None = None
+    # Release deja en base correspondant a album_title (voir routers/artists.py:top_tracks) -
+    # necessaire pour le bouton telecharger (POST /releases/{id}/tracks/{video_id}/download),
+    # absent quand aucune correspondance fiable n'a ete trouvee.
+    release_id: int | None = None
+    featured_artists: list[str] = []
 
 
 class TrackOut(BaseModel):
@@ -130,6 +135,13 @@ class TrackOut(BaseModel):
     video_id: str
     duration: str | None = None
     owned: bool | None = None
+    featured_artists: list[str] = []
+
+
+class SimilarArtistOut(BaseModel):
+    name: str
+    image_url: str | None = None
+    musicbrainz_id: str
 
 
 class TrackChoice(BaseModel):

@@ -94,6 +94,7 @@ export interface Track {
   video_id: string
   duration: string | null
   owned: boolean | null
+  featured_artists: string[]
 }
 
 export interface TopTrack {
@@ -104,6 +105,14 @@ export interface TopTrack {
   release_date: string | null
   cover_url: string | null
   video_id: string | null
+  release_id: number | null
+  featured_artists: string[]
+}
+
+export interface SimilarArtist {
+  name: string
+  image_url: string | null
+  musicbrainz_id: string
 }
 
 export type TaggingStatus = 'needs_review' | 'done' | 'error'
@@ -335,7 +344,9 @@ export const api = {
 
   scanArtist: (id: number) => request<TestConnectionResult>(`/artists/${id}/scan`, { method: 'POST' }),
 
-  getArtistTopTracks: (id: number) => request<TopTrack[]>(`/artists/${id}/top-tracks`),
+  getArtistTopTracks: (id: number, limit = 5) => request<TopTrack[]>(`/artists/${id}/top-tracks?limit=${limit}`),
+
+  getSimilarArtists: (id: number) => request<SimilarArtist[]>(`/artists/${id}/similar`),
 
   importFavorites: () => request<TestConnectionResult>('/artists/import-favorites', { method: 'POST' }),
 

@@ -8,10 +8,19 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..db import SessionLocal, get_db
 from ..enrichment import get_or_create_artist
-from ..matching import best_match
+from ..matching import best_match, normalize_text
 from ..models import ALL_RELEASE_TYPES, Artist, Release, ReleaseType
-from ..schemas import ArtistOut, ArtistPageOut, ArtistUpdateIn, ArtistWithReleases, FollowArtistIn, TestConnectionResult, TopTrackOut
-from ..services import lastfm, navidrome, ytmusic
+from ..schemas import (
+    ArtistOut,
+    ArtistPageOut,
+    ArtistUpdateIn,
+    ArtistWithReleases,
+    FollowArtistIn,
+    SimilarArtistOut,
+    TestConnectionResult,
+    TopTrackOut,
+)
+from ..services import lastfm, musicbrainz, navidrome, ytmusic
 from .. import scheduler
 
 logger = logging.getLogger("dedieufy.artists")
@@ -19,6 +28,9 @@ logger = logging.getLogger("dedieufy.artists")
 router = APIRouter(prefix="/api/artists", tags=["artists"])
 
 TOP_TRACKS_LIMIT = 5
+TOP_TRACKS_MAX_LIMIT = 50
+SIMILAR_ARTISTS_LIMIT = 5
+SIMILAR_ARTISTS_MAX_MBID_RESOLUTIONS = 5
 ARTISTS_DEFAULT_LIMIT = 30
 ARTISTS_MAX_LIMIT = 100
 
@@ -77,9 +89,9 @@ def _safe_track_info(artist_name: str, track_name: str, api_key: str) -> dict | 
         return None
 
 
-def _safe_video_id(artist_name: str, track_name: str) -> str | None:
+def _safe_song_match(artist_name: str, track_name: str) -> dict | None:
     try:
-        return ytmusic.search_song_video_id(artist_name, track_name)
+        return ytmusic.search_song_match(artist_name, track_name)
     except Exception:
         return None
 
@@ -225,14 +237,17 @@ def refresh_recommended_artists(background_tasks: BackgroundTasks, db: Session =
 
 
 @router.get("/{artist_id}/top-tracks", response_model=list[TopTrackOut])
-def top_tracks(artist_id: int, db: Session = Depends(get_db)):
+def top_tracks(artist_id: int, limit: int = Query(default=TOP_TRACKS_LIMIT, ge=1, le=TOP_TRACKS_MAX_LIMIT), db: Session = Depends(get_db)):
     """Les titres les plus ecoutes de l'artiste (playcount Last.fm), avec
     lecture directe via le lecteur audio existant - meme principe que
     l'ecoute d'une release (ReleaseRow.tsx), video_id resolu via YouTube
     Music. La cover/date/nom d'album privilegient la release deja en base
     quand son titre correspond (meilleure resolution, deja recuperee via
     Deezer/Cover Art Archive) ; sinon on retombe sur ce que Last.fm associe
-    au morceau."""
+    au morceau. `limit` permet au frontend de charger 5 titres de plus a la
+    demande ("Afficher plus") en refaisant simplement une requete plus large
+    plutot qu'une vraie pagination par offset - Last.fm n'exposant qu'un
+    classement global, redemander le top N+5 est aussi simple et fiable."""
     artist = db.get(Artist, artist_id)
     if artist is None:
         raise HTTPException(404, "Artiste introuvable")
@@ -242,42 +257,47 @@ def top_tracks(artist_id: int, db: Session = Depends(get_db)):
         raise HTTPException(422, "Cle API Last.fm requise dans Reglages pour les titres populaires")
 
     try:
-        raw_tracks = lastfm.get_top_tracks(artist.name, settings.lastfm_api_key, limit=TOP_TRACKS_LIMIT)
+        raw_tracks = lastfm.get_top_tracks(artist.name, settings.lastfm_api_key, limit=limit)
     except Exception as exc:
         raise HTTPException(502, f"Last.fm indisponible : {exc}") from exc
 
     if not raw_tracks:
         return []
 
-    # Les resolutions Last.fm (detail du morceau) et YouTube Music (videoId)
-    # sont independantes entre elles et entre morceaux - parallelisees pour ne
-    # pas payer sequentiellement 2 x TOP_TRACKS_LIMIT appels reseau.
+    # Les resolutions Last.fm (detail du morceau) et YouTube Music (videoId +
+    # artistes credites sur CE morceau, pour detecter un featuring) sont
+    # independantes entre elles et entre morceaux - parallelisees pour ne pas
+    # payer sequentiellement 2 x limit appels reseau.
     with ThreadPoolExecutor(max_workers=10) as pool:
         infos = list(pool.map(lambda t: _safe_track_info(artist.name, t.get("name", ""), settings.lastfm_api_key), raw_tracks))
-        video_ids = list(pool.map(lambda t: _safe_video_id(artist.name, t.get("name", "")), raw_tracks))
+        matches = list(pool.map(lambda t: _safe_song_match(artist.name, t.get("name", "")), raw_tracks))
 
     releases = artist.releases
     release_titles = [r.title for r in releases]
+    artist_name_normalized = normalize_text(artist.name)
 
     results: list[TopTrackOut] = []
-    for track, info, video_id in zip(raw_tracks, infos, video_ids):
+    for track, info, match in zip(raw_tracks, infos, matches):
         name = track.get("name")
         if not name:
             continue
 
-        album_title, cover_url, release_date = None, None, None
+        album_title, cover_url, release_date, release_id = None, None, None, None
         lastfm_album = (info or {}).get("album") or {}
         lf_title = lastfm_album.get("title")
         if lf_title and release_titles:
             idx = best_match(lf_title, release_titles, threshold=0.6)
             if idx is not None:
                 matched = releases[idx]
-                album_title, cover_url, release_date = matched.title, matched.cover_url, matched.release_date
+                album_title, cover_url, release_date, release_id = matched.title, matched.cover_url, matched.release_date, matched.id
 
         if album_title is None and lf_title:
             album_title = lf_title
             images = lastfm_album.get("image") or []
             cover_url = next((img.get("#text") for img in reversed(images) if img.get("#text")), None)
+
+        credited = (match or {}).get("artists") or []
+        featured_artists = [a for a in credited if normalize_text(a) != artist_name_normalized]
 
         results.append(
             TopTrackOut(
@@ -287,7 +307,66 @@ def top_tracks(artist_id: int, db: Session = Depends(get_db)):
                 album_title=album_title,
                 release_date=release_date,
                 cover_url=cover_url,
-                video_id=video_id,
+                video_id=(match or {}).get("video_id"),
+                release_id=release_id,
+                featured_artists=featured_artists,
+            )
+        )
+    return results
+
+
+@router.get("/{artist_id}/similar", response_model=list[SimilarArtistOut])
+def similar_artists(artist_id: int, db: Session = Depends(get_db)):
+    """Jusqu'a SIMILAR_ARTISTS_LIMIT artistes similaires (Last.fm
+    artist.getSimilar), affiches uniquement sur la fiche d'un artiste suivi
+    (voir ArtistPage.tsx). Cliquer dessus ouvre la meme fiche "apercu" qu'un
+    resultat de recherche ou une recommandation Last.fm (POST
+    /api/artists/preview cote frontend, meme flux que SearchPage.tsx) - ces
+    artistes ne sont ni suivis ni stockes comme recommandation ici, juste
+    resolus en mbid pour permettre l'ouverture de leur fiche. Meme repli de
+    resolution MusicBrainz par nom que scheduler.refresh_lastfm_recommendations
+    quand Last.fm ne fournit pas de mbid (artiste peu connu)."""
+    artist = db.get(Artist, artist_id)
+    if artist is None:
+        raise HTTPException(404, "Artiste introuvable")
+
+    settings = scheduler.get_settings(db)
+    if not settings.lastfm_api_key:
+        raise HTTPException(422, "Cle API Last.fm requise dans Reglages pour les artistes similaires")
+
+    try:
+        candidates = lastfm.get_similar_artists(artist.name, settings.lastfm_api_key, limit=15)
+    except Exception as exc:
+        raise HTTPException(502, f"Last.fm indisponible : {exc}") from exc
+
+    results: list[SimilarArtistOut] = []
+    resolutions_used = 0
+    for candidate in candidates:
+        if len(results) >= SIMILAR_ARTISTS_LIMIT:
+            break
+        name = candidate.get("name")
+        if not name:
+            continue
+
+        mbid = candidate.get("mbid") or None
+        if not mbid:
+            if resolutions_used >= SIMILAR_ARTISTS_MAX_MBID_RESOLUTIONS:
+                continue
+            resolutions_used += 1
+            try:
+                mb_candidates, _total = musicbrainz.search_artists(name, limit=5)
+            except Exception:
+                continue
+            idx = best_match(name, [c["name"] for c in mb_candidates], threshold=scheduler.FAVORITE_MATCH_THRESHOLD)
+            if idx is None:
+                continue
+            mbid = mb_candidates[idx]["id"]
+
+        results.append(
+            SimilarArtistOut(
+                name=name,
+                image_url=lastfm.best_image({"image": candidate.get("image")}) if candidate.get("image") else None,
+                musicbrainz_id=mbid,
             )
         )
     return results

@@ -115,18 +115,19 @@ def search_song_album_browse_id(artist_name: str, release_title: str, threshold:
     return best_album_id if best_score >= threshold else None
 
 
-def search_song_video_id(artist_name: str, track_title: str, threshold: float = 0.7) -> str | None:
-    """Retrouve le videoId YouTube Music d'un morceau precis (section "Titres
+def search_song_match(artist_name: str, track_title: str, threshold: float = 0.7) -> dict | None:
+    """Retrouve le morceau YouTube Music correspondant (section "Titres
     populaires" de la fiche artiste, voir routers/artists.py:top_tracks) -
-    meme heuristique de score que search_song_album_browse_id, mais renvoie
-    directement le videoId de la chanson plutot que l'id de son album parent."""
+    meme heuristique de score que search_song_album_browse_id. Renvoie
+    {"video_id", "artists"} (tous les artistes credites sur ce morceau precis,
+    utilise pour detecter un featuring - voir routers/artists.py) plutot que
+    seulement le videoId."""
     yt = _client()
     results = yt.search(f"{artist_name} {track_title}", filter="songs", limit=10)
 
-    best_id, best_score = None, 0.0
+    best_item, best_score = None, 0.0
     for item in results:
-        video_id = item.get("videoId")
-        if not video_id:
+        if not item.get("videoId"):
             continue
         title = item.get("title", "")
         artists = " ".join(a.get("name", "") for a in item.get("artists") or [])
@@ -134,9 +135,14 @@ def search_song_video_id(artist_name: str, track_title: str, threshold: float = 
         artist_score = similarity(artist_name, artists)
         score = title_score if title_score >= 0.92 else title_score * 0.8 + artist_score * 0.2
         if score > best_score:
-            best_score, best_id = score, video_id
+            best_score, best_item = score, item
 
-    return best_id if best_score >= threshold else None
+    if best_item is None or best_score < threshold:
+        return None
+    return {
+        "video_id": best_item["videoId"],
+        "artists": [a.get("name") for a in best_item.get("artists") or [] if a.get("name")],
+    }
 
 
 def resolve_release_browse_id(
@@ -173,7 +179,9 @@ def album_url(browse_id: str) -> str:
 def get_release_details(browse_id: str) -> dict:
     """Utilise pour lister les pistes (ecran artiste, telechargement manuel piste
     par piste) - pas necessaire pour le telechargement de l'album complet, qui se
-    fait directement via album_url()."""
+    fait directement via album_url(). "artists" reprend tous les artistes
+    credites sur CETTE piste (voir routers/releases.py:list_tracks, qui en
+    deduit les featurings en retirant l'artiste principal de la release)."""
     yt = _client()
     album = yt.get_album(browse_id)
     tracks = [
@@ -181,6 +189,7 @@ def get_release_details(browse_id: str) -> dict:
             "title": t.get("title"),
             "video_id": t.get("videoId"),
             "duration": t.get("duration"),
+            "artists": [a.get("name") for a in t.get("artists") or [] if a.get("name")],
         }
         for t in album.get("tracks", [])
         if t.get("videoId")

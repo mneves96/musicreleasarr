@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, RELEASE_TYPE_LABELS, type Release, type Track } from '../api'
-import { DownloadBadge, OwnershipBadge } from './StatusBadge'
+import { OwnershipBadge } from './StatusBadge'
 import ServiceLink from './ServiceLink'
 import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from './ServiceIcons'
 import { usePlayer, type QueueTrack } from '../context/PlayerContext'
+import { useToast } from '../context/ToastContext'
 import Spinner from './Spinner'
 import PlayGlyph from './PlayGlyph'
 import DownloadGlyph from './DownloadGlyph'
@@ -27,6 +28,7 @@ export default function ReleaseRow({
   const [missingBusy, setMissingBusy] = useState(false)
   const [playLoading, setPlayLoading] = useState(false)
   const { playQueue } = usePlayer()
+  const { showToast } = useToast()
 
   function toQueue(trackList: Track[]): QueueTrack[] {
     return trackList.map((t) => ({
@@ -65,7 +67,8 @@ export default function ReleaseRow({
     setMessage(null)
     try {
       const result = await api.downloadRelease(release.id)
-      setMessage(result.message)
+      if (result.ok) showToast('Telechargement envoye a MeTube')
+      else setMessage(result.message)
       onChanged?.()
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Erreur')
@@ -95,7 +98,8 @@ export default function ReleaseRow({
   async function downloadTrack(videoId: string) {
     try {
       const result = await api.downloadTrack(release.id, videoId)
-      setMessage(result.message)
+      if (result.ok) showToast('Telechargement envoye a MeTube')
+      else setMessage(result.message)
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Erreur')
     }
@@ -109,7 +113,7 @@ export default function ReleaseRow({
     setMessage(null)
     try {
       await Promise.all(missing.map((t) => api.downloadTrack(release.id, t.video_id)))
-      setMessage(`${missing.length} piste(s) manquante(s) mise(s) en file d'attente`)
+      showToast(`${missing.length} piste(s) envoyee(s) a MeTube`)
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Erreur')
     } finally {
@@ -182,7 +186,6 @@ export default function ReleaseRow({
           </div>
         </div>
         <OwnershipBadge status={release.ownership_status} />
-        <DownloadBadge status={release.download_status} error={release.download_error} />
         <button
           onClick={download}
           disabled={busy}
@@ -201,9 +204,6 @@ export default function ReleaseRow({
         </button>
       </div>
       {message && <div className="text-xs text-app-text-muted mt-1 ml-16">{message}</div>}
-      {!message && release.download_status === 'failed' && release.download_error && (
-        <div className="text-xs text-red-400 mt-1 ml-16">{release.download_error}</div>
-      )}
       {tracks && (
         <div className="mt-2 ml-16">
           {missingTrackCount > 0 && (
@@ -233,7 +233,11 @@ export default function ReleaseRow({
                     ▶
                   </button>
                   <span className="truncate flex-1">
-                    {t.title} {t.duration && <span className="text-app-text-faint">({t.duration})</span>}
+                    {t.title}
+                    {t.featured_artists.length > 0 && (
+                      <span className="text-app-text-faint"> (feat. {t.featured_artists.join(', ')})</span>
+                    )}{' '}
+                    {t.duration && <span className="text-app-text-faint">({t.duration})</span>}
                   </span>
                   {t.owned === true && (
                     <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-900/50 text-green-300 whitespace-nowrap">
