@@ -609,6 +609,7 @@ def _write_tags(
     disc_number: int | None,
     recording_id: str | None,
     release_mbid: str | None,
+    track_artist_credit: str | None,
     plain_lyrics: str | None,
     synced_lyrics: str | None,
 ) -> None:
@@ -629,8 +630,13 @@ def _write_tags(
     # incoherents entre pistes d'un meme album.
     tags.delall("TALB")
     tags.add(TALB(encoding=3, text=release.title))
+    # TPE1 (artiste) reprend le featuring credite sur CETTE piste quand connu
+    # (ex: "Drake feat. Rihanna", meme chaine que celle ecrite par Picard) -
+    # contrairement a TPE2 (artiste d'album) qui reste volontairement
+    # l'artiste principal de la release pour tout le monde, condition du
+    # regroupement par album dans Navidrome/Picard (voir plus haut).
     tags.delall("TPE1")
-    tags.add(TPE1(encoding=3, text=artist.name))
+    tags.add(TPE1(encoding=3, text=track_artist_credit or artist.name))
     tags.delall("TPE2")
     tags.add(TPE2(encoding=3, text=artist.name))
     # delall() inconditionnel avant chaque add() conditionnel : un fichier repasse
@@ -741,6 +747,7 @@ def apply_tag_and_move(
     disc_number: int | None,
     recording_id: str | None = None,
     release_mbid: str | None = None,
+    track_artist_credit: str | None = None,
 ) -> TaggingItem:
     """Ecrit les tags ID3 et deplace le fichier vers <bibliotheque>/<Artiste>/<Album>/
     - seule fonction de ce module qui ecrit sur le disque, appelee uniquement
@@ -776,7 +783,18 @@ def apply_tag_and_move(
 
     source_dir = os.path.dirname(item.source_path)
     try:
-        _write_tags(item.source_path, item, track_title, track_number, disc_number, recording_id, release_mbid, plain_lyrics, synced_lyrics)
+        _write_tags(
+            item.source_path,
+            item,
+            track_title,
+            track_number,
+            disc_number,
+            recording_id,
+            release_mbid,
+            track_artist_credit,
+            plain_lyrics,
+            synced_lyrics,
+        )
         os.makedirs(target_dir, exist_ok=True)
         shutil.move(item.source_path, target_path)
     except Exception as exc:

@@ -140,6 +140,24 @@ def get_release_groups(artist_mbid: str) -> list[dict]:
     return release_groups
 
 
+def _format_artist_credit(credit: list[dict] | None) -> str | None:
+    """Concatene un artist-credit MusicBrainz (nom + joinphrase de chaque
+    entree, ex: "Drake" + " feat. " + "Rihanna") en la meme chaine que celle
+    affichee sur MusicBrainz/ecrite par Picard dans le tag TPE1 - a la
+    difference de artist.name (l'artiste PRINCIPAL de la release, seul utilise
+    jusqu'ici, voir services/tagging.py:_write_tags), ceci inclut les
+    featurings credites sur CETTE piste precise."""
+    if not credit:
+        return None
+    parts: list[str] = []
+    for entry in credit:
+        name = entry.get("name") or (entry.get("artist") or {}).get("name") or ""
+        parts.append(name)
+        parts.append(entry.get("joinphrase") or "")
+    text = "".join(parts).strip()
+    return text or None
+
+
 def get_release_tracks(release_group_mbid: str, expected_track_count: int | None = None) -> list[dict]:
     """Tracklist canonique d'une release-group, utilisee comme source de verite
     pour le redressage des tags (voir services/tagging.py) - contrairement a
@@ -155,7 +173,7 @@ def get_release_tracks(release_group_mbid: str, expected_track_count: int | None
 
     data = _throttled_get(
         "/release",
-        {"release-group": release_group_mbid, "inc": "recordings", "limit": 25},
+        {"release-group": release_group_mbid, "inc": "recordings+artist-credits", "limit": 25},
     )
     releases = data.get("releases", [])
     if not releases:
@@ -192,6 +210,7 @@ def get_release_tracks(release_group_mbid: str, expected_track_count: int | None
                     # (l'erreur initiale ici) fait chercher le mauvais type d'objet et
                     # ne trouve donc rien.
                     "release_mbid": best.get("id"),
+                    "artist_credit": _format_artist_credit(track.get("artist-credit")),
                 }
             )
     with _tracks_cache_lock:

@@ -422,6 +422,7 @@ export default function BacklogPage() {
         disc_number: track.disc_number,
         recording_id: track.recording_id,
         release_mbid: track.release_mbid,
+        track_artist_credit: track.artist_credit,
       })
       if (updated.status === 'done') {
         setItems((prev) => (prev ? prev.filter((i) => i.id !== item.id) : prev))
@@ -457,6 +458,7 @@ export default function BacklogPage() {
               disc_number: track.disc_number,
               recording_id: track.recording_id,
               release_mbid: track.release_mbid,
+              track_artist_credit: track.artist_credit,
             })
           } catch {
             return null

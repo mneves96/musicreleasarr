@@ -144,6 +144,7 @@ export interface TrackChoice {
   disc_number: number
   recording_id: string | null
   release_mbid: string | null
+  artist_credit: string | null
 }
 
 export interface TaggingConfirmPayload {
@@ -152,6 +153,7 @@ export interface TaggingConfirmPayload {
   disc_number?: number | null
   recording_id?: string | null
   release_mbid?: string | null
+  track_artist_credit?: string | null
 }
 
 export interface ReleaseGroupChoice {

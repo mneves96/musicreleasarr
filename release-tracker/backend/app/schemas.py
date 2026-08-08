@@ -150,6 +150,7 @@ class TrackChoice(BaseModel):
     disc_number: int
     recording_id: str | None = None
     release_mbid: str | None = None
+    artist_credit: str | None = None
 
 
 class TaggingItemOut(BaseModel):
@@ -186,6 +187,7 @@ class TaggingConfirmIn(BaseModel):
     disc_number: int | None = None
     recording_id: str | None = None
     release_mbid: str | None = None
+    track_artist_credit: str | None = None
 
 
 class ReleaseGroupChoice(BaseModel):

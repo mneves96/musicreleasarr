@@ -220,6 +220,7 @@ def confirm(item_id: int, payload: TaggingConfirmIn, db: Session = Depends(get_d
         payload.disc_number,
         payload.recording_id,
         payload.release_mbid,
+        payload.track_artist_credit,
     )
     return _to_out(updated, settings.tagging_downloads_path)
 
