@@ -106,7 +106,21 @@ function ProgressWave({ playing }: { playing: boolean }) {
         style={{ animationPlayState: playing ? 'running' : 'paused' }}
         aria-hidden="true"
       >
-        <path d={WAVE_PATH} fill="none" stroke="var(--app-accent-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        {/* vector-effect="non-scaling-stroke" : sans ca, le scaleY(0) du
+            conteneur ci-dessus n'aplatit pas que l'amplitude, il ecrase aussi
+            l'epaisseur du trait (elle aussi verticale) jusqu'a 0px - la vague
+            "aplatie" devenait donc invisible au lieu de rester une ligne
+            visible. Ce mode garde l'epaisseur du trait constante a l'ecran
+            quel que soit le scale applique a ses ancetres. */}
+        <path
+          d={WAVE_PATH}
+          fill="none"
+          stroke="var(--app-accent-text)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
     </div>
   )
