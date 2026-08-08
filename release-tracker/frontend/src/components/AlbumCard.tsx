@@ -39,6 +39,12 @@ function FileChip({ item, onDiscard }: { item: TaggingItem; onDiscard: () => voi
     <div
       draggable
       onDragStart={(e) => {
+        // Empeche l'evenement de remonter jusqu'au conteneur de la carte album
+        // (lui-meme draggable, pour le glisser-deposer album sur album) : sans
+        // stopPropagation, son propre onDragStart ecrase le meme dataTransfer
+        // juste apres (type devient "album" au lieu de "file"), et le depot sur
+        // un slot de piste ne fait plus rien silencieusement.
+        e.stopPropagation()
         e.dataTransfer.setData('application/json', JSON.stringify({ type: 'file', itemId: item.id }))
         e.dataTransfer.effectAllowed = 'move'
       }}

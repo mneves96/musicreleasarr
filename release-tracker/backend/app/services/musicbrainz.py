@@ -17,6 +17,16 @@ _lock = threading.Lock()
 _last_call = 0.0
 _MIN_INTERVAL = 1.05
 
+# Cache process-wide de la tracklist d'une release-group (voir get_release_tracks) :
+# le Backlog la refetch a chaque glisser-deposer (assign_items_to_release) en plus
+# du chargement initial de la carte album, alors qu'une tracklist ne change
+# essentiellement jamais - sans cache, chaque piste glissee attendait son tour
+# derriere le throttle global de 1 requete/seconde (potentiellement plusieurs
+# secondes si d'autres appels MusicBrainz etaient deja en file), pour un resultat
+# identique a la fois precedente.
+_tracks_cache: dict[str, list[dict]] = {}
+_tracks_cache_lock = threading.Lock()
+
 
 def _throttled_get(path: str, params: dict) -> dict:
     global _last_call
@@ -138,12 +148,19 @@ def get_release_tracks(release_group_mbid: str, expected_track_count: int | None
     choisit celle qui correspond le mieux : statut "Official" en priorite, puis
     nombre de pistes le plus proche de expected_track_count (nombre de fichiers
     deja detectes dans le backlog) si fourni."""
+    with _tracks_cache_lock:
+        cached = _tracks_cache.get(release_group_mbid)
+    if cached is not None:
+        return cached
+
     data = _throttled_get(
         "/release",
         {"release-group": release_group_mbid, "inc": "recordings", "limit": 25},
     )
     releases = data.get("releases", [])
     if not releases:
+        with _tracks_cache_lock:
+            _tracks_cache[release_group_mbid] = []
         return []
 
     def sort_key(release: dict) -> tuple:
@@ -177,6 +194,8 @@ def get_release_tracks(release_group_mbid: str, expected_track_count: int | None
                     "release_mbid": best.get("id"),
                 }
             )
+    with _tracks_cache_lock:
+        _tracks_cache[release_group_mbid] = tracks
     return tracks
 
 

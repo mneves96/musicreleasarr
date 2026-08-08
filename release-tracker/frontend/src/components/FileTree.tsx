@@ -41,13 +41,14 @@ interface FileTreeProps {
   items: TaggingItem[]
   selectedIds: Set<number>
   onToggleSelect: (ids: number[], selected: boolean) => void
+  onDiscard: (itemId: number) => void
 }
 
 // Arborescence reelle du dossier de telechargements (pas 1 ligne par artiste) -
 // dossiers repliables avec case a cocher tri-state, fichiers avec case a
 // cocher individuelle. Fichiers et dossiers sont tous deux glissables vers la
 // colonne de droite (voir BacklogPage.tsx pour la gestion du drop).
-export default function FileTree({ items, selectedIds, onToggleSelect }: FileTreeProps) {
+export default function FileTree({ items, selectedIds, onToggleSelect, onDiscard }: FileTreeProps) {
   const tree = useMemo(() => buildTree(items), [items])
   const [expanded, setExpanded] = useState<Set<string> | null>(null)
   // Deplie les dossiers de premier niveau par defaut, une seule fois (pas a
@@ -79,10 +80,11 @@ export default function FileTree({ items, selectedIds, onToggleSelect }: FileTre
           onToggleExpand={toggleExpand}
           selectedIds={selectedIds}
           onToggleSelect={onToggleSelect}
+          onDiscard={onDiscard}
         />
       ))}
       {tree.files.map((file) => (
-        <FileRow key={file.id} item={file} depth={0} selectedIds={selectedIds} onToggleSelect={onToggleSelect} />
+        <FileRow key={file.id} item={file} depth={0} selectedIds={selectedIds} onToggleSelect={onToggleSelect} onDiscard={onDiscard} />
       ))}
     </div>
   )
@@ -95,6 +97,7 @@ function FolderRow({
   onToggleExpand,
   selectedIds,
   onToggleSelect,
+  onDiscard,
 }: {
   node: FolderNode
   depth: number
@@ -102,6 +105,7 @@ function FolderRow({
   onToggleExpand: (path: string) => void
   selectedIds: Set<number>
   onToggleSelect: (ids: number[], selected: boolean) => void
+  onDiscard: (itemId: number) => void
 }) {
   const isOpen = expanded.has(node.path)
   const descendantIds = useMemo(() => collectIds(node), [node])
@@ -150,10 +154,18 @@ function FolderRow({
               onToggleExpand={onToggleExpand}
               selectedIds={selectedIds}
               onToggleSelect={onToggleSelect}
+              onDiscard={onDiscard}
             />
           ))}
           {node.files.map((file) => (
-            <FileRow key={file.id} item={file} depth={depth + 1} selectedIds={selectedIds} onToggleSelect={onToggleSelect} />
+            <FileRow
+              key={file.id}
+              item={file}
+              depth={depth + 1}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
+              onDiscard={onDiscard}
+            />
           ))}
         </div>
       )}
@@ -166,11 +178,13 @@ function FileRow({
   depth,
   selectedIds,
   onToggleSelect,
+  onDiscard,
 }: {
   item: TaggingItem
   depth: number
   selectedIds: Set<number>
   onToggleSelect: (ids: number[], selected: boolean) => void
+  onDiscard: (itemId: number) => void
 }) {
   const checked = selectedIds.has(item.id)
   return (
@@ -191,6 +205,16 @@ function FileRow({
           ⚠
         </span>
       )}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onDiscard(item.id)
+        }}
+        className="text-app-text-faint hover:text-red-400 text-xs px-1 shrink-0"
+        title="Ignorer ce fichier"
+      >
+        ✕
+      </button>
     </div>
   )
 }

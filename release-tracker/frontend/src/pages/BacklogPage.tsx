@@ -484,6 +484,15 @@ export default function BacklogPage() {
     }
   }
 
+  function discardById(itemId: number) {
+    const item = itemsById.get(itemId)
+    if (item) discardItem(item)
+  }
+
+  function discardSelected() {
+    for (const id of selectedIds) discardById(id)
+  }
+
   async function discardItem(item: TaggingItem) {
     setBusy(item.id, true)
     setItems((prev) => (prev ? prev.filter((i) => i.id !== item.id) : prev))
@@ -728,10 +737,18 @@ export default function BacklogPage() {
               {searching && <Spinner className="w-3 h-3" />}
               Rechercher ({selectedIds.size})
             </button>
+            <button
+              onClick={discardSelected}
+              disabled={selectedIds.size === 0}
+              className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50 whitespace-nowrap"
+              title="Ignorer les fichiers selectionnes (ils disparaissent du backlog sans etre ranges)"
+            >
+              Supprimer ({selectedIds.size})
+            </button>
             {searchMessage && <span className="text-xs text-app-text-faint">{searchMessage}</span>}
           </div>
           <div className="flex-1 overflow-y-auto min-h-0 pr-1 border border-app-border rounded-lg bg-app-bg/40 p-2">
-            <FileTree items={unclusteredItems} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+            <FileTree items={unclusteredItems} selectedIds={selectedIds} onToggleSelect={toggleSelect} onDiscard={discardById} />
           </div>
         </div>
 

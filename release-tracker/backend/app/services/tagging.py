@@ -180,10 +180,29 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
         len(files_by_folder),
         {(name or "<racine>"): len(files) for name, files in files_by_folder.items()},
     )
+    existing_by_path = {item.source_path: item for item in db.query(TaggingItem).all()}
+
+    # Fichiers supprimes/deplaces manuellement depuis le dernier scan (en dehors
+    # de l'app) : leur TaggingItem restait indefiniment dans le backlog, y
+    # compris a gauche dans l'arborescence, meme apres un "Actualiser les
+    # fichiers" - seuls les items encore en attente (pas "done", deja
+    # deplaces par l'app elle-meme vers la bibliotheque) sont concernes. Fait
+    # AVANT le retour anticipe ci-dessous : un dossier de telechargements
+    # devenu entierement vide doit lui aussi vider le backlog en attente.
+    on_disk_paths = {path for paths in files_by_folder.values() for path in paths}
+    stale_items = [
+        item
+        for item in existing_by_path.values()
+        if item.status in (TaggingStatus.needs_review, TaggingStatus.error) and item.source_path not in on_disk_paths
+    ]
+    for item in stale_items:
+        db.delete(item)
+    if stale_items:
+        db.commit()
+        logger.info("Scan : %d fichier(s) disparu(s) du disque retire(s) du backlog", len(stale_items))
+
     if not files_by_folder:
         return []
-
-    existing_by_path = {item.source_path: item for item in db.query(TaggingItem).all()}
 
     created: list[TaggingItem] = []
     for folder_name, all_files in files_by_folder.items():
