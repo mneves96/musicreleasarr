@@ -234,43 +234,6 @@ export interface NowPlayingEntry {
   cover_art_id: string | null
 }
 
-export type FavoritesPeriod = 'week' | 'month' | 'year'
-
-export interface LastfmTopArtist {
-  name: string
-  playcount: number
-  image_url: string | null
-  musicbrainz_id: string | null
-  country: string | null
-  area_name: string | null
-}
-
-export interface LastfmTopAlbum {
-  name: string
-  artist_name: string
-  artist_musicbrainz_id: string | null
-  playcount: number
-  image_url: string | null
-  release_date: string | null
-}
-
-export interface LastfmTopTrack {
-  name: string
-  artist_name: string
-  artist_musicbrainz_id: string | null
-  album_title: string | null
-  cover_url: string | null
-  playcount: number
-  estimated_hours: number | null
-}
-
-export interface Favorites {
-  top_artist: LastfmTopArtist | null
-  top_album: LastfmTopAlbum | null
-  top_track: LastfmTopTrack | null
-  estimated_hours: number | null
-}
-
 export interface RecentlyPlayedAlbum {
   id: string
   name: string
@@ -453,8 +416,6 @@ export const api = {
   navidromeRecentlyPlayed: () => request<RecentlyPlayedAlbum[]>('/navidrome/recently-played'),
   navidromeScan: (full: boolean) =>
     request<TestConnectionResult>('/navidrome/scan', { method: 'POST', body: JSON.stringify({ full }) }),
-
-  getFavorites: (period: FavoritesPeriod) => request<Favorites>(`/stats/favorites?period=${period}`),
 
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),

@@ -37,12 +37,3 @@ export function GenreIcon({ className = 'w-4 h-4' }: IconProps) {
     </svg>
   )
 }
-
-export function ClockIcon({ className = 'w-4 h-4' }: IconProps) {
-  return (
-    <svg {...common} className={className}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3.5 2" />
-    </svg>
-  )
-}
