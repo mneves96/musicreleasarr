@@ -202,6 +202,14 @@ body {
   }
 }
 
+/* Aplatit/regonfle la vague en douceur a la pause/reprise de la lecture -
+   scaleY vers 0 depuis le centre, sur un element distinct du <svg> ci-dessus
+   pour ne pas entrer en conflit avec sa propre animation de scroll. */
+.progress-wave-flatten {
+  transform-origin: center;
+  transition: transform 0.35s ease;
+}
+
 /* Notification ephemere (voir context/ToastContext.tsx). */
 .animate-toast-in {
   animation: toast-in 0.2s ease-out;

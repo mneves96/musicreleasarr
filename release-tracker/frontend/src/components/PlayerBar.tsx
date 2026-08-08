@@ -90,17 +90,25 @@ function buildWavePath(): string {
 }
 const WAVE_PATH = buildWavePath()
 
+// Aplatit la vague en douceur a la pause (scaleY vers 0, transition CSS sur
+// ce wrapper) plutot que de la figer brutalement en forme de sinusoide -
+// portee par un element separe du <svg> qui scrolle (translateX via
+// @keyframes, voir .progress-wave-svg dans index.css) : les deux transforms
+// se composent sans se marcher dessus puisqu'ils vivent chacun sur leur
+// propre element plutot que de se disputer la meme propriete CSS transform.
 function ProgressWave({ playing }: { playing: boolean }) {
   return (
-    <svg
-      width={WAVE_WIDTH}
-      height={WAVE_HEIGHT}
-      className="progress-wave-svg block"
-      style={{ animationPlayState: playing ? 'running' : 'paused' }}
-      aria-hidden="true"
-    >
-      <path d={WAVE_PATH} fill="none" stroke="var(--app-accent-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className="progress-wave-flatten" style={{ transform: playing ? 'scaleY(1)' : 'scaleY(0)' }}>
+      <svg
+        width={WAVE_WIDTH}
+        height={WAVE_HEIGHT}
+        className="progress-wave-svg block"
+        style={{ animationPlayState: playing ? 'running' : 'paused' }}
+        aria-hidden="true"
+      >
+        <path d={WAVE_PATH} fill="none" stroke="var(--app-accent-text)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
   )
 }
 
