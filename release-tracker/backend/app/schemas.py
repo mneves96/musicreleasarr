@@ -279,11 +279,19 @@ class SettingsUpdateIn(BaseModel):
     tagging_library_path: str | None = None
 
 
+class GenreStatOut(BaseModel):
+    name: str
+    song_count: int
+    percent: float
+
+
 class NavidromeStatsOut(BaseModel):
     artist_count: int
     album_count: int
+    song_count: int
     scanning: bool
     last_scan_count: int | None = None
+    top_genres: list[GenreStatOut] = []
 
 
 class NowPlayingEntryOut(BaseModel):
@@ -293,6 +301,7 @@ class NowPlayingEntryOut(BaseModel):
     album: str | None = None
     minutes_ago: int | None = None
     player_name: str | None = None
+    cover_art_id: str | None = None
 
 
 class RecentlyPlayedAlbumOut(BaseModel):
@@ -319,3 +328,41 @@ class LastfmAuthStartOut(BaseModel):
 
 class LastfmAuthFinishIn(BaseModel):
     token: str
+
+
+class LastfmTopArtistOut(BaseModel):
+    name: str
+    playcount: int
+    image_url: str | None = None
+    musicbrainz_id: str | None = None
+    country: str | None = None
+    area_name: str | None = None
+
+
+class LastfmTopAlbumOut(BaseModel):
+    name: str
+    artist_name: str
+    artist_musicbrainz_id: str | None = None
+    playcount: int
+    image_url: str | None = None
+    release_date: date | None = None
+
+
+class LastfmTopTrackOut(BaseModel):
+    name: str
+    artist_name: str
+    artist_musicbrainz_id: str | None = None
+    album_title: str | None = None
+    cover_url: str | None = None
+    playcount: int
+    estimated_hours: float | None = None
+
+
+class FavoritesOut(BaseModel):
+    top_artist: LastfmTopArtistOut | None = None
+    top_album: LastfmTopAlbumOut | None = None
+    top_track: LastfmTopTrackOut | None = None
+    # Estimation (duree * lectures, sommee sur les pistes les plus ecoutees
+    # de la periode - Last.fm ne donne pas un vrai total, voir
+    # routers/stats.py) - jamais un temps d'ecoute exact.
+    estimated_hours: float | None = None

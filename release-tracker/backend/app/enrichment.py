@@ -6,10 +6,35 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from .matching import best_match
 from .models import Artist
 from .services import deezer, lastfm, musicbrainz, ytmusic
 
 logger = logging.getLogger("dedieufy.enrichment")
+
+# Duplique volontairement scheduler.FAVORITE_MATCH_THRESHOLD (meme valeur) :
+# scheduler.py importe deja get_or_create_artist depuis ce module, un import
+# dans l'autre sens creerait un cycle.
+_NAME_RESOLUTION_THRESHOLD = 0.85
+
+
+def resolve_mbid_by_name(name: str, threshold: float = _NAME_RESOLUTION_THRESHOLD) -> str | None:
+    """Resout un mbid MusicBrainz a partir d'un simple nom d'artiste - repli
+    utilise partout ou une source externe (Last.fm) ne fournit pas toujours
+    de mbid (artiste peu connu) : recommandations nocturnes
+    (scheduler.refresh_lastfm_recommendations), artistes similaires
+    (routers/artists.py:similar_artists) et favoris d'ecoute
+    (routers/stats.py). None si MusicBrainz est indisponible ou qu'aucun
+    candidat n'atteint le seuil de confiance plutot qu'une resolution
+    hasardeuse."""
+    try:
+        candidates, _total = musicbrainz.search_artists(name, limit=5)
+    except Exception:
+        return None
+    idx = best_match(name, [c["name"] for c in candidates], threshold=threshold)
+    if idx is None:
+        return None
+    return candidates[idx]["id"]
 
 
 def get_or_create_artist(db: Session, musicbrainz_id: str, lastfm_api_key: str | None) -> Artist:

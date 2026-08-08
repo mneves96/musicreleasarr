@@ -1,11 +1,12 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Settings
 from ..schemas import (
+    GenreStatOut,
     NavidromeScanIn,
     NavidromeStatsOut,
     NowPlayingEntryOut,
@@ -16,6 +17,8 @@ from ..scheduler import get_settings
 from ..services import navidrome
 
 router = APIRouter(prefix="/api/navidrome", tags=["navidrome"])
+
+TOP_GENRES_LIMIT = 5
 
 
 def _require_navidrome(db: Session) -> Settings:
@@ -30,15 +33,28 @@ def stats(db: Session = Depends(get_db)):
     settings = _require_navidrome(db)
     try:
         lib = navidrome.get_library_stats(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password)
+        song_count = navidrome.get_song_count(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password)
         scan = navidrome.get_scan_status(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password)
+        genres = navidrome.get_genres(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password)
     except Exception as exc:
         raise HTTPException(502, f"Navidrome indisponible : {exc}") from exc
+
+    top_genres = sorted(genres, key=lambda g: g.get("songCount") or 0, reverse=True)[:TOP_GENRES_LIMIT]
 
     return NavidromeStatsOut(
         artist_count=lib["artist_count"],
         album_count=lib["album_count"],
+        song_count=song_count,
         scanning=scan["scanning"],
         last_scan_count=scan.get("count"),
+        top_genres=[
+            GenreStatOut(
+                name=g.get("value", ""),
+                song_count=g.get("songCount") or 0,
+                percent=round((g.get("songCount") or 0) / song_count * 100, 1) if song_count else 0.0,
+            )
+            for g in top_genres
+        ],
     )
 
 
@@ -58,9 +74,24 @@ def now_playing(db: Session = Depends(get_db)):
             album=e.get("album"),
             minutes_ago=e.get("minutesAgo"),
             player_name=e.get("playerName"),
+            cover_art_id=e.get("coverArt"),
         )
         for e in entries
     ]
+
+
+@router.get("/cover-art/{cover_id}")
+def cover_art(cover_id: str, db: Session = Depends(get_db)):
+    """Relaie une cover Navidrome (auth Subsonic signee, le frontend n'a pas
+    les identifiants) - consomme directement en <img src="/api/navidrome/cover-art/{id}">."""
+    settings = _require_navidrome(db)
+    try:
+        content, content_type = navidrome.get_cover_art(
+            settings.navidrome_url, settings.navidrome_username, settings.navidrome_password, cover_id
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"Navidrome indisponible : {exc}") from exc
+    return Response(content=content, media_type=content_type)
 
 
 @router.get("/recently-played", response_model=list[RecentlyPlayedAlbumOut])

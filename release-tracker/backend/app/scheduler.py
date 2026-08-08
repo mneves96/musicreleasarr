@@ -8,7 +8,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal
-from .enrichment import enrich_artist, get_or_create_artist
+from .enrichment import enrich_artist, get_or_create_artist, resolve_mbid_by_name
 from .matching import best_match, normalize_text
 from .models import ALL_RELEASE_TYPES, Artist, DownloadStatus, OwnershipStatus, Release, ReleaseType, Settings
 from .services import coverart, deezer, lastfm, metube, musicbrainz, navidrome, notify, tagging, ytmusic
@@ -311,14 +311,9 @@ def refresh_lastfm_recommendations(db: Session) -> None:
             resolutions_used += 1
             # Last.fm ne fournit pas toujours un mbid (artiste peu connu) - meme
             # logique de repli que l'import des favoris Navidrome ci-dessous.
-            try:
-                candidates, _total = musicbrainz.search_artists(name, limit=5)
-            except Exception:
+            mbid = resolve_mbid_by_name(name, threshold=FAVORITE_MATCH_THRESHOLD)
+            if mbid is None:
                 continue
-            idx = best_match(name, [c["name"] for c in candidates], threshold=FAVORITE_MATCH_THRESHOLD)
-            if idx is None:
-                continue
-            mbid = candidates[idx]["id"]
 
         # Filtre de securite en plus de l'exclusion par nom faite cote
         # lastfm.get_similar_to_followed : le mbid est la source de verite,

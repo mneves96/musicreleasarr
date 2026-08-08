@@ -1,5 +1,6 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -7,7 +8,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..db import SessionLocal, get_db
-from ..enrichment import get_or_create_artist
+from ..enrichment import get_or_create_artist, resolve_mbid_by_name
 from ..matching import best_match, normalize_text
 from ..models import ALL_RELEASE_TYPES, Artist, Release, ReleaseType
 from ..schemas import (
@@ -20,7 +21,7 @@ from ..schemas import (
     TestConnectionResult,
     TopTrackOut,
 )
-from ..services import lastfm, musicbrainz, navidrome, ytmusic
+from ..services import lastfm, navidrome, ytmusic
 from .. import scheduler
 
 logger = logging.getLogger("dedieufy.artists")
@@ -236,6 +237,30 @@ def refresh_recommended_artists(background_tasks: BackgroundTasks, db: Session =
     return TestConnectionResult(ok=True, message="Rafraichissement des recommandations lance")
 
 
+def _enrich_track_album(releases: list[Release], lastfm_album: dict) -> tuple[str | None, str | None, date | None, int | None]:
+    """Resout (album_title, cover_url, release_date, release_id) pour un
+    titre a partir du detail Last.fm du morceau (voir _safe_track_info) -
+    prefere une release deja en base quand son titre correspond (meilleure
+    resolution, deja recuperee via Deezer/Cover Art Archive) que celle de
+    `releases` (peut etre vide, ex: artiste pas encore en base cote
+    routers/stats.py:favorites), sinon retombe sur ce que Last.fm associe au
+    morceau. Reutilise par top_tracks() ci-dessous et les favoris d'ecoute."""
+    lf_title = lastfm_album.get("title")
+    if not lf_title:
+        return None, None, None, None
+
+    release_titles = [r.title for r in releases]
+    if release_titles:
+        idx = best_match(lf_title, release_titles, threshold=0.6)
+        if idx is not None:
+            matched = releases[idx]
+            return matched.title, matched.cover_url, matched.release_date, matched.id
+
+    images = lastfm_album.get("image") or []
+    cover_url = next((img.get("#text") for img in reversed(images) if img.get("#text")), None)
+    return lf_title, cover_url, None, None
+
+
 @router.get("/{artist_id}/top-tracks", response_model=list[TopTrackOut])
 def top_tracks(artist_id: int, limit: int = Query(default=TOP_TRACKS_LIMIT, ge=1, le=TOP_TRACKS_MAX_LIMIT), db: Session = Depends(get_db)):
     """Les titres les plus ecoutes de l'artiste (playcount Last.fm), avec
@@ -273,7 +298,6 @@ def top_tracks(artist_id: int, limit: int = Query(default=TOP_TRACKS_LIMIT, ge=1
         matches = list(pool.map(lambda t: _safe_song_match(artist.name, t.get("name", "")), raw_tracks))
 
     releases = artist.releases
-    release_titles = [r.title for r in releases]
     artist_name_normalized = normalize_text(artist.name)
 
     results: list[TopTrackOut] = []
@@ -282,19 +306,8 @@ def top_tracks(artist_id: int, limit: int = Query(default=TOP_TRACKS_LIMIT, ge=1
         if not name:
             continue
 
-        album_title, cover_url, release_date, release_id = None, None, None, None
         lastfm_album = (info or {}).get("album") or {}
-        lf_title = lastfm_album.get("title")
-        if lf_title and release_titles:
-            idx = best_match(lf_title, release_titles, threshold=0.6)
-            if idx is not None:
-                matched = releases[idx]
-                album_title, cover_url, release_date, release_id = matched.title, matched.cover_url, matched.release_date, matched.id
-
-        if album_title is None and lf_title:
-            album_title = lf_title
-            images = lastfm_album.get("image") or []
-            cover_url = next((img.get("#text") for img in reversed(images) if img.get("#text")), None)
+        album_title, cover_url, release_date, release_id = _enrich_track_album(releases, lastfm_album)
 
         credited = (match or {}).get("artists") or []
         featured_artists = [a for a in credited if normalize_text(a) != artist_name_normalized]
@@ -353,14 +366,9 @@ def similar_artists(artist_id: int, db: Session = Depends(get_db)):
             if resolutions_used >= SIMILAR_ARTISTS_MAX_MBID_RESOLUTIONS:
                 continue
             resolutions_used += 1
-            try:
-                mb_candidates, _total = musicbrainz.search_artists(name, limit=5)
-            except Exception:
+            mbid = resolve_mbid_by_name(name, threshold=scheduler.FAVORITE_MATCH_THRESHOLD)
+            if mbid is None:
                 continue
-            idx = best_match(name, [c["name"] for c in mb_candidates], threshold=scheduler.FAVORITE_MATCH_THRESHOLD)
-            if idx is None:
-                continue
-            mbid = mb_candidates[idx]["id"]
 
         results.append(
             SimilarArtistOut(

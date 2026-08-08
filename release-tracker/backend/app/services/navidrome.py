@@ -196,3 +196,63 @@ def get_recently_played(base_url: str, username: str, password: str, size: int =
     resp.raise_for_status()
     body = resp.json().get("subsonic-response", {})
     return body.get("albumList2", {}).get("album", [])
+
+
+def get_genres(base_url: str, username: str, password: str) -> list[dict]:
+    """Genres connus de la bibliotheque avec leur nombre de morceaux/albums -
+    endpoint Subsonic standard, agrege sur toute la bibliotheque (pas par
+    utilisateur), utilise pour le widget "genres les plus representes" du
+    tableau de bord."""
+    resp = httpx.get(
+        f"{base_url.rstrip('/')}/rest/getGenres.view",
+        params=_auth_params(username, password),
+        timeout=15,
+    )
+    resp.raise_for_status()
+    body = resp.json().get("subsonic-response", {})
+    return body.get("genres", {}).get("genre", [])
+
+
+_SONG_COUNT_PAGE_SIZE = 500
+
+
+def get_song_count(base_url: str, username: str, password: str) -> int:
+    """Nombre total de morceaux indexes - pas d'endpoint Subsonic dedie (comme
+    get_library_stats pour artistes/albums), derive ici en paginant
+    getAlbumList2 (tri alphabetique, le plus stable page a page) et en
+    sommant songCount par album plutot que de tout re-parcourir cote
+    artiste/album (chaque album ne porte son songCount qu'a ce niveau)."""
+    total = 0
+    offset = 0
+    while True:
+        resp = httpx.get(
+            f"{base_url.rstrip('/')}/rest/getAlbumList2.view",
+            params={
+                **_auth_params(username, password),
+                "type": "alphabeticalByName",
+                "size": str(_SONG_COUNT_PAGE_SIZE),
+                "offset": str(offset),
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        body = resp.json().get("subsonic-response", {})
+        albums = body.get("albumList2", {}).get("album", [])
+        total += sum(a.get("songCount") or 0 for a in albums)
+        if len(albums) < _SONG_COUNT_PAGE_SIZE:
+            break
+        offset += _SONG_COUNT_PAGE_SIZE
+    return total
+
+
+def get_cover_art(base_url: str, username: str, password: str, cover_id: str) -> tuple[bytes, str]:
+    """Image brute (bytes, content-type) d'une cover Navidrome - l'auth
+    Subsonic est signee (salt+token), le frontend ne peut donc pas construire
+    l'URL lui-meme ; ce backend sert de proxy (voir routers/navidrome.py)."""
+    resp = httpx.get(
+        f"{base_url.rstrip('/')}/rest/getCoverArt.view",
+        params={**_auth_params(username, password), "id": cover_id},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("content-type", "image/jpeg")

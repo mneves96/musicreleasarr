@@ -209,11 +209,19 @@ export interface Settings {
   tagging_library_path: string
 }
 
+export interface GenreStat {
+  name: string
+  song_count: number
+  percent: number
+}
+
 export interface NavidromeStats {
   artist_count: number
   album_count: number
+  song_count: number
   scanning: boolean
   last_scan_count: number | null
+  top_genres: GenreStat[]
 }
 
 export interface NowPlayingEntry {
@@ -223,6 +231,44 @@ export interface NowPlayingEntry {
   album: string | null
   minutes_ago: number | null
   player_name: string | null
+  cover_art_id: string | null
+}
+
+export type FavoritesPeriod = 'week' | 'month' | 'year'
+
+export interface LastfmTopArtist {
+  name: string
+  playcount: number
+  image_url: string | null
+  musicbrainz_id: string | null
+  country: string | null
+  area_name: string | null
+}
+
+export interface LastfmTopAlbum {
+  name: string
+  artist_name: string
+  artist_musicbrainz_id: string | null
+  playcount: number
+  image_url: string | null
+  release_date: string | null
+}
+
+export interface LastfmTopTrack {
+  name: string
+  artist_name: string
+  artist_musicbrainz_id: string | null
+  album_title: string | null
+  cover_url: string | null
+  playcount: number
+  estimated_hours: number | null
+}
+
+export interface Favorites {
+  top_artist: LastfmTopArtist | null
+  top_album: LastfmTopAlbum | null
+  top_track: LastfmTopTrack | null
+  estimated_hours: number | null
 }
 
 export interface RecentlyPlayedAlbum {
@@ -408,6 +454,8 @@ export const api = {
   navidromeScan: (full: boolean) =>
     request<TestConnectionResult>('/navidrome/scan', { method: 'POST', body: JSON.stringify({ full }) }),
 
+  getFavorites: (period: FavoritesPeriod) => request<Favorites>(`/stats/favorites?period=${period}`),
+
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),
     scanNow: () => request<TestConnectionResult>('/tagging/scan', { method: 'POST' }),
@@ -442,6 +490,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ current_password, new_password }),
     }),
+}
+
+// URL directe (pas d'appel via request()) : consommee telle quelle en <img
+// src>, le proxy backend gere l'authentification Subsonic signee.
+export function navidromeCoverArtUrl(coverArtId: string): string {
+  return `/api/navidrome/cover-art/${encodeURIComponent(coverArtId)}`
 }
 
 export const RELEASE_TYPE_LABELS: Record<ReleaseType, string> = {
