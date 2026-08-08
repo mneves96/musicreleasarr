@@ -38,11 +38,30 @@ logger = logging.getLogger("dedieufy.tagging")
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".flac", ".opus", ".ogg", ".wav"}
 
 # Suffixes parasites frequents dans les titres de videos YouTube, a retirer avant
-# comparaison avec le titre de piste MusicBrainz (ex: "Song Title (Official Audio)").
+# comparaison avec le titre de piste MusicBrainz (ex: "Song Title (Official Audio)",
+# "Song Title (feat. Someone)") - un featuring ecrit dans le nom de fichier
+# n'a de toute facon plus besoin d'etre compare tel quel : le tag TPE1 final
+# reprend le featuring credite par MusicBrainz au moment de la confirmation
+# (voir apply_tag_and_move), pas celui devine dans le nom de fichier. "ft" est
+# le seul mot-cle delimite par \b ci-dessous (les autres restent des simples
+# sous-chaines, ex: "lyric" doit continuer a matcher "Lyrics") car sinon il
+# matcherait a l'interieur de mots courants ("Soft", "Craft", "Left"...).
 _NOISE_RE = re.compile(
-    r"[\(\[][^)\]]*(official|audio|video|lyric|visualizer|hd|4k|remaster\w*)[^)\]]*[\)\]]",
+    r"[\(\[][^)\]]*(official|audio|video|lyric|visualizer|hd|hq|4k|remaster\w*|feat\w*|\bft\b|prod\w*|clean|explicit)[^)\]]*[\)\]]",
     re.IGNORECASE,
 )
+# Meme repli pour un featuring ecrit sans parentheses ("Song Title feat. Someone.mp3") -
+# l'espace obligatoire avant/apres "feat"/"ft"/"featuring" evite les memes faux
+# positifs ("Soft", "Craft"...) que dans _NOISE_RE ci-dessus.
+_FEATURING_SUFFIX_RE = re.compile(r"\s+(?:feat\.?|ft\.?|featuring)\s+.+$", re.IGNORECASE)
+# Numero de piste en tete d'un fichier range/renomme a la main ("01 - Titre.mp3",
+# "3. Titre.mp3") - absent des noms de fichiers issus de MeTube (nommes d'apres
+# le titre de la video), mais frequent sur des fichiers deja organises que
+# l'utilisateur glisse dans le dossier de telechargements. Le separateur
+# (point/tiret/parenthese fermante) est volontairement obligatoire, pas
+# optionnel : sans lui, un titre qui commence reellement par un chiffre suivi
+# d'un espace ("7 rings", "99 Luftballons"...) se ferait amputer a tort.
+_TRACK_NUMBER_PREFIX_RE = re.compile(r"^\s*\d{1,3}\s*[.\-)]\s*")
 _TOPIC_SUFFIX_RE = re.compile(r"\s*[-–]\s*topic$", re.IGNORECASE)
 _INVALID_FS_CHARS_RE = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
@@ -51,7 +70,9 @@ Candidate = tuple[Release, dict]
 
 def _clean_filename(filename: str) -> str:
     stem = os.path.splitext(filename)[0]
+    stem = _TRACK_NUMBER_PREFIX_RE.sub("", stem)
     stem = _NOISE_RE.sub("", stem)
+    stem = _FEATURING_SUFFIX_RE.sub("", stem)
     stem = _TOPIC_SUFFIX_RE.sub("", stem)
     return stem.strip()
 
@@ -237,11 +258,33 @@ def scan_downloads_root(db: Session, settings: Settings) -> list[TaggingItem]:
     return created
 
 
+# Ordre de priorite des types de release pour le matching automatique (retour
+# utilisateur : comparer les titres contre TOUTES les sorties de l'artiste en
+# vrac laissait parfois un fichier glisser vers un titre proche sur un single
+# alors qu'il appartenait a l'album, ou inversement) - tente d'abord les
+# albums, puis les EP, puis les singles, puis tout le reste (compilations...),
+# une etape n'etant tentee que pour les fichiers que l'etape precedente n'a
+# pas reussi a matcher avec suffisamment de confiance (REMATCH_THRESHOLD, voir
+# plus bas). Types absents de cette liste (compilation, other) atterrissent
+# tous dans le dernier groupe, "le reste".
+_RELEASE_TYPE_PRIORITY = ["album", "ep", "single"]
+
+
+def _release_type_rank(release_type: str) -> int:
+    try:
+        return _RELEASE_TYPE_PRIORITY.index(release_type)
+    except ValueError:
+        return len(_RELEASE_TYPE_PRIORITY)
+
+
 def _auto_match_group(db: Session, source_folder: str, items: list[TaggingItem]) -> list[TaggingItem]:
     """Coeur de la recherche "artistes suivis" pour un groupe d'items
     partageant le meme dossier source : tente de rapprocher le nom du dossier
     d'un artiste suivi, propose ses pistes manquantes. Ne modifie que les
-    items effectivement matches (les autres restent "non identifies")."""
+    items effectivement matches (les autres restent "non identifies") - un
+    fichier n'est reserve a une release que si son score de similarite de
+    titre atteint REMATCH_THRESHOLD, voir _release_type_rank ci-dessus pour
+    l'ordre dans lequel les types de release sont tentes."""
     if not items:
         return []
 
@@ -258,24 +301,35 @@ def _auto_match_group(db: Session, source_folder: str, items: list[TaggingItem])
     if not releases:
         return []
 
-    candidates = _candidates_for_releases(releases, len(items))
-    if not candidates:
-        return []
-    labeled = [(str(item.id), normalize_text(_clean_filename(item.original_filename))) for item in items]
-    matches = _greedy_match(labeled, candidates)
+    tiers: dict[int, list[Release]] = {}
+    for release in releases:
+        tiers.setdefault(_release_type_rank(release.release_type.value), []).append(release)
 
+    remaining = list(items)
     matched_items: list[TaggingItem] = []
-    for item in items:
-        match = matches.get(str(item.id))
-        if match is None:
+    for rank in sorted(tiers):
+        if not remaining:
+            break
+        candidates = _candidates_for_releases(tiers[rank], len(remaining))
+        if not candidates:
             continue
-        (matched_release, track), score = match
-        item.release_id = matched_release.id
-        item.suggested_track_title = track["title"]
-        item.suggested_track_number = track["position"]
-        item.suggested_disc_number = track["disc_number"]
-        item.match_score = round(score, 3)
-        matched_items.append(item)
+        labeled = [(str(item.id), normalize_text(_clean_filename(item.original_filename))) for item in remaining]
+        matches = _greedy_match(labeled, candidates)
+
+        still_remaining: list[TaggingItem] = []
+        for item in remaining:
+            match = matches.get(str(item.id))
+            if match is None or match[1] < REMATCH_THRESHOLD:
+                still_remaining.append(item)
+                continue
+            (matched_release, track), score = match
+            item.release_id = matched_release.id
+            item.suggested_track_title = track["title"]
+            item.suggested_track_number = track["position"]
+            item.suggested_disc_number = track["disc_number"]
+            item.match_score = round(score, 3)
+            matched_items.append(item)
+        remaining = still_remaining
 
     return matched_items
 
@@ -361,7 +415,12 @@ def search_musicbrainz_for_item(
     if not release_groups:
         return False
 
-    rg = release_groups[0]
+    # Un enregistrement appartient souvent a plusieurs release-groups (single
+    # ET l'album qui le reprend) - priorite aux albums, puis EP, puis singles,
+    # puis le reste (voir _release_type_rank), plutot que le premier renvoye
+    # par MusicBrainz (ordre non garanti par type). A rang egal, l'ordre
+    # d'origine de MusicBrainz est preserve (tri stable).
+    rg = min(release_groups, key=lambda g: _release_type_rank(musicbrainz.classify_release_type(g) or ""))
     release_type = musicbrainz.classify_release_type(rg) or ReleaseType.other.value
     release_date, _precision = musicbrainz.parse_release_date(rg.get("first-release-date"))
     release = get_or_create_release(db, artist, rg["id"], rg["title"], release_type, release_date)
