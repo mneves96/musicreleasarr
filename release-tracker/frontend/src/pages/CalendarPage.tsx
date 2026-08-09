@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, RELEASE_TYPE_LABELS, type Release } from '../api'
-import { DownloadBadge, OwnershipBadge } from '../components/StatusBadge'
+import { OwnershipBadge } from '../components/StatusBadge'
 import Spinner, { LoadingBlock } from '../components/Spinner'
+import { useToast } from '../context/ToastContext'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const MONTH_NAMES = [
@@ -329,6 +330,7 @@ function EventsView() {
 function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigate: () => void }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const { showToast } = useToast()
 
   async function download(e: MouseEvent) {
     e.stopPropagation()
@@ -336,7 +338,8 @@ function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigat
     setMessage(null)
     try {
       const result = await api.downloadRelease(release.id)
-      setMessage(result.message)
+      if (result.ok) showToast('Telechargement envoye a MeTube')
+      else setMessage(result.message)
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Erreur')
     } finally {
@@ -364,16 +367,13 @@ function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigat
         {message && <div className="text-xs text-app-text-muted mt-1">{message}</div>}
       </div>
       <OwnershipBadge status={release.ownership_status} />
-      <DownloadBadge status={release.download_status} error={release.download_error} />
-      {release.download_status !== 'queued' && (
-        <button
-          onClick={download}
-          disabled={busy}
-          className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
-        >
-          {busy ? '...' : downloadLabel}
-        </button>
-      )}
+      <button
+        onClick={download}
+        disabled={busy}
+        className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
+      >
+        {busy ? '...' : downloadLabel}
+      </button>
     </div>
   )
 }

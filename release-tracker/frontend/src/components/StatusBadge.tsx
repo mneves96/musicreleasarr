@@ -1,4 +1,4 @@
-import type { DownloadStatus, OwnershipStatus, TaggingStatus } from '../api'
+import type { OwnershipStatus, TaggingStatus } from '../api'
 
 const OWNERSHIP_STYLES: Record<OwnershipStatus, string> = {
   owned: 'bg-green-900/50 text-green-300 border-green-700',
@@ -10,20 +10,6 @@ const OWNERSHIP_LABELS: Record<OwnershipStatus, string> = {
   owned: 'Possedee',
   missing: 'Manquante',
   unknown: 'Statut inconnu',
-}
-
-const DOWNLOAD_STYLES: Record<DownloadStatus, string> = {
-  not_requested: '',
-  queued: 'bg-blue-900/50 text-blue-300 border-blue-700',
-  downloaded: 'bg-green-900/50 text-green-300 border-green-700',
-  failed: 'bg-red-900/50 text-red-300 border-red-700',
-}
-
-const DOWNLOAD_LABELS: Record<DownloadStatus, string> = {
-  not_requested: '',
-  queued: 'Envoye a MeTube',
-  downloaded: 'Telecharge',
-  failed: 'Echec du telechargement',
 }
 
 function Badge({
@@ -44,16 +30,6 @@ function Badge({
 
 export function OwnershipBadge({ status }: { status: OwnershipStatus }) {
   return <Badge className={OWNERSHIP_STYLES[status]}>{OWNERSHIP_LABELS[status]}</Badge>
-}
-
-export function DownloadBadge({ status, error }: { status: DownloadStatus; error?: string | null }) {
-  if (status === 'not_requested') return null
-
-  return (
-    <Badge className={DOWNLOAD_STYLES[status]} title={status === 'failed' ? error ?? undefined : undefined}>
-      {DOWNLOAD_LABELS[status]}
-    </Badge>
-  )
 }
 
 const TAGGING_STYLES: Record<TaggingStatus, string> = {
