@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
+import { useSwipe } from '../hooks/useSwipe'
 
 function PlayPauseIcon({ playing }: { playing: boolean }) {
   return playing ? (
@@ -142,6 +143,12 @@ export default function PlayerBar() {
   } = usePlayer()
 
   const [seeking, setSeeking] = useState(false)
+  // Sur mobile : balayer vers le bas ferme le lecteur, vers la gauche/droite
+  // passe au titre suivant/precedent - convention des lecteurs audio mobiles.
+  // Attache seulement a la ligne titre/pochette/boutons, pas a toute la barre :
+  // la barre de progression au-dessus gere deja son propre glisser (scrubbing),
+  // un swipe sur cette zone-la serait interprete a tort comme "piste suivante".
+  const controlsSwipe = useSwipe({ onSwipeDown: close, onSwipeLeft: next, onSwipeRight: previous })
 
   if (queue.length === 0) return null
 
@@ -194,7 +201,7 @@ export default function PlayerBar() {
         </div>
         <span className="w-9 shrink-0">{formatTime(duration)}</span>
       </div>
-      <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 pb-2.5 pt-1">
+      <div {...controlsSwipe} className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 pb-2.5 pt-1">
         {track.cover_url ? (
           <img src={track.cover_url} alt="" className="w-10 h-10 rounded object-cover bg-app-surface-hover shrink-0" />
         ) : (

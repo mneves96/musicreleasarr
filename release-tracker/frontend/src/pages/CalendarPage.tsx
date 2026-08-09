@@ -4,6 +4,7 @@ import { api, RELEASE_TYPE_LABELS, type Release } from '../api'
 import { OwnershipBadge } from '../components/StatusBadge'
 import Spinner, { LoadingBlock } from '../components/Spinner'
 import { useToast } from '../context/ToastContext'
+import { useSwipe } from '../hooks/useSwipe'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const MONTH_NAMES = [
@@ -61,6 +62,15 @@ export default function CalendarPage() {
   const grid = useMemo(() => buildGrid(month), [month])
   const today = toISODate(new Date())
 
+  // Balayer sur l'en-tete du mois (pas sur la grille elle-meme, qui defile
+  // horizontalement sur petit ecran - voir plus bas - un swipe dessus serait
+  // ambigu entre "faire defiler" et "changer de mois") navigue au mois
+  // precedent/suivant, comme la plupart des apps calendrier mobiles.
+  const monthSwipe = useSwipe({
+    onSwipeLeft: () => setMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)),
+    onSwipeRight: () => setMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)),
+  })
+
   useEffect(() => {
     localStorage.setItem(TAB_STORAGE_KEY, tab)
   }, [tab])
@@ -109,7 +119,7 @@ export default function CalendarPage() {
 
       {tab === 'month' ? (
         <>
-          <div className="flex items-center justify-between mb-4">
+          <div {...monthSwipe} className="flex items-center justify-between mb-4">
             <h2 className="font-medium">
               {MONTH_NAMES[month.getMonth()]} {month.getFullYear()}
             </h2>

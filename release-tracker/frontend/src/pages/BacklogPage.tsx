@@ -12,6 +12,7 @@ import {
 import AlbumCard, { type AlbumDropPayload, editFromItem, trackKey, type Edit } from '../components/AlbumCard'
 import FileTree from '../components/FileTree'
 import Spinner, { LoadingBlock } from '../components/Spinner'
+import { useSwipe } from '../hooks/useSwipe'
 
 const POLL_MS = 15000
 const COLUMN_HEIGHT = 'calc(100vh - 15rem)'
@@ -217,6 +218,13 @@ export default function BacklogPage() {
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set())
   const [busyReleaseIds, setBusyReleaseIds] = useState<Set<number>>(new Set())
   const [mobileColumn, setMobileColumn] = useState<MobileColumn>('files')
+  // Balaye entre les onglets Fichiers/Albums sous le seuil lg, en complement
+  // des onglets cliquables - sans effet visible au-dessus (les deux colonnes
+  // y sont deja affichees simultanement, voir les classes lg:flex plus bas).
+  const mobileColumnSwipe = useSwipe({
+    onSwipeLeft: () => setMobileColumn('albums'),
+    onSwipeRight: () => setMobileColumn('files'),
+  })
 
   const refresh = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true)
@@ -714,7 +722,7 @@ export default function BacklogPage() {
         </button>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-4" style={{ height: COLUMN_HEIGHT }}>
+      <div {...mobileColumnSwipe} className="flex flex-col lg:flex-row gap-4" style={{ height: COLUMN_HEIGHT }}>
         <div className={`${mobileColumn === 'files' ? 'flex' : 'hidden'} lg:flex w-full lg:w-1/2 h-full flex-col min-h-0`}>
           <div className="flex items-center gap-2 mb-2 flex-wrap shrink-0">
             <div className="flex rounded-md overflow-hidden border border-app-border-strong shrink-0">

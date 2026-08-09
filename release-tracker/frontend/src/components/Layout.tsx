@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from
 import { api } from '../api'
 import PlayerBar from './PlayerBar'
 import { usePlayer } from '../context/PlayerContext'
+import { useSwipe } from '../hooks/useSwipe'
 import AppLogo from './AppLogo'
 import DownloadGlyph from './DownloadGlyph'
 import {
@@ -88,6 +89,49 @@ export default function Layout() {
     setSidebarOpen(false)
   }, [location.pathname])
 
+  // Balayer depuis le bord gauche de l'ecran vers la droite ouvre le tiroir
+  // de navigation, comme le geste standard des apps mobiles - ecoute au
+  // niveau du document (pas d'un element precis) puisque le point de depart
+  // peut tomber sur n'importe quel contenu de page, avec une contrainte sur
+  // la position de depart (EDGE_THRESHOLD_PX) pour ne pas se declencher sur
+  // un balayage horizontal ailleurs sur la page (ex: a l'interieur d'une
+  // liste). Inactif tant que le tiroir est deja ouvert.
+  useEffect(() => {
+    if (sidebarOpen) return
+    const EDGE_THRESHOLD_PX = 24
+    const OPEN_DISTANCE_PX = 60
+    let start: { x: number; y: number } | null = null
+
+    function onTouchStart(e: globalThis.TouchEvent) {
+      const t = e.touches[0]
+      start = t.clientX <= EDGE_THRESHOLD_PX ? { x: t.clientX, y: t.clientY } : null
+    }
+    function onTouchEnd(e: globalThis.TouchEvent) {
+      if (!start) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      start = null
+      if (dx >= OPEN_DISTANCE_PX && Math.abs(dy) < dx) setSidebarOpen(true)
+    }
+    function onTouchCancel() {
+      start = null
+    }
+
+    document.addEventListener('touchstart', onTouchStart)
+    document.addEventListener('touchend', onTouchEnd)
+    document.addEventListener('touchcancel', onTouchCancel)
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('touchend', onTouchEnd)
+      document.removeEventListener('touchcancel', onTouchCancel)
+    }
+  }, [sidebarOpen])
+
+  // Balayer vers la gauche sur le tiroir ouvert le referme, en complement du
+  // clic sur le fond assombri et du bouton fermer.
+  const closeSwipe = useSwipe({ onSwipeLeft: () => setSidebarOpen(false) })
+
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (query.trim()) navigate(`/search?q=${encodeURIComponent(query.trim())}`)
@@ -104,6 +148,7 @@ export default function Layout() {
         <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
       <aside
+        {...closeSwipe}
         className={`w-56 shrink-0 border-r border-app-border bg-app-bg flex flex-col h-full fixed inset-y-0 left-0 z-30 transform transition-transform duration-200 lg:static lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
