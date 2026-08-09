@@ -90,28 +90,28 @@ function buildWavePath(): string {
 }
 const WAVE_PATH = buildWavePath()
 
-// Aplatit la vague en douceur a la pause (scaleY vers 0, transition CSS sur
-// ce wrapper) plutot que de la figer brutalement en forme de sinusoide -
-// portee par un element separe du <svg> qui scrolle (translateX via
-// @keyframes, voir .progress-wave-svg dans index.css) : les deux transforms
-// se composent sans se marcher dessus puisqu'ils vivent chacun sur leur
-// propre element plutot que de se disputer la meme propriete CSS transform.
+// A la pause : un simple trait plein (jamais de disparition possible, ni
+// d'ecrasement de l'epaisseur du trait). En lecture : la vague animee.
+// Fondu croise en opacite entre les deux, plutot qu'essayer d'aplatir la
+// vague elle-meme via un scaleY - un scaleY sur l'element ecrasait aussi
+// l'epaisseur du trait jusqu'a 0px (meme avec vector-effect=
+// "non-scaling-stroke", qui n'annule que les transforms internes au SVG,
+// pas ceux d'un ancetre HTML comme ce conteneur), faisant disparaitre la
+// vague au lieu de la laisser aplatie et visible.
 function ProgressWave({ playing }: { playing: boolean }) {
   return (
-    <div className="progress-wave-flatten" style={{ transform: playing ? 'scaleY(1)' : 'scaleY(0)' }}>
+    <div className="relative" style={{ width: WAVE_WIDTH, height: WAVE_HEIGHT }}>
+      <div
+        className="absolute inset-x-0 rounded-full bg-app-accent-text transition-opacity duration-300"
+        style={{ top: WAVE_CENTER - 1, height: 2, opacity: playing ? 0 : 1 }}
+      />
       <svg
         width={WAVE_WIDTH}
         height={WAVE_HEIGHT}
-        className="progress-wave-svg block"
-        style={{ animationPlayState: playing ? 'running' : 'paused' }}
+        className="progress-wave-svg block absolute inset-0 transition-opacity duration-300"
+        style={{ animationPlayState: playing ? 'running' : 'paused', opacity: playing ? 1 : 0 }}
         aria-hidden="true"
       >
-        {/* vector-effect="non-scaling-stroke" : sans ca, le scaleY(0) du
-            conteneur ci-dessus n'aplatit pas que l'amplitude, il ecrase aussi
-            l'epaisseur du trait (elle aussi verticale) jusqu'a 0px - la vague
-            "aplatie" devenait donc invisible au lieu de rester une ligne
-            visible. Ce mode garde l'epaisseur du trait constante a l'ecran
-            quel que soit le scale applique a ses ancetres. */}
         <path
           d={WAVE_PATH}
           fill="none"
@@ -119,7 +119,6 @@ function ProgressWave({ playing }: { playing: boolean }) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
         />
       </svg>
     </div>
