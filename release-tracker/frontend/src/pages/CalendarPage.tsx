@@ -119,7 +119,7 @@ export default function CalendarPage() {
 
       {tab === 'month' ? (
         <>
-          <div {...monthSwipe} className="flex items-center justify-between mb-4">
+          <div {...monthSwipe} style={{ touchAction: 'pan-y' }} className="flex items-center justify-between mb-4">
             <h2 className="font-medium">
               {MONTH_NAMES[month.getMonth()]} {month.getFullYear()}
             </h2>

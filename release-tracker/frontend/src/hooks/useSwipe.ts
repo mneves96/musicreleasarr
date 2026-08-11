@@ -17,6 +17,14 @@ const MIN_SWIPE_DISTANCE_PX = 50
 // inversement. Ne fait jamais preventDefault, donc n'interfere pas avec le
 // scroll/drag natif de l'element - seul un geste clairement horizontal ou
 // vertical au-dela de MIN_SWIPE_DISTANCE_PX declenche un callback.
+//
+// Sur Chrome mobile, chaque element ou ce hook est utilise doit poser une
+// CSS touch-action coherente avec l'axe attendu (ex: 'pan-y' pour un swipe
+// horizontal sur un element qui doit garder son scroll vertical natif,
+// 'none' si aucun scroll natif n'est necessaire) - sans ca, un geste meme
+// legerement diagonal peut etre recupere par le navigateur comme un scroll
+// natif avant que onTouchEnd ne se declenche (touchcancel silencieux, le
+// balayage semble alors "ne rien faire").
 export function useSwipe(handlers: SwipeHandlers) {
   const start = useRef<{ x: number; y: number } | null>(null)
 

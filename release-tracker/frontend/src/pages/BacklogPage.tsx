@@ -722,7 +722,11 @@ export default function BacklogPage() {
         </button>
       </div>
 
-      <div {...mobileColumnSwipe} className="flex flex-col lg:flex-row gap-4" style={{ height: COLUMN_HEIGHT }}>
+      <div
+        {...mobileColumnSwipe}
+        className="flex flex-col lg:flex-row gap-4"
+        style={{ height: COLUMN_HEIGHT, touchAction: 'pan-y' }}
+      >
         <div className={`${mobileColumn === 'files' ? 'flex' : 'hidden'} lg:flex w-full lg:w-1/2 h-full flex-col min-h-0`}>
           <div className="flex items-center gap-2 mb-2 flex-wrap shrink-0">
             <div className="flex rounded-md overflow-hidden border border-app-border-strong shrink-0">

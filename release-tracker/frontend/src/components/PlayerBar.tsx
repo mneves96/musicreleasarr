@@ -201,7 +201,11 @@ export default function PlayerBar() {
         </div>
         <span className="w-9 shrink-0">{formatTime(duration)}</span>
       </div>
-      <div {...controlsSwipe} className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 pb-2.5 pt-1">
+      <div
+        {...controlsSwipe}
+        style={{ touchAction: 'none' }}
+        className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 pb-2.5 pt-1"
+      >
         {track.cover_url ? (
           <img src={track.cover_url} alt="" className="w-10 h-10 rounded object-cover bg-app-surface-hover shrink-0" />
         ) : (
