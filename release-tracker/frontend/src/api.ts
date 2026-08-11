@@ -113,6 +113,8 @@ export interface SimilarArtist {
   name: string
   image_url: string | null
   musicbrainz_id: string
+  country: string | null
+  area_name: string | null
 }
 
 export type TaggingStatus = 'needs_review' | 'done' | 'error'

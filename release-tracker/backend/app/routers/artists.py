@@ -8,7 +8,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..db import SessionLocal, get_db
-from ..enrichment import get_or_create_artist, resolve_mbid_by_name
+from ..enrichment import get_or_create_artist, resolve_artist_by_name
 from ..matching import best_match, normalize_text
 from ..models import ALL_RELEASE_TYPES, Artist, Release, ReleaseType
 from ..schemas import (
@@ -21,7 +21,7 @@ from ..schemas import (
     TestConnectionResult,
     TopTrackOut,
 )
-from ..services import lastfm, navidrome, ytmusic
+from ..services import deezer, lastfm, musicbrainz, navidrome, ytmusic
 from .. import scheduler
 
 logger = logging.getLogger("dedieufy.artists")
@@ -336,9 +336,19 @@ def similar_artists(artist_id: int, db: Session = Depends(get_db)):
     resultat de recherche ou une recommandation Last.fm (POST
     /api/artists/preview cote frontend, meme flux que SearchPage.tsx) - ces
     artistes ne sont ni suivis ni stockes comme recommandation ici, juste
-    resolus en mbid pour permettre l'ouverture de leur fiche. Meme repli de
-    resolution MusicBrainz par nom que scheduler.refresh_lastfm_recommendations
-    quand Last.fm ne fournit pas de mbid (artiste peu connu)."""
+    resolus en mbid pour permettre l'ouverture de leur fiche.
+
+    Last.fm ne sert quasiment plus jamais d'image d'artiste via son API
+    (champ "image" present mais vide depuis son changement de politique
+    autour de 2019) - on privilegie donc l'image deja en base si cet artiste
+    y est deja connu (mbid resolu correspondant a un Artist existant), sinon
+    on retombe sur Deezer (meme source que le suivi normal d'un artiste, voir
+    enrichment.enrich_artist), Last.fm restant un dernier recours.
+    Nationalite (pays/region) resolue de la meme maniere, en reutilisant le
+    resultat de recherche MusicBrainz deja fait pour le mbid quand possible
+    plutot que de repayer un appel separe - le nombre total d'appels
+    MusicBrainz (throttle 1 req/s) reste borne a
+    SIMILAR_ARTISTS_MAX_MBID_RESOLUTIONS sur tout l'endpoint."""
     artist = db.get(Artist, artist_id)
     if artist is None:
         raise HTTPException(404, "Artiste introuvable")
@@ -353,7 +363,7 @@ def similar_artists(artist_id: int, db: Session = Depends(get_db)):
         raise HTTPException(502, f"Last.fm indisponible : {exc}") from exc
 
     results: list[SimilarArtistOut] = []
-    resolutions_used = 0
+    mb_calls_used = 0
     for candidate in candidates:
         if len(results) >= SIMILAR_ARTISTS_LIMIT:
             break
@@ -362,20 +372,43 @@ def similar_artists(artist_id: int, db: Session = Depends(get_db)):
             continue
 
         mbid = candidate.get("mbid") or None
+        mb_match: dict | None = None
         if not mbid:
-            if resolutions_used >= SIMILAR_ARTISTS_MAX_MBID_RESOLUTIONS:
+            if mb_calls_used >= SIMILAR_ARTISTS_MAX_MBID_RESOLUTIONS:
                 continue
-            resolutions_used += 1
-            mbid = resolve_mbid_by_name(name, threshold=scheduler.FAVORITE_MATCH_THRESHOLD)
-            if mbid is None:
+            mb_calls_used += 1
+            mb_match = resolve_artist_by_name(name, threshold=scheduler.FAVORITE_MATCH_THRESHOLD)
+            if mb_match is None:
                 continue
+            mbid = mb_match["id"]
+
+        existing = db.query(Artist).filter(Artist.musicbrainz_id == mbid).first()
+        if existing is not None:
+            image_url = existing.image_url
+            country, area_name = existing.country, existing.area_name
+        else:
+            image_url = lastfm.best_image({"image": candidate.get("image")}) if candidate.get("image") else None
+            if not image_url:
+                try:
+                    deezer_match = deezer.search_artist(name)
+                    if deezer_match:
+                        image_url = deezer_match.get("picture_xl")
+                except Exception:
+                    logger.warning("Enrichissement Deezer indisponible pour l'artiste similaire %s", name)
+
+            if mb_match is not None:
+                country, area_name = musicbrainz.extract_area(mb_match)
+            elif mb_calls_used < SIMILAR_ARTISTS_MAX_MBID_RESOLUTIONS:
+                mb_calls_used += 1
+                try:
+                    country, area_name = musicbrainz.extract_area(musicbrainz.get_artist(mbid))
+                except Exception:
+                    country, area_name = None, None
+            else:
+                country, area_name = None, None
 
         results.append(
-            SimilarArtistOut(
-                name=name,
-                image_url=lastfm.best_image({"image": candidate.get("image")}) if candidate.get("image") else None,
-                musicbrainz_id=mbid,
-            )
+            SimilarArtistOut(name=name, image_url=image_url, musicbrainz_id=mbid, country=country, area_name=area_name)
         )
     return results
 

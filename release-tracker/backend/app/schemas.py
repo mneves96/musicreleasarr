@@ -142,6 +142,8 @@ class SimilarArtistOut(BaseModel):
     name: str
     image_url: str | None = None
     musicbrainz_id: str
+    country: str | None = None
+    area_name: str | None = None
 
 
 class TrackChoice(BaseModel):
