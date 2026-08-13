@@ -68,21 +68,46 @@ def get_similar_artists(artist_mbids: list[str]) -> list[dict]:
     return resp.json() or []
 
 
-def get_recommendations_from_scrobbles(username: str, top_count: int = 25) -> list[dict]:
-    """Agrege top artistes reellement ecoutes (get_top_artists) -> artistes
-    similaires (get_similar_artists) - meme principe que
-    lastfm.get_similar_to_followed, mais la "graine" est ici l'ecoute reelle
-    de l'utilisateur plutot que les artistes suivis dans l'app : peut faire
-    remonter des artistes tres ecoutes sans avoir ete explicitement suivis.
-    Chaque entree du resultat garde la trace du/des artiste(s) le/les plus
-    ecoute(s) qui l'ont fait remonter (cle "sources", triee par contribution
-    decroissante), pour affichage "Base sur : ..." cote frontend."""
-    top = get_top_artists(username, count=top_count)
-    top_by_mbid = {a["artist_mbid"]: a for a in top if a.get("artist_mbid")}
-    if not top_by_mbid:
+# Periodes cumulees pour constituer les graines - pas seulement "all_time" :
+# sur un compte dont l'ecoute est concentree sur une poignee d'artistes en
+# tout temps mais plus variee recemment, se limiter a all_time ne fait
+# remonter des recommandations que par rapport a ces quelques artistes-la,
+# peu diverses. L'union des trois periodes elargit le bassin de graines et
+# fait apparaitre des artistes ecoutes recemment (semaine/mois) qui n'auraient
+# jamais perce le classement all_time.
+SEED_RANGES = ("week", "month", "all_time")
+
+
+def get_recommendations_from_scrobbles(username: str, seed_count: int = 25, limit: int = 50) -> list[dict]:
+    """Agrege top artistes reellement ecoutes sur plusieurs periodes
+    (get_top_artists) -> artistes similaires (get_similar_artists) - meme
+    principe que lastfm.get_similar_to_followed, mais la "graine" est ici
+    l'ecoute reelle de l'utilisateur plutot que les artistes suivis dans
+    l'app : peut faire remonter des artistes tres ecoutes sans avoir ete
+    explicitement suivis. Chaque entree du resultat garde la trace du/des
+    artiste(s) le/les plus ecoute(s) qui l'ont fait remonter (cle "sources",
+    triee par contribution decroissante), pour affichage "Base sur : ..."
+    cote frontend.
+
+    La contribution de chaque graine est normalisee par son propre score
+    maximum (0-1) avant d'etre sommee par candidat, plutot que de sommer les
+    scores bruts de l'API : ceux-ci sont des comptages de sessions d'ecoute
+    co-occurentes, dont l'ordre de grandeur suit surtout la popularite
+    generale de la graine - sans normalisation, quelques graines tres
+    populaires (typiquement issues de all_time) ecrasaient systematiquement
+    les recommandations issues de graines plus confidentielles (typiquement
+    issues de week/month), rendant le resultat final peu divers meme avec un
+    bassin de graines elargi."""
+    seeds: dict[str, dict] = {}
+    for range_ in SEED_RANGES:
+        for a in get_top_artists(username, count=seed_count, range_=range_):
+            mbid = a.get("artist_mbid")
+            if mbid and mbid not in seeds:
+                seeds[mbid] = a
+    if not seeds:
         return []
 
-    similar = get_similar_artists(list(top_by_mbid.keys()))
+    similar = get_similar_artists(list(seeds.keys()))
 
     # La Labs API renvoie parfois plusieurs lignes identiques pour la meme
     # paire (reference, candidat) - verifie manuellement, comportement non
@@ -90,24 +115,34 @@ def get_recommendations_from_scrobbles(username: str, top_count: int = 25) -> li
     # score agrege (compte plusieurs fois) et polluer l'affichage "Base sur :
     # X, X, X..." cote frontend.
     seen_pairs: set[tuple[str, str]] = set()
-    aggregated: dict[str, dict] = {}
+    by_reference: dict[str, list[dict]] = {}
     for candidate in similar:
         cand_mbid = candidate.get("artist_mbid")
         cand_name = candidate.get("name")
         ref_mbid = candidate.get("reference_mbid")
-        reference = top_by_mbid.get(ref_mbid)
-        if not cand_mbid or not cand_name or cand_mbid in top_by_mbid or not reference:
+        if not cand_mbid or not cand_name or cand_mbid in seeds or ref_mbid not in seeds:
             continue
         if (cand_mbid, ref_mbid) in seen_pairs:
             continue
         seen_pairs.add((cand_mbid, ref_mbid))
+        by_reference.setdefault(ref_mbid, []).append(candidate)
 
-        score = candidate.get("score") or 0
-        entry = aggregated.setdefault(cand_mbid, {"name": cand_name, "mbid": cand_mbid, "score": 0, "sources": []})
-        entry["score"] += score
-        entry["sources"].append({"name": reference["artist_name"], "mbid": reference["artist_mbid"], "score": score})
+    aggregated: dict[str, dict] = {}
+    for ref_mbid, candidates in by_reference.items():
+        reference = seeds[ref_mbid]
+        max_score = max((c.get("score") or 0) for c in candidates) or 1
+        for candidate in candidates:
+            cand_mbid = candidate["artist_mbid"]
+            normalized = (candidate.get("score") or 0) / max_score
+            entry = aggregated.setdefault(
+                cand_mbid, {"name": candidate["name"], "mbid": cand_mbid, "score": 0.0, "sources": []}
+            )
+            entry["score"] += normalized
+            entry["sources"].append(
+                {"name": reference["artist_name"], "mbid": reference["artist_mbid"], "score": normalized}
+            )
 
     ranked = sorted(aggregated.values(), key=lambda e: e["score"], reverse=True)
     for entry in ranked:
         entry["sources"].sort(key=lambda s: s["score"], reverse=True)
-    return ranked
+    return ranked[:limit]
