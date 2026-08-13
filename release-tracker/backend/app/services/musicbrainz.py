@@ -83,6 +83,57 @@ def get_artist(artist_mbid: str) -> dict:
     return _throttled_get(f"/artist/{artist_mbid}", {})
 
 
+def get_related_artists(artist_mbid: str) -> list[dict]:
+    """Artistes directement lies a celui-ci dans la base MusicBrainz (membre du
+    meme groupe, collaboration, side-project... - inc=artist-rels) : source de
+    recommandation alternative a Last.fm (artist.getSimilar), basee sur des
+    relations factuelles saisies par les editeurs MusicBrainz plutot que sur
+    des statistiques d'ecoute. Ne garde que les relations dont la cible est un
+    autre artiste (une relation d'artiste peut aussi pointer vers une
+    Label/Work/... selon le type, mais inc=artist-rels ne renvoie que celles
+    dont la cible est de type artist), deduplique par id - un meme artiste
+    peut apparaitre plusieurs fois (ex: "membre de" + "a compose pour")."""
+    data = _throttled_get(f"/artist/{artist_mbid}", {"inc": "artist-rels"})
+    seen: set[str] = set()
+    related: list[dict] = []
+    for rel in data.get("relations", []):
+        target = rel.get("artist")
+        if not target or target["id"] == artist_mbid or target["id"] in seen:
+            continue
+        seen.add(target["id"])
+        related.append({"id": target["id"], "name": target.get("name")})
+    return related
+
+
+def get_related_to_followed(followed: list[tuple[int, str, str]]) -> list[dict]:
+    """Recommandations basees sur les relations d'artiste MusicBrainz des
+    artistes reellement suivis dans l'app (pas l'historique d'ecoute Last.fm) :
+    pour chaque artiste suivi (id, name, mbid), recupere ses artistes lies
+    (get_related_artists) et agrege les artistes suivis source par candidat -
+    recommande par plusieurs artistes suivis = remonte avec plus de sources.
+    Meme principe que lastfm.get_similar_to_followed, mais la cible d'une
+    relation MusicBrainz porte toujours son mbid : jamais besoin d'une
+    resolution par nom en aval (voir scheduler.refresh_musicbrainz_recommendations,
+    qui n'a donc pas d'equivalent a MAX_RECOMMENDATION_MBID_RESOLUTIONS)."""
+    followed_mbids = {mbid for _id, _name, mbid in followed}
+    aggregated: dict[str, dict] = {}
+    for followed_id, followed_name, followed_mbid in followed:
+        try:
+            related = get_related_artists(followed_mbid)
+        except Exception:
+            continue
+        for candidate in related:
+            cand_mbid = candidate["id"]
+            if cand_mbid in followed_mbids or not candidate.get("name"):
+                continue
+            entry = aggregated.setdefault(
+                cand_mbid, {"name": candidate["name"], "mbid": cand_mbid, "sources": []}
+            )
+            if not any(s["id"] == followed_id for s in entry["sources"]):
+                entry["sources"].append({"id": followed_id, "name": followed_name})
+    return list(aggregated.values())
+
+
 def search_recordings(title: str, artist: str | None = None, limit: int = 5) -> list[dict]:
     """Recherche libre d'enregistrements (pas limite aux artistes suivis) -
     utilise pour le "Lookup" automatique piste par piste (voir

@@ -44,6 +44,8 @@ export interface Artist {
   is_followed: boolean
   is_recommended: boolean
   recommended_because: { id: number; name: string }[]
+  is_recommended_mb: boolean
+  recommended_because_mb: { id: number; name: string }[]
   notify_enabled: boolean
   auto_download: boolean
   followed_release_types: ReleaseType[]
@@ -339,6 +341,17 @@ export const api = {
     return request<ArtistPage>(`/artists/recommended?${qs.toString()}`)
   },
   refreshRecommendedArtists: () => request<TestConnectionResult>('/artists/recommended/refresh', { method: 'POST' }),
+
+  getRecommendedArtistsMusicbrainz: (params: { offset?: number; limit?: number; q?: string; sort?: ArtistSortBy } = {}) => {
+    const qs = new URLSearchParams()
+    qs.set('offset', String(params.offset ?? 0))
+    qs.set('limit', String(params.limit ?? 30))
+    if (params.q) qs.set('q', params.q)
+    if (params.sort) qs.set('sort', params.sort)
+    return request<ArtistPage>(`/artists/recommended-musicbrainz?${qs.toString()}`)
+  },
+  refreshRecommendedArtistsMusicbrainz: () =>
+    request<TestConnectionResult>('/artists/recommended-musicbrainz/refresh', { method: 'POST' }),
 
   followArtist: (payload: {
     musicbrainz_id: string

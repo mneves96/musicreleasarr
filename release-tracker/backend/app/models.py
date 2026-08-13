@@ -84,6 +84,15 @@ class Artist(Base):
     # scheduler.refresh_lastfm_recommendations. None/vide pour un artiste
     # normal (non recommande).
     recommended_because: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    # Pendant MusicBrainz de is_recommended/recommended_because ci-dessus (voir
+    # scheduler.refresh_musicbrainz_recommendations) : source differente
+    # (relations d'artiste MusicBrainz - membre du meme groupe, collaboration,
+    # side-project...) mais memes invariants (jamais True en meme temps
+    # qu'is_followed) - colonnes separees plutot que reutiliser celles de
+    # Last.fm pour qu'un artiste puisse etre recommande independamment par les
+    # deux sources sans que l'une n'ecrase l'autre.
+    is_recommended_mb: Mapped[bool] = mapped_column(Boolean, default=False)
+    recommended_because_mb: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     # False par defaut : un artiste juste previsualise (pas encore suivi) ne doit
     # pas apparaitre avec les notifications deja activees. Suivre un artiste passe
     # explicitement par cette valeur (voir routers/artists.py:follow_artist).

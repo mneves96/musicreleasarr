@@ -2,6 +2,9 @@ import { Link } from 'react-router-dom'
 import type { Artist } from '../api'
 
 export default function ArtistListRow({ artist }: { artist: Artist }) {
+  // Voir ArtistCard.tsx : meme repli entre les deux sources de recommandation.
+  const recommendedBecause = artist.recommended_because.length > 0 ? artist.recommended_because : artist.recommended_because_mb
+
   return (
     <Link
       to={`/artists/${artist.id}`}
@@ -20,10 +23,10 @@ export default function ArtistListRow({ artist }: { artist: Artist }) {
         {artist.album_count} album{artist.album_count > 1 ? 's' : ''}
       </span>
       <div className="flex gap-1 shrink-0">
-        {artist.recommended_because.length > 0 && (
+        {recommendedBecause.length > 0 && (
           <span
             className="text-xs px-1.5 py-0.5 rounded bg-app-surface-hover"
-            title={`Base sur : ${artist.recommended_because.map((s) => s.name).join(', ')}`}
+            title={`Base sur : ${recommendedBecause.map((s) => s.name).join(', ')}`}
           >
             🔗
           </span>

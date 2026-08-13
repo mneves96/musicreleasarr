@@ -29,6 +29,7 @@ FULL_CYCLE_JOB_ID = "full_discovery_cycle"
 RECHECK_JOB_ID = "recheck_queued_downloads"
 TAGGING_SCAN_JOB_ID = "scan_tagging_backlog"
 LASTFM_RECOMMENDATIONS_JOB_ID = "refresh_lastfm_recommendations"
+MUSICBRAINZ_RECOMMENDATIONS_JOB_ID = "refresh_musicbrainz_recommendations"
 
 
 def get_settings(db: Session) -> Settings:
@@ -291,9 +292,17 @@ def refresh_lastfm_recommendations(db: Session) -> None:
     # Un artiste suivi ne doit jamais etre supprime, meme s'il ressort comme
     # similaire a un autre artiste suivi - is_recommended reste False pour lui
     # plus bas (le check `if artist.is_followed: continue` avant de le marquer).
+    # Un artiste recommande a la fois par Last.fm et par MusicBrainz (voir
+    # refresh_musicbrainz_recommendations) ne doit pas non plus disparaitre
+    # juste parce qu'il devient perime cote Last.fm - seul son flag Last.fm
+    # est efface, la ligne survit tant que is_recommended_mb reste vrai.
     stale = db.query(Artist).filter(Artist.is_recommended.is_(True), Artist.is_followed.is_(False)).all()
     for artist in stale:
-        db.delete(artist)
+        if artist.is_recommended_mb:
+            artist.is_recommended = False
+            artist.recommended_because = None
+        else:
+            db.delete(artist)
     db.commit()
 
     followed_ids = {a.musicbrainz_id for a in followed}
@@ -335,6 +344,63 @@ def refresh_lastfm_recommendations(db: Session) -> None:
         artist.recommended_because = [
             {"id": s["id"], "name": s["name"]} for s in item.get("sources", [])[:3]
         ]
+
+    db.commit()
+
+
+def refresh_musicbrainz_recommendations(db: Session) -> None:
+    """Pendant MusicBrainz de refresh_lastfm_recommendations ci-dessus (voir
+    POST /api/artists/recommended-musicbrainz/refresh pour le declenchement
+    manuel) : meme mecanique de bout en bout (supprime les recommandations
+    perimees non suivies puis en reimporte de nouvelles, stockees comme de
+    vrais Artist avec is_recommended_mb=True), mais source differente -
+    relations d'artiste MusicBrainz (membre du meme groupe, collaboration,
+    side-project... - voir musicbrainz.get_related_to_followed) plutot que les
+    statistiques d'ecoute Last.fm. Contrairement au pendant Last.fm, ne
+    necessite aucune cle API/session (MusicBrainz est public)."""
+    followed = db.query(Artist).filter(Artist.is_followed.is_(True)).all()
+    if not followed:
+        logger.info("Aucun artiste suivi, rafraichissement des recommandations MusicBrainz ignore")
+        return
+
+    settings = get_settings(db)
+
+    try:
+        raw = musicbrainz.get_related_to_followed([(a.id, a.name, a.musicbrainz_id) for a in followed])
+    except Exception:
+        logger.exception("Echec de la recuperation des relations MusicBrainz")
+        return
+
+    # Meme raisonnement croise que dans refresh_lastfm_recommendations : ne
+    # supprime que si l'artiste n'est pas non plus une recommandation Last.fm
+    # toujours valide.
+    stale = db.query(Artist).filter(Artist.is_recommended_mb.is_(True), Artist.is_followed.is_(False)).all()
+    for artist in stale:
+        if artist.is_recommended:
+            artist.is_recommended_mb = False
+            artist.recommended_because_mb = None
+        else:
+            db.delete(artist)
+    db.commit()
+
+    followed_ids = {a.musicbrainz_id for a in followed}
+
+    for item in raw:
+        mbid = item["mbid"]
+        if mbid in followed_ids:
+            continue
+
+        try:
+            artist = get_or_create_artist(db, mbid, settings.lastfm_api_key)
+        except Exception:
+            logger.warning("Impossible de creer l'artiste recommande (MusicBrainz) '%s'", item["name"])
+            continue
+
+        if artist.is_followed:
+            continue
+
+        artist.is_recommended_mb = True
+        artist.recommended_because_mb = [{"id": s["id"], "name": s["name"]} for s in item["sources"][:3]]
 
     db.commit()
 
@@ -452,6 +518,11 @@ def run_refresh_lastfm_recommendations() -> None:
         refresh_lastfm_recommendations(db)
 
 
+def run_refresh_musicbrainz_recommendations() -> None:
+    with SessionLocal() as db:
+        refresh_musicbrainz_recommendations(db)
+
+
 def reschedule() -> None:
     with SessionLocal() as db:
         settings = get_settings(db)
@@ -470,6 +541,18 @@ def reschedule() -> None:
         run_refresh_lastfm_recommendations,
         trigger=CronTrigger.from_crontab(lastfm_cron),
         id=LASTFM_RECOMMENDATIONS_JOB_ID,
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    # Reutilise le meme reglage de planification que les recommandations
+    # Last.fm plutot qu'un nouveau champ dedie dans Reglages : contrairement a
+    # Last.fm, ce rafraichissement ne depend d'aucune configuration/cle API
+    # (MusicBrainz est public), un second cron series serait juste redondant.
+    _scheduler.add_job(
+        run_refresh_musicbrainz_recommendations,
+        trigger=CronTrigger.from_crontab(lastfm_cron),
+        id=MUSICBRAINZ_RECOMMENDATIONS_JOB_ID,
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=3600,

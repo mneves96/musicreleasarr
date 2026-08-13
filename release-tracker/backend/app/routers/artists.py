@@ -164,9 +164,12 @@ def follow_artist(payload: FollowArtistIn, background_tasks: BackgroundTasks, db
     # Suivre une recommandation la fait sortir de la liste des recommandations
     # (voir GET /recommended, filtre sur is_followed=False) - on nettoie aussi
     # le flag lui-meme pour ne pas laisser une fiche "suivie" ET "recommandee"
-    # en meme temps (invariant documente sur Artist.is_recommended).
+    # en meme temps (invariant documente sur Artist.is_recommended, valable
+    # pour les deux sources - Last.fm et MusicBrainz).
     artist.is_recommended = False
     artist.recommended_because = None
+    artist.is_recommended_mb = False
+    artist.recommended_because_mb = None
     artist.notify_enabled = payload.notify_enabled
     artist.auto_download = payload.auto_download
     artist.followed_release_types = [
@@ -234,6 +237,42 @@ def refresh_recommended_artists(background_tasks: BackgroundTasks, db: Session =
     if not (settings.lastfm_api_key and settings.lastfm_api_secret and settings.lastfm_session_key):
         raise HTTPException(422, "Connecte Last.fm dans Reglages pour rafraichir les recommandations")
     background_tasks.add_task(scheduler.run_refresh_lastfm_recommendations)
+    return TestConnectionResult(ok=True, message="Rafraichissement des recommandations lance")
+
+
+@router.get("/recommended-musicbrainz", response_model=ArtistPageOut)
+def recommended_artists_musicbrainz(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=ARTISTS_DEFAULT_LIMIT, ge=1, le=ARTISTS_MAX_LIMIT),
+    q: str | None = Query(default=None),
+    sort: str = Query(default="name", pattern="^(name|albums|latest)$"),
+    db: Session = Depends(get_db),
+):
+    """Pendant MusicBrainz de GET /recommended ci-dessus (voir
+    Artist.is_recommended_mb) : exactement le meme principe (memes lignes
+    Artist, meme pagination/tri, meme rafraichissement nocturne + bouton
+    manuel), mais source differente - relations d'artiste MusicBrainz (membre
+    du meme groupe, collaboration, side-project...) plutot que les
+    statistiques d'ecoute Last.fm. Simple lecture DB : aucun appel reseau ici.
+
+    IMPORTANT : cette route doit rester declaree AVANT /{artist_id} plus bas,
+    meme raison que /recommended."""
+    artists, total = _paginated_artists(
+        db, (Artist.is_recommended_mb.is_(True)) & (Artist.is_followed.is_(False)), offset, limit, q, sort
+    )
+    return ArtistPageOut(results=artists, total=total, offset=offset, limit=limit)
+
+
+@router.post("/recommended-musicbrainz/refresh", response_model=TestConnectionResult)
+def refresh_recommended_artists_musicbrainz(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Rafraichissement manuel (bouton "Rafraichir" de l'onglet Recommandations
+    MusicBrainz), meme logique que le job nocturne - deportee en tache de fond
+    car elle peut prendre plusieurs secondes/minutes (1 requete MusicBrainz par
+    artiste suivi, throttlee a 1 req/s). Contrairement au pendant Last.fm, ne
+    necessite aucune configuration prealable (MusicBrainz est public)."""
+    if not db.query(Artist).filter(Artist.is_followed.is_(True)).first():
+        raise HTTPException(422, "Suis au moins un artiste pour obtenir des recommandations")
+    background_tasks.add_task(scheduler.run_refresh_musicbrainz_recommendations)
     return TestConnectionResult(ok=True, message="Rafraichissement des recommandations lance")
 
 
@@ -455,6 +494,8 @@ def update_artist(artist_id: int, payload: ArtistUpdateIn, db: Session = Depends
         # depuis la fiche d'un artiste recommande, voir ArtistPage.tsx).
         artist.is_recommended = False
         artist.recommended_because = None
+        artist.is_recommended_mb = False
+        artist.recommended_because_mb = None
 
     db.commit()
     db.refresh(artist)

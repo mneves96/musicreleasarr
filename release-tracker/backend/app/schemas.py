@@ -78,13 +78,15 @@ class ArtistOut(BaseModel):
     is_followed: bool
     is_recommended: bool
     recommended_because: list[RecommendedSource] = []
+    is_recommended_mb: bool = False
+    recommended_because_mb: list[RecommendedSource] = []
     notify_enabled: bool
     auto_download: bool
     followed_release_types: list[str]
 
     # La colonne DB est nullable (None pour un artiste normal, non recommande) -
     # normalise en liste vide pour eviter un `null` cote frontend.
-    @field_validator("recommended_because", mode="before")
+    @field_validator("recommended_because", "recommended_because_mb", mode="before")
     @classmethod
     def _default_recommended_because(cls, v):
         return v or []

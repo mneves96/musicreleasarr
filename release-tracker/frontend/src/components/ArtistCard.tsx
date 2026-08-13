@@ -2,6 +2,12 @@ import { Link } from 'react-router-dom'
 import type { Artist } from '../api'
 
 export default function ArtistCard({ artist }: { artist: Artist }) {
+  // Un artiste n'a jamais les deux listes remplies en meme temps en pratique
+  // (chaque ecran de recommandations ne filtre que sur sa propre source) -
+  // recommended_because_mb sert de repli pour que ce meme composant affiche
+  // la bonne raison qu'il vienne de Last.fm ou de MusicBrainz.
+  const recommendedBecause = artist.recommended_because.length > 0 ? artist.recommended_because : artist.recommended_because_mb
+
   return (
     <Link
       to={`/artists/${artist.id}`}
@@ -21,9 +27,9 @@ export default function ArtistCard({ artist }: { artist: Artist }) {
 
       {artist.bio && <p className="text-xs text-app-text-muted line-clamp-2">{artist.bio}</p>}
 
-      {artist.recommended_because.length > 0 && (
+      {recommendedBecause.length > 0 && (
         <p className="text-xs text-app-accent-text/80 truncate">
-          Base sur : {artist.recommended_because.map((s) => s.name).join(', ')}
+          Base sur : {recommendedBecause.map((s) => s.name).join(', ')}
         </p>
       )}
 
