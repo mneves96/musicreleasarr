@@ -25,7 +25,12 @@ class ArtistSearchPage(BaseModel):
 
 
 class RecommendedSource(BaseModel):
-    id: int
+    # id absent pour une source ListenBrainz (artiste le plus ecoute d'apres
+    # les scrobbles, pas necessairement suivi dans l'app - voir
+    # scheduler.refresh_listenbrainz_recommendations) : toujours present pour
+    # les sources Last.fm/MusicBrainz, qui sont par construction des artistes
+    # suivis (donc de vraies lignes Artist).
+    id: int | None = None
     name: str
 
 
@@ -78,15 +83,15 @@ class ArtistOut(BaseModel):
     is_followed: bool
     is_recommended: bool
     recommended_because: list[RecommendedSource] = []
-    is_recommended_mb: bool = False
-    recommended_because_mb: list[RecommendedSource] = []
+    is_recommended_lb: bool = False
+    recommended_because_lb: list[RecommendedSource] = []
     notify_enabled: bool
     auto_download: bool
     followed_release_types: list[str]
 
     # La colonne DB est nullable (None pour un artiste normal, non recommande) -
     # normalise en liste vide pour eviter un `null` cote frontend.
-    @field_validator("recommended_because", "recommended_because_mb", mode="before")
+    @field_validator("recommended_because", "recommended_because_lb", mode="before")
     @classmethod
     def _default_recommended_because(cls, v):
         return v or []
@@ -255,7 +260,8 @@ class SettingsOut(BaseModel):
     notify_pushbullet_enabled: bool
     scan_cron: str
     lastfm_recommendations_cron: str
-    musicbrainz_recommendations_cron: str
+    listenbrainz_username: str | None
+    listenbrainz_recommendations_cron: str
     calendar_token: str | None
     tagging_downloads_path: str
     tagging_library_path: str
@@ -280,7 +286,8 @@ class SettingsUpdateIn(BaseModel):
     notify_pushbullet_enabled: bool | None = None
     scan_cron: str | None = None
     lastfm_recommendations_cron: str | None = None
-    musicbrainz_recommendations_cron: str | None = None
+    listenbrainz_username: str | None = None
+    listenbrainz_recommendations_cron: str | None = None
     tagging_downloads_path: str | None = None
     tagging_library_path: str | None = None
 

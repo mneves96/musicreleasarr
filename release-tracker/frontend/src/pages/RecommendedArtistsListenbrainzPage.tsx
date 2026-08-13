@@ -1,42 +1,42 @@
 import { useCallback, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, type ArtistSortBy } from '../api'
 import ArtistListView from '../components/ArtistListView'
 
 const POLL_INTERVAL_MS = 4000
 const POLL_MAX_TICKS = 15 // ~1 minute
 
-// Pendant MusicBrainz de RecommendedArtistsPage.tsx (Last.fm) : meme
+// Pendant ListenBrainz de RecommendedArtistsPage.tsx (Last.fm) : meme
 // composant ArtistListView, meme mise en page/comportement (rafraichir,
-// sonder, filtrer/trier/vue grille-liste, defilement infini) - seule la
-// source des recommandations differe cote backend (relations d'artiste
-// MusicBrainz plutot que artist.getSimilar Last.fm), et il n'y a ici aucune
-// configuration prealable a verifier (MusicBrainz est public, contrairement
-// a Last.fm qui necessite une cle API + un compte connecte).
-export default function RecommendedArtistsMusicbrainzPage() {
+// sonder, filtrer/trier/vue grille-liste, defilement infini). La difference
+// est plus profonde que la simple source cote backend : la "graine" des
+// recommandations est ici l'ecoute reelle de l'utilisateur (scrobbles,
+// Navidrome -> ListenBrainz) plutot que les artistes suivis dans l'app - donc
+// necessite un nom d'utilisateur ListenBrainz configure dans Reglages (pas de
+// cle API/OAuth, juste le pseudo, les stats/recommandations y sont publiques).
+export default function RecommendedArtistsListenbrainzPage() {
   const [total, setTotal] = useState<number | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [configError, setConfigError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
 
   const fetchPage = useCallback(
     (params: { offset: number; limit: number; q: string; sort: ArtistSortBy }) =>
-      api.getRecommendedArtistsMusicbrainz(params),
+      api.getRecommendedArtistsListenbrainz(params),
     []
   )
 
   // Stockees comme de vrais Artist en base et rafraichies chaque nuit par le
-  // scheduler (meme cron que les recommandations Last.fm, voir Reglages) -
-  // ce bouton lance le meme rafraichissement a la demande. Il tourne en
-  // tache de fond cote serveur (1 requete MusicBrainz par artiste suivi,
-  // throttlee a 1 req/s), donc on sonde la liste plutot que d'attendre une
-  // reponse synchrone.
+  // scheduler (voir Reglages > ListenBrainz) - ce bouton lance le meme
+  // rafraichissement a la demande. Il tourne en tache de fond cote serveur,
+  // donc on sonde la liste plutot que d'attendre une reponse synchrone.
   async function refresh() {
     setRefreshing(true)
     setRefreshMessage(null)
     try {
-      const result = await api.refreshRecommendedArtistsMusicbrainz()
+      const result = await api.refreshRecommendedArtistsListenbrainz()
       setRefreshMessage(result.message)
 
       let ticks = 0
@@ -55,10 +55,25 @@ export default function RecommendedArtistsMusicbrainzPage() {
     }
   }
 
+  if (configError) {
+    return (
+      <div className="text-app-text-muted">
+        <p>{configError}</p>
+        <p className="mt-2">
+          Renseigne ton nom d'utilisateur ListenBrainz dans{' '}
+          <Link to="/settings" className="text-app-accent-text hover:underline">
+            Reglages
+          </Link>{' '}
+          pour voir des recommandations basees sur tes scrobbles (Navidrome doit deja scrobbler vers ce compte).
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h1 className="text-xl font-semibold">Recommandations MusicBrainz{total !== null ? ` (${total})` : ''}</h1>
+        <h1 className="text-xl font-semibold">Recommandations ListenBrainz{total !== null ? ` (${total})` : ''}</h1>
         <button
           onClick={refresh}
           disabled={refreshing}
@@ -68,10 +83,9 @@ export default function RecommendedArtistsMusicbrainzPage() {
         </button>
       </div>
       {refreshMessage && <p className="text-sm text-app-text-muted mb-4">{refreshMessage}</p>}
-      {loadError && <p className="text-sm text-red-400 mb-4">{loadError}</p>}
 
       <ArtistListView
-        storageKeyPrefix="recommendedMbList"
+        storageKeyPrefix="recommendedLbList"
         fetchPage={fetchPage}
         reloadToken={reloadToken}
         onTotalChange={setTotal}
@@ -82,7 +96,7 @@ export default function RecommendedArtistsMusicbrainzPage() {
           </p>
         }
         emptyFilterMessage="Aucune recommandation ne correspond au filtre."
-        onError={(err) => setLoadError(err instanceof Error ? err.message : 'Erreur')}
+        onError={(err) => setConfigError(err instanceof Error ? err.message : 'Erreur')}
       />
     </div>
   )

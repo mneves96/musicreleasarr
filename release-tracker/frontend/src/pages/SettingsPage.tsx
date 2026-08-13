@@ -177,32 +177,37 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
   )
 }
 
-// Pendant de LastfmSection ci-dessus pour les recommandations MusicBrainz
-// (voir pages/RecommendedArtistsMusicbrainzPage.tsx) : pas de cle API ni de
-// connexion de compte a gerer ici (MusicBrainz est public), juste sa propre
-// planification - un champ dedie plutot que de reutiliser
-// lastfm_recommendations_cron, pour que les deux rafraichissements puissent
-// tourner a des heures differentes.
-function MusicbrainzSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+// Pendant de LastfmSection ci-dessus pour les recommandations ListenBrainz
+// (voir pages/RecommendedArtistsListenbrainzPage.tsx) : basees sur l'ecoute
+// reelle (scrobbles) plutot que sur les artistes suivis dans l'app - Navidrome
+// doit deja scrobbler vers ce compte pour qu'il y ait des donnees a exploiter.
+// Pas de cle API/OAuth a gerer ici : juste le nom d'utilisateur, les
+// stats/recommandations d'un profil ListenBrainz sont publiques par defaut.
+function ListenbrainzSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
     setSettings({ ...settings, [key]: value })
   }
 
   return (
-    <Section title="MusicBrainz">
+    <Section title="ListenBrainz">
       <p className="text-xs text-app-text-faint">
-        Recommandations basees sur les artistes reellement lies (membre du meme groupe, collaboration,
-        side-project...) a ceux que tu suis - aucune cle API ni connexion de compte necessaire, MusicBrainz est
-        public.
+        Recommandations basees sur ce que tu ecoutes vraiment (scrobbles) plutot que sur les artistes suivis dans
+        l'app - assure-toi que Navidrome scrobble bien vers ce compte (voir ses propres reglages), sinon
+        ListenBrainz n'a aucune donnee d'ecoute a exploiter.
       </p>
       <Field
+        label="Nom d'utilisateur ListenBrainz"
+        value={settings.listenbrainz_username ?? ''}
+        onChange={(v) => set('listenbrainz_username', v)}
+      />
+      <Field
         label="Planification du rafraichissement des recommandations (ex: 0 3 * * * = tous les jours a 3h)"
-        value={settings.musicbrainz_recommendations_cron}
-        onChange={(v) => set('musicbrainz_recommendations_cron', v)}
+        value={settings.listenbrainz_recommendations_cron}
+        onChange={(v) => set('listenbrainz_recommendations_cron', v)}
       />
       <p className="text-xs text-app-text-faint">
         Chaque nuit, les anciennes recommandations non suivies sont supprimees et remplacees par les nouvelles -
-        un bouton "Rafraichir" dans l'onglet Recommandations MusicBrainz declenche le meme rafraichissement a la
+        un bouton "Rafraichir" dans l'onglet Recommandations ListenBrainz declenche le meme rafraichissement a la
         demande.
       </p>
     </Section>
@@ -444,7 +449,7 @@ export default function SettingsPage() {
       </Section>
 
       <LastfmSection settings={settings} setSettings={setSettings} />
-      <MusicbrainzSection settings={settings} setSettings={setSettings} />
+      <ListenbrainzSection settings={settings} setSettings={setSettings} />
 
       <Section title="Notifications par email">
         <label className="flex items-center gap-2 text-sm">

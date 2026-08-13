@@ -84,15 +84,16 @@ class Artist(Base):
     # scheduler.refresh_lastfm_recommendations. None/vide pour un artiste
     # normal (non recommande).
     recommended_because: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
-    # Pendant MusicBrainz de is_recommended/recommended_because ci-dessus (voir
-    # scheduler.refresh_musicbrainz_recommendations) : source differente
-    # (relations d'artiste MusicBrainz - membre du meme groupe, collaboration,
-    # side-project...) mais memes invariants (jamais True en meme temps
-    # qu'is_followed) - colonnes separees plutot que reutiliser celles de
-    # Last.fm pour qu'un artiste puisse etre recommande independamment par les
-    # deux sources sans que l'une n'ecrase l'autre.
-    is_recommended_mb: Mapped[bool] = mapped_column(Boolean, default=False)
-    recommended_because_mb: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    # Pendant ListenBrainz de is_recommended/recommended_because ci-dessus (voir
+    # scheduler.refresh_listenbrainz_recommendations) : source differente -
+    # ecoute reelle de l'utilisateur (scrobbles, Navidrome -> ListenBrainz)
+    # plutot que les artistes suivis dans l'app - mais memes invariants
+    # (jamais True en meme temps qu'is_followed) - colonnes separees plutot
+    # que reutiliser celles de Last.fm pour qu'un artiste puisse etre
+    # recommande independamment par les deux sources sans que l'une n'ecrase
+    # l'autre.
+    is_recommended_lb: Mapped[bool] = mapped_column(Boolean, default=False)
+    recommended_because_lb: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     # False par defaut : un artiste juste previsualise (pas encore suivi) ne doit
     # pas apparaitre avec les notifications deja activees. Suivre un artiste passe
     # explicitement par cette valeur (voir routers/artists.py:follow_artist).
@@ -264,7 +265,12 @@ class Settings(Base):
 
     scan_cron: Mapped[str] = mapped_column(String, default="0 6 * * *")
     lastfm_recommendations_cron: Mapped[str] = mapped_column(String, default="0 3 * * *")
-    musicbrainz_recommendations_cron: Mapped[str] = mapped_column(String, default="0 3 * * *")
+    # Nom d'utilisateur ListenBrainz (pas de cle API/token : les stats et
+    # recommandations d'un utilisateur sont publiques par defaut sur
+    # listenbrainz.org, voir services/listenbrainz.py) - Navidrome doit deja
+    # scrobbler vers ce compte pour que des recommandations existent.
+    listenbrainz_username: Mapped[str | None] = mapped_column(String, nullable=True)
+    listenbrainz_recommendations_cron: Mapped[str] = mapped_column(String, default="0 3 * * *")
 
     calendar_token: Mapped[str | None] = mapped_column(String, nullable=True)
 

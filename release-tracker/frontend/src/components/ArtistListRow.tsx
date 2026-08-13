@@ -3,7 +3,7 @@ import type { Artist } from '../api'
 
 export default function ArtistListRow({ artist }: { artist: Artist }) {
   // Voir ArtistCard.tsx : meme repli entre les deux sources de recommandation.
-  const recommendedBecause = artist.recommended_because.length > 0 ? artist.recommended_because : artist.recommended_because_mb
+  const recommendedBecause = artist.recommended_because.length > 0 ? artist.recommended_because : artist.recommended_because_lb
 
   return (
     <Link

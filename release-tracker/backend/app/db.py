@@ -42,6 +42,40 @@ def get_db():
         db.close()
 
 
+def _rename_musicbrainz_recommendation_columns():
+    """La recommandation "MusicBrainz" (relations d'artiste) a ete remplacee par
+    une recommandation ListenBrainz (ecoute reelle/scrobbles, voir
+    scheduler.refresh_listenbrainz_recommendations) - renomme les colonnes en
+    consequence sur les installations qui avaient deja tourne avec la version
+    precedente, plutot que les laisser trainer vides pendant qu'une nouvelle
+    paire de colonnes est ajoutee par _add_missing_columns() ci-dessous (ce qui
+    perdrait les recommandations deja calculees pour rien). SQLite supporte
+    ALTER TABLE ... RENAME COLUMN depuis la version 3.25 (2018), largement
+    couverte par toute version de Python encore maintenue. Idempotent : ne
+    fait rien des que le renommage a deja eu lieu une fois."""
+    inspector = inspect(engine)
+    if "artists" in inspector.get_table_names():
+        existing_cols = {c["name"] for c in inspector.get_columns("artists")}
+        with engine.begin() as conn:
+            if "is_recommended_mb" in existing_cols and "is_recommended_lb" not in existing_cols:
+                conn.execute(text('ALTER TABLE artists RENAME COLUMN "is_recommended_mb" TO "is_recommended_lb"'))
+            if "recommended_because_mb" in existing_cols and "recommended_because_lb" not in existing_cols:
+                conn.execute(
+                    text('ALTER TABLE artists RENAME COLUMN "recommended_because_mb" TO "recommended_because_lb"')
+                )
+
+    if "settings" in inspector.get_table_names():
+        existing_cols = {c["name"] for c in inspector.get_columns("settings")}
+        if "musicbrainz_recommendations_cron" in existing_cols and "listenbrainz_recommendations_cron" not in existing_cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        'ALTER TABLE settings RENAME COLUMN "musicbrainz_recommendations_cron" '
+                        'TO "listenbrainz_recommendations_cron"'
+                    )
+                )
+
+
 def _add_missing_columns():
     """Migration minimale : ajoute les colonnes manquantes sur les tables deja
     existantes (create_all ne le fait pas). ALTER TABLE ADD COLUMN ne backfill
@@ -168,6 +202,7 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
     _relax_tagging_release_id_not_null()
+    _rename_musicbrainz_recommendation_columns()
     _add_missing_columns()
     _backfill_tagging_source_folder()
     _upgrade_cover_art_resolution()

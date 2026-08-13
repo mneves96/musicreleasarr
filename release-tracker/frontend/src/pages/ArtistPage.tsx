@@ -50,17 +50,17 @@ export default function ArtistPage() {
   // sorties, cet effet se re-declenche et s'arrete de lui-meme au lieu de
   // continuer jusqu'a la limite de temps.
   //
-  // Les artistes recommandes (Last.fm is_recommended ou MusicBrainz
-  // is_recommended_mb) ne beneficient jamais de ce scan automatique - generes
+  // Les artistes recommandes (Last.fm is_recommended ou ListenBrainz
+  // is_recommended_lb) ne beneficient jamais de ce scan automatique - generes
   // en masse chaque nuit, le declencher pour chacun saturerait MusicBrainz
-  // (1 requete/seconde) - donc sonder ici pour eux attendait indefiniment des
-  // sorties qui n'arriveraient jamais. Le bouton "Actualiser" reste le moyen
-  // de lancer ce scan a la demande.
+  // (1 requete/seconde, cf get_or_create_artist) - donc sonder ici pour eux
+  // attendait indefiniment des sorties qui n'arriveraient jamais. Le bouton
+  // "Actualiser" reste le moyen de lancer ce scan a la demande.
   useEffect(() => {
     if (
       !artist ||
       artist.is_recommended ||
-      artist.is_recommended_mb ||
+      artist.is_recommended_lb ||
       artist.releases.length > 0 ||
       scanPollTicks.current >= SCAN_POLL_MAX_TICKS
     ) {
@@ -266,7 +266,7 @@ export default function ArtistPage() {
               {filtered.length === 0 && (
                 <p className="text-app-text-muted text-sm">
                   {artist.releases.length === 0
-                    ? artist.is_recommended || artist.is_recommended_mb
+                    ? artist.is_recommended || artist.is_recommended_lb
                       ? 'Aucune sortie chargee pour le moment - clique sur "Actualiser" pour decouvrir la discographie de cet artiste.'
                       : 'Aucune sortie trouvee pour le moment (le premier scan n\'a peut-etre pas encore tourne).'
                     : 'Aucune sortie ne correspond au filtre.'}

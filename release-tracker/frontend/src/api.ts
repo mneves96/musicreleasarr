@@ -43,9 +43,9 @@ export interface Artist {
   latest_release_date: string | null
   is_followed: boolean
   is_recommended: boolean
-  recommended_because: { id: number; name: string }[]
-  is_recommended_mb: boolean
-  recommended_because_mb: { id: number; name: string }[]
+  recommended_because: { id: number | null; name: string }[]
+  is_recommended_lb: boolean
+  recommended_because_lb: { id: number | null; name: string }[]
   notify_enabled: boolean
   auto_download: boolean
   followed_release_types: ReleaseType[]
@@ -208,7 +208,8 @@ export interface Settings {
   notify_pushbullet_enabled: boolean
   scan_cron: string
   lastfm_recommendations_cron: string
-  musicbrainz_recommendations_cron: string
+  listenbrainz_username: string | null
+  listenbrainz_recommendations_cron: string
   calendar_token: string | null
   tagging_downloads_path: string
   tagging_library_path: string
@@ -343,16 +344,16 @@ export const api = {
   },
   refreshRecommendedArtists: () => request<TestConnectionResult>('/artists/recommended/refresh', { method: 'POST' }),
 
-  getRecommendedArtistsMusicbrainz: (params: { offset?: number; limit?: number; q?: string; sort?: ArtistSortBy } = {}) => {
+  getRecommendedArtistsListenbrainz: (params: { offset?: number; limit?: number; q?: string; sort?: ArtistSortBy } = {}) => {
     const qs = new URLSearchParams()
     qs.set('offset', String(params.offset ?? 0))
     qs.set('limit', String(params.limit ?? 30))
     if (params.q) qs.set('q', params.q)
     if (params.sort) qs.set('sort', params.sort)
-    return request<ArtistPage>(`/artists/recommended-musicbrainz?${qs.toString()}`)
+    return request<ArtistPage>(`/artists/recommended-listenbrainz?${qs.toString()}`)
   },
-  refreshRecommendedArtistsMusicbrainz: () =>
-    request<TestConnectionResult>('/artists/recommended-musicbrainz/refresh', { method: 'POST' }),
+  refreshRecommendedArtistsListenbrainz: () =>
+    request<TestConnectionResult>('/artists/recommended-listenbrainz/refresh', { method: 'POST' }),
 
   followArtist: (payload: {
     musicbrainz_id: string

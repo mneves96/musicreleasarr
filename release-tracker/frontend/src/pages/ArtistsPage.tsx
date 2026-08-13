@@ -1,9 +1,9 @@
 import { useSearchParams } from 'react-router-dom'
 import FollowedListPage from './FollowedListPage'
 import RecommendedArtistsPage from './RecommendedArtistsPage'
-import RecommendedArtistsMusicbrainzPage from './RecommendedArtistsMusicbrainzPage'
+import RecommendedArtistsListenbrainzPage from './RecommendedArtistsListenbrainzPage'
 
-type Tab = 'followed' | 'recommended' | 'recommended-mb'
+type Tab = 'followed' | 'recommended' | 'recommended-lb'
 
 const tabClass = (active: boolean) =>
   `px-3 py-1.5 rounded-md text-sm font-medium ${
@@ -13,7 +13,7 @@ const tabClass = (active: boolean) =>
 export default function ArtistsPage() {
   const [params, setParams] = useSearchParams()
   const tabParam = params.get('tab')
-  const tab: Tab = tabParam === 'recommended' || tabParam === 'recommended-mb' ? tabParam : 'followed'
+  const tab: Tab = tabParam === 'recommended' || tabParam === 'recommended-lb' ? tabParam : 'followed'
 
   function setTab(next: Tab) {
     const nextParams = new URLSearchParams(params)
@@ -31,13 +31,13 @@ export default function ArtistsPage() {
         <button onClick={() => setTab('recommended')} className={tabClass(tab === 'recommended')}>
           Recommandations Last.fm
         </button>
-        <button onClick={() => setTab('recommended-mb')} className={tabClass(tab === 'recommended-mb')}>
-          Recommandations MusicBrainz
+        <button onClick={() => setTab('recommended-lb')} className={tabClass(tab === 'recommended-lb')}>
+          Recommandations ListenBrainz
         </button>
       </div>
       {tab === 'followed' && <FollowedListPage />}
       {tab === 'recommended' && <RecommendedArtistsPage />}
-      {tab === 'recommended-mb' && <RecommendedArtistsMusicbrainzPage />}
+      {tab === 'recommended-lb' && <RecommendedArtistsListenbrainzPage />}
     </div>
   )
 }
