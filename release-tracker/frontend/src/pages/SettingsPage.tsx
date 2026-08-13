@@ -177,6 +177,38 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
   )
 }
 
+// Pendant de LastfmSection ci-dessus pour les recommandations MusicBrainz
+// (voir pages/RecommendedArtistsMusicbrainzPage.tsx) : pas de cle API ni de
+// connexion de compte a gerer ici (MusicBrainz est public), juste sa propre
+// planification - un champ dedie plutot que de reutiliser
+// lastfm_recommendations_cron, pour que les deux rafraichissements puissent
+// tourner a des heures differentes.
+function MusicbrainzSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+  function set<K extends keyof Settings>(key: K, value: Settings[K]) {
+    setSettings({ ...settings, [key]: value })
+  }
+
+  return (
+    <Section title="MusicBrainz">
+      <p className="text-xs text-app-text-faint">
+        Recommandations basees sur les artistes reellement lies (membre du meme groupe, collaboration,
+        side-project...) a ceux que tu suis - aucune cle API ni connexion de compte necessaire, MusicBrainz est
+        public.
+      </p>
+      <Field
+        label="Planification du rafraichissement des recommandations (ex: 0 3 * * * = tous les jours a 3h)"
+        value={settings.musicbrainz_recommendations_cron}
+        onChange={(v) => set('musicbrainz_recommendations_cron', v)}
+      />
+      <p className="text-xs text-app-text-faint">
+        Chaque nuit, les anciennes recommandations non suivies sont supprimees et remplacees par les nouvelles -
+        un bouton "Rafraichir" dans l'onglet Recommandations MusicBrainz declenche le meme rafraichissement a la
+        demande.
+      </p>
+    </Section>
+  )
+}
+
 function CalendarSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
   const [copied, setCopied] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
@@ -412,6 +444,7 @@ export default function SettingsPage() {
       </Section>
 
       <LastfmSection settings={settings} setSettings={setSettings} />
+      <MusicbrainzSection settings={settings} setSettings={setSettings} />
 
       <Section title="Notifications par email">
         <label className="flex items-center gap-2 text-sm">

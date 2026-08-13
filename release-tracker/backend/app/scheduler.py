@@ -528,6 +528,7 @@ def reschedule() -> None:
         settings = get_settings(db)
         cron = settings.scan_cron
         lastfm_cron = settings.lastfm_recommendations_cron
+        musicbrainz_cron = settings.musicbrainz_recommendations_cron
 
     _scheduler.add_job(
         run_full_cycle,
@@ -545,13 +546,9 @@ def reschedule() -> None:
         max_instances=1,
         misfire_grace_time=3600,
     )
-    # Reutilise le meme reglage de planification que les recommandations
-    # Last.fm plutot qu'un nouveau champ dedie dans Reglages : contrairement a
-    # Last.fm, ce rafraichissement ne depend d'aucune configuration/cle API
-    # (MusicBrainz est public), un second cron series serait juste redondant.
     _scheduler.add_job(
         run_refresh_musicbrainz_recommendations,
-        trigger=CronTrigger.from_crontab(lastfm_cron),
+        trigger=CronTrigger.from_crontab(musicbrainz_cron),
         id=MUSICBRAINZ_RECOMMENDATIONS_JOB_ID,
         replace_existing=True,
         max_instances=1,

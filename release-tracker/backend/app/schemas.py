@@ -255,6 +255,7 @@ class SettingsOut(BaseModel):
     notify_pushbullet_enabled: bool
     scan_cron: str
     lastfm_recommendations_cron: str
+    musicbrainz_recommendations_cron: str
     calendar_token: str | None
     tagging_downloads_path: str
     tagging_library_path: str
@@ -279,6 +280,7 @@ class SettingsUpdateIn(BaseModel):
     notify_pushbullet_enabled: bool | None = None
     scan_cron: str | None = None
     lastfm_recommendations_cron: str | None = None
+    musicbrainz_recommendations_cron: str | None = None
     tagging_downloads_path: str | None = None
     tagging_library_path: str | None = None
 

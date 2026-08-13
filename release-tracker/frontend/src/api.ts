@@ -208,6 +208,7 @@ export interface Settings {
   notify_pushbullet_enabled: boolean
   scan_cron: string
   lastfm_recommendations_cron: string
+  musicbrainz_recommendations_cron: string
   calendar_token: string | null
   tagging_downloads_path: string
   tagging_library_path: string

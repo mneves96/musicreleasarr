@@ -264,6 +264,7 @@ class Settings(Base):
 
     scan_cron: Mapped[str] = mapped_column(String, default="0 6 * * *")
     lastfm_recommendations_cron: Mapped[str] = mapped_column(String, default="0 3 * * *")
+    musicbrainz_recommendations_cron: Mapped[str] = mapped_column(String, default="0 3 * * *")
 
     calendar_token: Mapped[str | None] = mapped_column(String, nullable=True)
 
