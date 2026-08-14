@@ -10,6 +10,7 @@ from ..schemas import (
     NavidromeScanIn,
     NavidromeStatsOut,
     NowPlayingEntryOut,
+    RecentlyAddedAlbumOut,
     RecentlyPlayedAlbumOut,
     TestConnectionResult,
 )
@@ -118,6 +119,38 @@ def recently_played(db: Session = Depends(get_db)):
                 artist=a.get("artist"),
                 play_count=a.get("playCount"),
                 played=played,
+            )
+        )
+    return results
+
+
+@router.get("/recently-added", response_model=list[RecentlyAddedAlbumOut])
+def recently_added(db: Session = Depends(get_db)):
+    """Albums les plus recemment ajoutes a la bibliotheque - utilise par le
+    widget "Ajouts recents" du tableau de bord (voir DashboardPage.tsx),
+    presente comme les widgets "Sorties recentes"/"Sorties a venir"."""
+    settings = _require_navidrome(db)
+    try:
+        albums = navidrome.get_recently_added(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password, size=5)
+    except Exception as exc:
+        raise HTTPException(502, f"Navidrome indisponible : {exc}") from exc
+
+    results = []
+    for a in albums:
+        created = None
+        raw_created = a.get("created")
+        if raw_created:
+            try:
+                created = datetime.fromisoformat(raw_created.replace("Z", "+00:00"))
+            except ValueError:
+                created = None
+        results.append(
+            RecentlyAddedAlbumOut(
+                id=str(a.get("id", "")),
+                name=a.get("name") or a.get("title") or "",
+                artist=a.get("artist"),
+                cover_art_id=a.get("coverArt"),
+                created=created,
             )
         )
     return results

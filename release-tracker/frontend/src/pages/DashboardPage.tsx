@@ -4,15 +4,18 @@ import {
   api,
   navidromeCoverArtUrl,
   RELEASE_TYPE_LABELS,
-  type MetubeItem,
+  type MetubeHistory,
   type NavidromeStats,
   type NowPlayingEntry,
+  type RecentlyAddedAlbum,
   type Release,
+  type ScrobblingStats,
   type TaggingItem,
 } from '../api'
 import { LoadingBlock } from '../components/Spinner'
 import { ArtistsIcon } from '../components/NavIcons'
-import { AlbumIcon, GenreIcon, TrackIcon } from '../components/DashboardIcons'
+import DownloadGlyph from '../components/DownloadGlyph'
+import { AlbumIcon, CheckCircleIcon, ClockIcon, ErrorCircleIcon, GenreIcon, ScrobbleIcon, TrackIcon } from '../components/DashboardIcons'
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -71,18 +74,76 @@ function ReleaseListWidget({ releases, emptyText }: { releases: Release[]; empty
   )
 }
 
+// Meme presentation que ReleaseListWidget ci-dessus (cover + ligne principale
+// + sous-ligne), mais sans lien cliquable : un album Navidrome n'a pas
+// forcement de fiche artiste correspondante cote app (aucun artist_id fiable
+// vers lequel naviguer), contrairement a une Release.
+function RecentlyAddedWidget({ albums, emptyText }: { albums: RecentlyAddedAlbum[]; emptyText: string }) {
+  if (albums.length === 0) return <p className="text-sm text-app-text-faint">{emptyText}</p>
+  return (
+    <div className="flex flex-col gap-2">
+      {albums.map((a) => (
+        <div key={a.id} className="flex items-center gap-2 rounded-md px-1 py-1 -mx-1">
+          {a.cover_art_id ? (
+            <img
+              src={navidromeCoverArtUrl(a.cover_art_id)}
+              alt=""
+              className="w-8 h-8 rounded object-cover bg-app-surface-hover shrink-0"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded bg-app-surface-hover shrink-0" />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="text-sm truncate">
+              {a.artist && <span className="font-medium">{a.artist} - </span>}
+              {a.name}
+            </div>
+            <div className="text-xs text-app-text-faint">Ajoute le {a.created ? a.created.slice(0, 10) : '?'}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+type MetubeCounts = { pending: number; inProgress: number; done: number; error: number }
+
+function MetubeStatTile({
+  icon,
+  count,
+  label,
+  colorClass,
+}: {
+  icon: ReactNode
+  count: number
+  label: string
+  colorClass: string
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={colorClass}>{icon}</span>
+      <div>
+        <p className={`text-lg font-semibold leading-none ${colorClass}`}>{count}</p>
+        <p className="text-xs text-app-text-faint">{label}</p>
+      </div>
+    </div>
+  )
+}
+
 // Page d'accueil "mission control" : agrege des donnees deja exposees par
-// d'autres onglets (sorties, backlog, MeTube, Navidrome) sur une seule vue.
-// Chaque widget se degrade silencieusement (ConfigHint) si le service
-// correspondant n'est pas configure.
+// d'autres onglets (sorties, backlog, MeTube, Navidrome, scrobbling) sur une
+// seule vue. Chaque widget se degrade silencieusement (ConfigHint) si le
+// service correspondant n'est pas configure.
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [recentReleases, setRecentReleases] = useState<Release[]>([])
   const [upcomingReleases, setUpcomingReleases] = useState<Release[]>([])
   const [backlogItems, setBacklogItems] = useState<TaggingItem[]>([])
-  const [recentDownloads, setRecentDownloads] = useState<MetubeItem[] | 'not_configured'>([])
+  const [recentlyAdded, setRecentlyAdded] = useState<RecentlyAddedAlbum[] | 'not_configured'>([])
+  const [metubeHistory, setMetubeHistory] = useState<MetubeHistory | 'not_configured'>('not_configured')
   const [navidromeStats, setNavidromeStats] = useState<NavidromeStats | 'not_configured' | null>(null)
   const [nowPlaying, setNowPlaying] = useState<NowPlayingEntry[] | 'not_configured'>([])
+  const [scrobbling, setScrobbling] = useState<ScrobblingStats | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -90,22 +151,35 @@ export default function DashboardPage() {
     const today = new Date()
 
     async function load() {
-      const [recentResult, upcomingResult, backlogResult, metubeResult, statsResult, nowPlayingResult] = await Promise.allSettled([
+      const [
+        recentResult,
+        upcomingResult,
+        backlogResult,
+        recentlyAddedResult,
+        metubeResult,
+        statsResult,
+        nowPlayingResult,
+        scrobblingResult,
+      ] = await Promise.allSettled([
         api.listReleases({ to: toISODate(today), limit: 5, order: 'desc' }),
         api.listReleases({ from: toISODate(today), limit: 5, order: 'asc' }),
         api.tagging.backlog(),
+        api.navidromeRecentlyAdded(),
         api.metubeHistory(),
         api.navidromeStats(),
         api.navidromeNowPlaying(),
+        api.scrobblingStats(),
       ])
       if (cancelled) return
 
       setRecentReleases(recentResult.status === 'fulfilled' ? recentResult.value.results : [])
       setUpcomingReleases(upcomingResult.status === 'fulfilled' ? upcomingResult.value.results : [])
       setBacklogItems(backlogResult.status === 'fulfilled' ? backlogResult.value : [])
-      setRecentDownloads(metubeResult.status === 'fulfilled' ? metubeResult.value.done.slice(-5).reverse() : 'not_configured')
+      setRecentlyAdded(recentlyAddedResult.status === 'fulfilled' ? recentlyAddedResult.value : 'not_configured')
+      setMetubeHistory(metubeResult.status === 'fulfilled' ? metubeResult.value : 'not_configured')
       setNavidromeStats(statsResult.status === 'fulfilled' ? statsResult.value : 'not_configured')
       setNowPlaying(nowPlayingResult.status === 'fulfilled' ? nowPlayingResult.value : 'not_configured')
+      setScrobbling(scrobblingResult.status === 'fulfilled' ? scrobblingResult.value : null)
       setLoading(false)
     }
 
@@ -118,6 +192,20 @@ export default function DashboardPage() {
   if (loading) return <LoadingBlock />
 
   const errorCount = backlogItems.filter((i) => i.status === 'error').length
+
+  const metubeCounts: MetubeCounts | null =
+    metubeHistory === 'not_configured'
+      ? null
+      : [...metubeHistory.queue, ...metubeHistory.pending, ...metubeHistory.done].reduce(
+          (acc, item) => {
+            if (item.status === 'pending' || item.status === 'scheduled') acc.pending += 1
+            else if (item.status === 'preparing' || item.status === 'downloading') acc.inProgress += 1
+            else if (item.status === 'finished') acc.done += 1
+            else if (item.status === 'error') acc.error += 1
+            return acc
+          },
+          { pending: 0, inProgress: 0, done: 0, error: 0 }
+        )
 
   return (
     <div>
@@ -250,32 +338,100 @@ export default function DashboardPage() {
         </DashboardCard>
 
         <DashboardCard
-          title="Telechargements recents"
+          title="Ajouts recents"
+          action={
+            <Link to="/navidrome" className="text-xs text-app-accent-text hover:underline">
+              Voir tout →
+            </Link>
+          }
+        >
+          {recentlyAdded === 'not_configured' ? (
+            <ConfigHint text="Navidrome n'est pas configure." />
+          ) : (
+            <RecentlyAddedWidget albums={recentlyAdded} emptyText="Aucun album ajoute recemment." />
+          )}
+        </DashboardCard>
+
+        <DashboardCard
+          title="MeTube"
           action={
             <Link to="/metube" className="text-xs text-app-accent-text hover:underline">
               Voir tout →
             </Link>
           }
         >
-          {recentDownloads === 'not_configured' ? (
+          {metubeCounts === null ? (
             <ConfigHint text="MeTube n'est pas configure." />
-          ) : recentDownloads.length > 0 ? (
-            <div className="flex flex-col gap-1.5">
-              {recentDownloads.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="truncate">{item.title ?? item.filename ?? item.url}</span>
-                  <span
-                    className={`text-xs whitespace-nowrap ${
-                      item.status === 'finished' ? 'text-green-400' : item.status === 'error' ? 'text-red-400' : 'text-app-text-faint'
-                    }`}
-                  >
-                    {item.status}
-                  </span>
-                </div>
-              ))}
-            </div>
           ) : (
-            <p className="text-sm text-app-text-faint">Aucun telechargement recent.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <MetubeStatTile
+                icon={<ClockIcon className="w-5 h-5" />}
+                count={metubeCounts.pending}
+                label="en attente"
+                colorClass="text-app-text-faint"
+              />
+              <MetubeStatTile
+                icon={<DownloadGlyph className="w-5 h-5" />}
+                count={metubeCounts.inProgress}
+                label="en cours"
+                colorClass="text-blue-400"
+              />
+              <MetubeStatTile
+                icon={<CheckCircleIcon className="w-5 h-5" />}
+                count={metubeCounts.done}
+                label="reussis"
+                colorClass="text-green-400"
+              />
+              <MetubeStatTile
+                icon={<ErrorCircleIcon className="w-5 h-5" />}
+                count={metubeCounts.error}
+                label="en erreur"
+                colorClass="text-red-400"
+              />
+            </div>
+          )}
+        </DashboardCard>
+
+        <DashboardCard title="Scrobbling">
+          {!scrobbling || (!scrobbling.lastfm && !scrobbling.listenbrainz) ? (
+            <ConfigHint text="Ni Last.fm ni ListenBrainz ne sont connectes." />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {scrobbling.lastfm && (
+                <a
+                  href={scrobbling.lastfm.url ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-3 hover:bg-app-surface-hover rounded-md px-1 py-1 -mx-1"
+                >
+                  <ScrobbleIcon className="w-6 h-6 text-red-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold leading-none">{scrobbling.lastfm.playcount.toLocaleString()}</p>
+                    <p className="text-xs text-app-text-faint truncate">
+                      scrobbles Last.fm · {scrobbling.lastfm.username}
+                    </p>
+                  </div>
+                </a>
+              )}
+              {scrobbling.listenbrainz && (
+                <a
+                  href={`https://listenbrainz.org/user/${encodeURIComponent(scrobbling.listenbrainz.username)}/`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-3 hover:bg-app-surface-hover rounded-md px-1 py-1 -mx-1"
+                >
+                  <ScrobbleIcon className="w-6 h-6 text-orange-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold leading-none">
+                      {scrobbling.listenbrainz.listen_count.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-app-text-faint truncate">
+                      ecoutes ListenBrainz · {scrobbling.listenbrainz.username}
+                    </p>
+                  </div>
+                </a>
+              )}
+            </div>
           )}
         </DashboardCard>
       </div>

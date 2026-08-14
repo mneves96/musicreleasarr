@@ -325,6 +325,14 @@ class RecentlyPlayedAlbumOut(BaseModel):
     played: datetime | None = None
 
 
+class RecentlyAddedAlbumOut(BaseModel):
+    id: str
+    name: str
+    artist: str | None = None
+    cover_art_id: str | None = None
+    created: datetime | None = None
+
+
 class NavidromeScanIn(BaseModel):
     full: bool = False
 
@@ -337,6 +345,26 @@ class TestConnectionResult(BaseModel):
 class LastfmAuthStartOut(BaseModel):
     token: str
     auth_url: str
+
+
+class LastfmScrobbleStatsOut(BaseModel):
+    username: str
+    playcount: int
+    url: str | None = None
+
+
+class ListenbrainzScrobbleStatsOut(BaseModel):
+    username: str
+    listen_count: int
+
+
+class ScrobblingStatsOut(BaseModel):
+    # Chaque service est independant l'un de l'autre - absent (None) s'il
+    # n'est pas configure/connecte, plutot que de faire echouer toute la
+    # reponse (voir routers/scrobbling.py, meme degrade silencieux que les
+    # autres widgets du tableau de bord).
+    lastfm: LastfmScrobbleStatsOut | None = None
+    listenbrainz: ListenbrainzScrobbleStatsOut | None = None
 
 
 class LastfmAuthFinishIn(BaseModel):

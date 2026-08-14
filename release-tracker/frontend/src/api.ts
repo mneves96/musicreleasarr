@@ -248,6 +248,30 @@ export interface RecentlyPlayedAlbum {
   played: string | null
 }
 
+export interface RecentlyAddedAlbum {
+  id: string
+  name: string
+  artist: string | null
+  cover_art_id: string | null
+  created: string | null
+}
+
+export interface LastfmScrobbleStats {
+  username: string
+  playcount: number
+  url: string | null
+}
+
+export interface ListenbrainzScrobbleStats {
+  username: string
+  listen_count: number
+}
+
+export interface ScrobblingStats {
+  lastfm: LastfmScrobbleStats | null
+  listenbrainz: ListenbrainzScrobbleStats | null
+}
+
 export interface AuthStatus {
   needs_setup: boolean
   authenticated: boolean
@@ -431,8 +455,11 @@ export const api = {
   navidromeStats: () => request<NavidromeStats>('/navidrome/stats'),
   navidromeNowPlaying: () => request<NowPlayingEntry[]>('/navidrome/now-playing'),
   navidromeRecentlyPlayed: () => request<RecentlyPlayedAlbum[]>('/navidrome/recently-played'),
+  navidromeRecentlyAdded: () => request<RecentlyAddedAlbum[]>('/navidrome/recently-added'),
   navidromeScan: (full: boolean) =>
     request<TestConnectionResult>('/navidrome/scan', { method: 'POST', body: JSON.stringify({ full }) }),
+
+  scrobblingStats: () => request<ScrobblingStats>('/scrobbling/stats'),
 
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),

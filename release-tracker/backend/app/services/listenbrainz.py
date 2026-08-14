@@ -24,6 +24,17 @@ SIMILAR_ARTISTS_ALGORITHM = (
 )
 
 
+def get_listen_count(username: str) -> int | None:
+    """Nombre total d'ecoutes (scrobbles) enregistrees pour ce compte - utilise
+    pour le widget "Scrobbling" du tableau de bord (voir routers/scrobbling.py).
+    None si l'utilisateur n'existe pas/est injoignable, a distinguer de 0
+    (compte existant mais sans ecoute)."""
+    resp = httpx.get(f"{API_BASE_URL}/1/user/{username}/listen-count", timeout=15)
+    if resp.status_code != 200:
+        return None
+    return ((resp.json() or {}).get("payload") or {}).get("count")
+
+
 def get_top_artists(username: str, count: int = 25, range_: str = "all_time") -> list[dict]:
     """Artistes les plus reellement ecoutes (pas suivis dans l'app) par
     l'utilisateur ListenBrainz sur la periode donnee - sert de graine pour les

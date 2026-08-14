@@ -27,6 +27,24 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 
 
+def get_user_info(username: str, api_key: str) -> dict | None:
+    """Infos publiques d'un compte Last.fm (notamment "playcount", le nombre
+    total de scrobbles) - utilise pour le widget "Scrobbling" du tableau de
+    bord (voir routers/scrobbling.py). Lecture seule, cle API seule suffit
+    (pas besoin de session signee, contrairement a get_similar_to_followed)."""
+    resp = httpx.get(
+        BASE_URL,
+        params={"method": "user.getinfo", "user": username, "api_key": api_key, "format": "json"},
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    if "error" in data:
+        return None
+    return data.get("user")
+
+
 def get_artist_info(name: str, api_key: str) -> dict | None:
     if not api_key:
         return None

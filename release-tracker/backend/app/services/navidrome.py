@@ -198,6 +198,22 @@ def get_recently_played(base_url: str, username: str, password: str, size: int =
     return body.get("albumList2", {}).get("album", [])
 
 
+def get_recently_added(base_url: str, username: str, password: str, size: int = 5) -> list[dict]:
+    """Albums les plus recemment ajoutes a la bibliotheque (type=newest,
+    extension standard de getAlbumList2, trie par date d'ajout/indexation) -
+    utilise pour le widget "Ajouts recents" du tableau de bord, a la
+    difference de get_recently_played (type=recent) qui trie par derniere
+    ecoute plutot que par date d'ajout."""
+    resp = httpx.get(
+        f"{base_url.rstrip('/')}/rest/getAlbumList2.view",
+        params={**_auth_params(username, password), "type": "newest", "size": str(size)},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    body = resp.json().get("subsonic-response", {})
+    return body.get("albumList2", {}).get("album", [])
+
+
 def get_genres(base_url: str, username: str, password: str) -> list[dict]:
     """Genres connus de la bibliotheque avec leur nombre de morceaux/albums -
     endpoint Subsonic standard, agrege sur toute la bibliotheque (pas par
