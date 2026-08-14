@@ -16,13 +16,13 @@ def build_message(artist: Artist, release: Release) -> tuple[str, str]:
         f"Date de sortie : {date_str}",
     ]
     if release.ownership_status.value == "owned":
-        lines.append("Deja presente dans ta bibliotheque Navidrome.")
+        lines.append("Déjà présente dans ta bibliothèque Navidrome.")
     elif release.download_status.value == "queued":
-        lines.append("Absente de ta bibliotheque : telechargement lance automatiquement via MeTube.")
+        lines.append("Absente de ta bibliothèque : téléchargement lancé automatiquement via MeTube.")
     elif release.ownership_status.value == "unknown":
-        lines.append("Presence dans ta bibliotheque pas encore verifiee.")
+        lines.append("Présence dans ta bibliothèque pas encore vérifiée.")
     else:
-        lines.append("Absente de ta bibliotheque.")
+        lines.append("Absente de ta bibliothèque.")
     if release.youtube_music_url:
         lines.append(f"YouTube Music : {release.youtube_music_url}")
     return subject, "\n".join(lines)
@@ -30,7 +30,7 @@ def build_message(artist: Artist, release: Release) -> tuple[str, str]:
 
 def send_email(settings: Settings, subject: str, body: str) -> tuple[bool, str]:
     if not (settings.smtp_host and settings.smtp_from and settings.smtp_to):
-        return False, "Parametres SMTP incomplets"
+        return False, "Paramètres SMTP incomplets"
     try:
         msg = MIMEText(body)
         msg["Subject"] = subject
@@ -42,9 +42,9 @@ def send_email(settings: Settings, subject: str, body: str) -> tuple[bool, str]:
             if settings.smtp_user and settings.smtp_password:
                 server.login(settings.smtp_user, settings.smtp_password)
             server.sendmail(settings.smtp_from, [settings.smtp_to], msg.as_string())
-        return True, "Email envoye"
+        return True, "Email envoyé"
     except (smtplib.SMTPException, OSError) as exc:
-        return False, f"Echec envoi email : {exc}"
+        return False, f"Échec envoi email : {exc}"
 
 
 def send_pushbullet(settings: Settings, title: str, body: str) -> tuple[bool, str]:
@@ -58,9 +58,9 @@ def send_pushbullet(settings: Settings, title: str, body: str) -> tuple[bool, st
             timeout=10,
         )
         resp.raise_for_status()
-        return True, "Notification Pushbullet envoyee"
+        return True, "Notification Pushbullet envoyée"
     except httpx.HTTPError as exc:
-        return False, f"Echec Pushbullet : {exc}"
+        return False, f"Échec Pushbullet : {exc}"
 
 
 def notify_new_release(settings: Settings, artist: Artist, release: Release) -> None:

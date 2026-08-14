@@ -1,15 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { api, RELEASE_TYPE_LABELS, type Release } from '../api'
+import { api, getReleaseTypeLabels, type Release } from '../api'
 import { OwnershipBadge } from '../components/StatusBadge'
 import Spinner, { LoadingBlock } from '../components/Spinner'
 import { useToast } from '../context/ToastContext'
 import { useSwipe } from '../hooks/useSwipe'
+import { useLanguage } from '../context/LanguageContext'
+import type { TranslationKey } from '../i18n/en'
 
-const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-const MONTH_NAMES = [
-  'Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre',
+const WEEKDAY_KEYS: TranslationKey[] = [
+  'calendar.weekday.mon',
+  'calendar.weekday.tue',
+  'calendar.weekday.wed',
+  'calendar.weekday.thu',
+  'calendar.weekday.fri',
+  'calendar.weekday.sat',
+  'calendar.weekday.sun',
+]
+const MONTH_KEYS: TranslationKey[] = [
+  'calendar.month.jan',
+  'calendar.month.feb',
+  'calendar.month.mar',
+  'calendar.month.apr',
+  'calendar.month.may',
+  'calendar.month.jun',
+  'calendar.month.jul',
+  'calendar.month.aug',
+  'calendar.month.sep',
+  'calendar.month.oct',
+  'calendar.month.nov',
+  'calendar.month.dec',
 ]
 
 function toISODate(d: Date): string {
@@ -34,15 +54,6 @@ function buildGrid(monthStart: Date): Date[] {
   return days
 }
 
-// "YYYY-MM-DD" -> cle "YYYY-MM" + libelle "Aout 2026", en decoupant directement
-// la chaine plutot que via `new Date(...)` pour eviter tout decalage de fuseau
-// horaire sur une date sans heure.
-function monthKeyAndLabel(isoDate: string): { key: string; label: string } {
-  const year = isoDate.slice(0, 4)
-  const monthIndex = Number(isoDate.slice(5, 7)) - 1
-  return { key: isoDate.slice(0, 7), label: `${MONTH_NAMES[monthIndex]} ${year}` }
-}
-
 type Tab = 'month' | 'events'
 
 const TAB_STORAGE_KEY = 'calendar.tab'
@@ -54,10 +65,28 @@ function readStored<T extends string>(key: string, allowed: readonly T[], fallba
 }
 
 export default function CalendarPage() {
+  const { t } = useLanguage()
   const [tab, setTab] = useState<Tab>(() => readStored(TAB_STORAGE_KEY, ['month', 'events'] as const, 'month'))
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [monthReleases, setMonthReleases] = useState<Release[]>([])
   const [loading, setLoading] = useState(true)
+
+  const weekdays = WEEKDAY_KEYS.map((k) => t(k))
+  const monthNames = MONTH_KEYS.map((k) => t(k))
+  const releaseTypeLabels = getReleaseTypeLabels(t)
+
+  // "YYYY-MM-DD" -> cle "YYYY-MM" + libelle "Aout 2026", en decoupant directement
+  // la chaine plutot que via `new Date(...)` pour eviter tout decalage de fuseau
+  // horaire sur une date sans heure.
+  const monthKeyAndLabel = useCallback(
+    (isoDate: string): { key: string; label: string } => {
+      const year = isoDate.slice(0, 4)
+      const monthIndex = Number(isoDate.slice(5, 7)) - 1
+      return { key: isoDate.slice(0, 7), label: `${monthNames[monthIndex]} ${year}` }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- monthNames recalcule a chaque render, deps volontairement omises
+    [t]
+  )
 
   const grid = useMemo(() => buildGrid(month), [month])
   const today = toISODate(new Date())
@@ -100,19 +129,19 @@ export default function CalendarPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h1 className="text-xl font-semibold">Calendrier</h1>
+        <h1 className="text-xl font-semibold">{t('calendar.title')}</h1>
         <div className="flex gap-1">
           <button
             onClick={() => setTab('month')}
             className={`text-xs px-3 py-1.5 rounded-md ${tab === 'month' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
           >
-            Mois
+            {t('calendar.tabMonth')}
           </button>
           <button
             onClick={() => setTab('events')}
             className={`text-xs px-3 py-1.5 rounded-md ${tab === 'events' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
           >
-            Evenements
+            {t('calendar.tabEvents')}
           </button>
         </div>
       </div>
@@ -121,26 +150,26 @@ export default function CalendarPage() {
         <>
           <div {...monthSwipe} style={{ touchAction: 'pan-y' }} className="flex items-center justify-between mb-4">
             <h2 className="font-medium">
-              {MONTH_NAMES[month.getMonth()]} {month.getFullYear()}
+              {monthNames[month.getMonth()]} {month.getFullYear()}
             </h2>
             <div className="flex gap-2">
               <button
                 onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
                 className="px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong text-sm"
               >
-                ← Precedent
+                {t('calendar.previous')}
               </button>
               <button
                 onClick={() => setMonth(startOfMonth(new Date()))}
                 className="px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong text-sm"
               >
-                Aujourd'hui
+                {t('calendar.today')}
               </button>
               <button
                 onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
                 className="px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong text-sm"
               >
-                Suivant →
+                {t('calendar.next')}
               </button>
             </div>
           </div>
@@ -150,7 +179,7 @@ export default function CalendarPage() {
           <div className="overflow-x-auto">
             <div className="min-w-[560px]">
               <div className="grid grid-cols-7 gap-1 text-xs text-app-text-faint mb-1">
-                {WEEKDAYS.map((w) => (
+                {weekdays.map((w) => (
                   <div key={w} className="text-center py-1">
                     {w}
                   </div>
@@ -174,7 +203,7 @@ export default function CalendarPage() {
                           key={r.id}
                           to={`/artists/${r.artist_id}`}
                           className="flex items-center gap-1 bg-app-surface-hover hover:bg-app-border-strong rounded px-1 py-0.5"
-                          title={`${r.artist_name} - ${r.title} (${RELEASE_TYPE_LABELS[r.release_type]})`}
+                          title={`${r.artist_name} - ${r.title} (${releaseTypeLabels[r.release_type]})`}
                         >
                           {r.cover_url ? (
                             <img src={r.cover_url} alt="" className="w-5 h-5 rounded object-cover bg-app-border-strong shrink-0" />
@@ -184,13 +213,13 @@ export default function CalendarPage() {
                           <div className="min-w-0 leading-tight">
                             <div className="text-[11px] font-medium truncate">{r.artist_name}</div>
                             <div className="text-[10px] text-app-text-muted truncate">
-                              {r.title} · {RELEASE_TYPE_LABELS[r.release_type]}
+                              {r.title} · {releaseTypeLabels[r.release_type]}
                             </div>
                           </div>
                         </Link>
                       ))}
                       {dayReleases.length > 2 && (
-                        <span className="text-[11px] text-app-text-faint">+{dayReleases.length - 2} autres</span>
+                        <span className="text-[11px] text-app-text-faint">{t('calendar.others', { count: dayReleases.length - 2 })}</span>
                       )}
                     </div>
                   )
@@ -200,7 +229,7 @@ export default function CalendarPage() {
           </div>
         </>
       ) : (
-        <EventsView />
+        <EventsView monthKeyAndLabel={monthKeyAndLabel} />
       )}
     </div>
   )
@@ -209,7 +238,8 @@ export default function CalendarPage() {
 const EVENTS_PAGE_SIZE = 40
 const EVENTS_SEARCH_DEBOUNCE_MS = 300
 
-function EventsView() {
+function EventsView({ monthKeyAndLabel }: { monthKeyAndLabel: (isoDate: string) => { key: string; label: string } }) {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const [releases, setReleases] = useState<Release[]>([])
   const [total, setTotal] = useState(0)
@@ -289,7 +319,7 @@ function EventsView() {
       }
     }
     return result
-  }, [releases])
+  }, [releases, monthKeyAndLabel])
 
   return (
     <div>
@@ -297,21 +327,21 @@ function EventsView() {
         <input
           value={queryInput}
           onChange={(e) => setQueryInput(e.target.value)}
-          placeholder="Filtrer par titre ou artiste..."
+          placeholder={t('calendar.filterPlaceholder')}
           className="bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
         />
         <button
           onClick={() => setSortDesc((v) => !v)}
-          title={sortDesc ? 'Plus recentes en premier' : 'Plus anciennes en premier'}
+          title={sortDesc ? t('calendar.sortNewestFirst') : t('calendar.sortOldestFirst')}
           className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover border border-app-border-strong hover:bg-app-border-strong whitespace-nowrap"
         >
-          Date {sortDesc ? '↓' : '↑'}
+          {t('calendar.dateLabel')} {sortDesc ? '↓' : '↑'}
         </button>
       </div>
 
       {initialLoading && <LoadingBlock />}
       {!initialLoading && groups.length === 0 && (
-        <p className="text-app-text-muted text-sm">Aucune sortie ne correspond au filtre.</p>
+        <p className="text-app-text-muted text-sm">{t('calendar.noMatch')}</p>
       )}
 
       {groups.map((group) => (
@@ -338,6 +368,8 @@ function EventsView() {
 }
 
 function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigate: () => void }) {
+  const { t } = useLanguage()
+  const releaseTypeLabels = getReleaseTypeLabels(t)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const { showToast } = useToast()
@@ -348,16 +380,16 @@ function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigat
     setMessage(null)
     try {
       const result = await api.downloadRelease(release.id)
-      if (result.ok) showToast('Telechargement envoye a MeTube')
+      if (result.ok) showToast(t('calendar.downloadSentToast'))
       else setMessage(result.message)
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erreur')
+      setMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
   }
 
-  const downloadLabel = release.ownership_status === 'owned' ? 'Retelecharger' : 'Telecharger'
+  const downloadLabel = release.ownership_status === 'owned' ? t('calendar.redownload') : t('metube.download')
 
   return (
     <div
@@ -372,7 +404,7 @@ function CalendarEventRow({ release, onNavigate }: { release: Release; onNavigat
       <div className="flex-1 min-w-0">
         <div className="font-medium truncate">{release.title}</div>
         <div className="text-sm text-app-text-muted truncate">
-          {release.artist_name} - {RELEASE_TYPE_LABELS[release.release_type]} - {release.release_date}
+          {release.artist_name} - {releaseTypeLabels[release.release_type]} - {release.release_date}
         </div>
         {message && <div className="text-xs text-app-text-muted mt-1">{message}</div>}
       </div>

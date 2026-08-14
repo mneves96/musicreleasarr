@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import type { Artist } from '../api'
+import { useLanguage } from '../context/LanguageContext'
 
 export default function ArtistCard({ artist }: { artist: Artist }) {
+  const { t } = useLanguage()
   // Un artiste n'a jamais les deux listes remplies en meme temps en pratique
   // (chaque ecran de recommandations ne filtre que sur sa propre source) -
   // recommended_because_lb sert de repli pour que ce meme composant affiche
@@ -29,18 +31,18 @@ export default function ArtistCard({ artist }: { artist: Artist }) {
 
       {recommendedBecause.length > 0 && (
         <p className="text-xs text-app-accent-text/80 truncate">
-          Base sur : {recommendedBecause.map((s) => s.name).join(', ')}
+          {t('artistCard.basedOn', { names: recommendedBecause.map((s) => s.name).join(', ') })}
         </p>
       )}
 
       <div className="flex items-center justify-between text-xs text-app-text-muted mt-1 flex-wrap gap-1">
         <span>
           {artist.album_count} album{artist.album_count > 1 ? 's' : ''}
-          {artist.release_count > artist.album_count && ` · ${artist.release_count} sorties au total`}
+          {artist.release_count > artist.album_count && t('artistCard.totalReleases', { count: artist.release_count })}
         </span>
         <div className="flex gap-2">
-          {artist.notify_enabled && <span className="px-1.5 py-0.5 rounded bg-app-surface-hover">Notifications</span>}
-          {artist.auto_download && <span className="px-1.5 py-0.5 rounded bg-app-surface-hover">Auto-telechargement</span>}
+          {artist.notify_enabled && <span className="px-1.5 py-0.5 rounded bg-app-surface-hover">{t('artistCard.notifications')}</span>}
+          {artist.auto_download && <span className="px-1.5 py-0.5 rounded bg-app-surface-hover">{t('artistCard.autoDownload')}</span>}
         </div>
       </div>
     </Link>

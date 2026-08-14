@@ -49,11 +49,11 @@ def status(db: Session = Depends(get_db), user: AppUser | None = Depends(get_cur
 @router.post("/setup", response_model=StatusOut)
 def setup(payload: CredentialsIn, response: Response, request: Request, db: Session = Depends(get_db)):
     if db.query(AppUser).first() is not None:
-        raise HTTPException(409, "Un compte existe deja")
+        raise HTTPException(409, "Un compte existe déjà")
     if len(payload.username.strip()) < 3:
-        raise HTTPException(422, "Nom d'utilisateur trop court (3 caracteres minimum)")
+        raise HTTPException(422, "Nom d'utilisateur trop court (3 caractères minimum)")
     if len(payload.password) < 8:
-        raise HTTPException(422, "Mot de passe trop court (8 caracteres minimum)")
+        raise HTTPException(422, "Mot de passe trop court (8 caractères minimum)")
 
     user = AppUser(username=payload.username.strip(), password_hash=hash_password(payload.password))
     db.add(user)
@@ -91,7 +91,7 @@ def change_password(
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(401, "Mot de passe actuel incorrect")
     if len(payload.new_password) < 8:
-        raise HTTPException(422, "Nouveau mot de passe trop court (8 caracteres minimum)")
+        raise HTTPException(422, "Nouveau mot de passe trop court (8 caractères minimum)")
 
     user.password_hash = hash_password(payload.new_password)
     # Invalide les autres sessions actives (ex: session volee) - seule celle en

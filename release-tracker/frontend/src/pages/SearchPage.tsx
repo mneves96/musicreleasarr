@@ -2,50 +2,53 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ALL_RELEASE_TYPES, api, type ArtistSearchResult } from '../api'
 import Spinner, { LoadingBlock } from '../components/Spinner'
+import { useLanguage } from '../context/LanguageContext'
+import type { TranslationKey } from '../i18n/en'
 
-const COUNTRY_OPTIONS: [string, string][] = [
-  ['US', 'Etats-Unis'],
-  ['GB', 'Royaume-Uni'],
-  ['FR', 'France'],
-  ['DE', 'Allemagne'],
-  ['JP', 'Japon'],
-  ['KR', 'Coree du Sud'],
-  ['CA', 'Canada'],
-  ['AU', 'Australie'],
-  ['IT', 'Italie'],
-  ['ES', 'Espagne'],
-  ['SE', 'Suede'],
-  ['NO', 'Norvege'],
-  ['DK', 'Danemark'],
-  ['FI', 'Finlande'],
-  ['NL', 'Pays-Bas'],
-  ['BE', 'Belgique'],
-  ['BR', 'Bresil'],
-  ['MX', 'Mexique'],
-  ['IE', 'Irlande'],
-  ['IS', 'Islande'],
-  ['PT', 'Portugal'],
-  ['PL', 'Pologne'],
-  ['RU', 'Russie'],
-  ['CN', 'Chine'],
-  ['IN', 'Inde'],
-  ['AT', 'Autriche'],
-  ['CH', 'Suisse'],
-  ['NZ', 'Nouvelle-Zelande'],
-  ['AR', 'Argentine'],
-  ['CO', 'Colombie'],
+const COUNTRY_OPTIONS: [string, TranslationKey][] = [
+  ['US', 'search.country.US'],
+  ['GB', 'search.country.GB'],
+  ['FR', 'search.country.FR'],
+  ['DE', 'search.country.DE'],
+  ['JP', 'search.country.JP'],
+  ['KR', 'search.country.KR'],
+  ['CA', 'search.country.CA'],
+  ['AU', 'search.country.AU'],
+  ['IT', 'search.country.IT'],
+  ['ES', 'search.country.ES'],
+  ['SE', 'search.country.SE'],
+  ['NO', 'search.country.NO'],
+  ['DK', 'search.country.DK'],
+  ['FI', 'search.country.FI'],
+  ['NL', 'search.country.NL'],
+  ['BE', 'search.country.BE'],
+  ['BR', 'search.country.BR'],
+  ['MX', 'search.country.MX'],
+  ['IE', 'search.country.IE'],
+  ['IS', 'search.country.IS'],
+  ['PT', 'search.country.PT'],
+  ['PL', 'search.country.PL'],
+  ['RU', 'search.country.RU'],
+  ['CN', 'search.country.CN'],
+  ['IN', 'search.country.IN'],
+  ['AT', 'search.country.AT'],
+  ['CH', 'search.country.CH'],
+  ['NZ', 'search.country.NZ'],
+  ['AR', 'search.country.AR'],
+  ['CO', 'search.country.CO'],
 ]
 
-const TYPE_OPTIONS: [string, string][] = [
-  ['Person', 'Personne (solo)'],
-  ['Group', 'Groupe'],
-  ['Orchestra', 'Orchestre'],
-  ['Choir', 'Choeur'],
-  ['Character', 'Personnage'],
-  ['Other', 'Autre'],
+const TYPE_OPTIONS: [string, TranslationKey][] = [
+  ['Person', 'search.type.person'],
+  ['Group', 'search.type.group'],
+  ['Orchestra', 'search.type.orchestra'],
+  ['Choir', 'search.type.choir'],
+  ['Character', 'search.type.character'],
+  ['Other', 'search.type.other'],
 ]
 
 export default function SearchPage() {
+  const { t } = useLanguage()
   const [params] = useSearchParams()
   const query = params.get('q') ?? ''
   const [country, setCountry] = useState('')
@@ -65,8 +68,8 @@ export default function SearchPage() {
   // Evite d'interroger MusicBrainz (limite a 1 req/s) a chaque frappe sur le
   // champ genre - seul le debounce declenche une recherche, pas chaque lettre.
   useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedTag(tag.trim()), 500)
-    return () => window.clearTimeout(t)
+    const timeout = window.setTimeout(() => setDebouncedTag(tag.trim()), 500)
+    return () => window.clearTimeout(timeout)
   }, [tag])
 
   const loadPage = useCallback(
@@ -94,8 +97,9 @@ export default function SearchPage() {
     setLoading(true)
     setError(null)
     loadPage(0, requestId)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Erreur de recherche'))
+      .catch((err) => setError(err instanceof Error ? err.message : t('search.searchError')))
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t stable en pratique, deps volontairement omises
   }, [query, loadPage])
 
   // Pagination dynamique : charge la page suivante uniquement quand la
@@ -131,7 +135,7 @@ export default function SearchPage() {
       })
       navigate(`/artists/${artist.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors du suivi')
+      setError(err instanceof Error ? err.message : t('search.followError'))
       setBusyId(null)
     }
   }
@@ -142,19 +146,22 @@ export default function SearchPage() {
       const artist = await api.previewArtist(result.musicbrainz_id)
       navigate(`/artists/${artist.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur a l'ouverture de la fiche")
+      setError(err instanceof Error ? err.message : t('search.openError'))
       setBusyId(null)
     }
   }
 
-  const typeLabel = (t: string | null) => TYPE_OPTIONS.find(([v]) => v === t)?.[1] ?? t
+  const typeLabel = (type: string | null) => {
+    const key = TYPE_OPTIONS.find(([v]) => v === type)?.[1]
+    return key ? t(key) : type
+  }
 
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">
-        {query ? `Resultats pour "${query}"` : 'Recherche d\'artistes'}
+        {query ? t('search.resultsFor', { query }) : t('search.title')}
       </h1>
-      {!query && <p className="text-app-text-muted">Utilise la barre de recherche en haut de page.</p>}
+      {!query && <p className="text-app-text-muted">{t('search.useSearchBar')}</p>}
 
       {query && (
         <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -163,10 +170,10 @@ export default function SearchPage() {
             onChange={(e) => setCountry(e.target.value)}
             className="bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
           >
-            <option value="">Tous les pays</option>
-            {COUNTRY_OPTIONS.map(([code, label]) => (
+            <option value="">{t('search.allCountries')}</option>
+            {COUNTRY_OPTIONS.map(([code, labelKey]) => (
               <option key={code} value={code}>
-                {label}
+                {t(labelKey)}
               </option>
             ))}
           </select>
@@ -175,27 +182,27 @@ export default function SearchPage() {
             onChange={(e) => setArtistType(e.target.value)}
             className="bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
           >
-            <option value="">Tous les types</option>
-            {TYPE_OPTIONS.map(([value, label]) => (
+            <option value="">{t('search.allTypesOption')}</option>
+            {TYPE_OPTIONS.map(([value, labelKey]) => (
               <option key={value} value={value}>
-                {label}
+                {t(labelKey)}
               </option>
             ))}
           </select>
           <input
             value={tag}
             onChange={(e) => setTag(e.target.value)}
-            placeholder="Genre (ex: rock, synth-pop)..."
+            placeholder={t('search.genrePlaceholder')}
             className="bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
           />
-          {total > 0 && <span className="text-xs text-app-text-faint ml-auto">{total} resultat(s)</span>}
+          {total > 0 && <span className="text-xs text-app-text-faint ml-auto">{t('search.resultsCount', { count: total })}</span>}
         </div>
       )}
 
-      {loading && <LoadingBlock label="Recherche en cours..." />}
+      {loading && <LoadingBlock label={t('search.searching')} />}
       {error && <p className="text-red-400">{error}</p>}
       {query && !loading && !error && results.length === 0 && (
-        <p className="text-app-text-muted">Aucun artiste ne correspond a cette recherche.</p>
+        <p className="text-app-text-muted">{t('search.noMatch')}</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -208,7 +215,7 @@ export default function SearchPage() {
               onClick={() => view(r)}
               disabled={busyId === r.musicbrainz_id}
               className="flex items-center gap-3 min-w-0 flex-1 text-left disabled:opacity-50"
-              title="Voir la fiche de l'artiste"
+              title={t('search.viewArtistTitle')}
             >
               {r.image_url ? (
                 <img src={r.image_url} alt="" className="w-10 h-10 rounded-full object-cover bg-app-surface-hover shrink-0" />
@@ -224,7 +231,7 @@ export default function SearchPage() {
               </div>
             </button>
             {r.already_followed ? (
-              <span className="text-xs text-app-text-faint whitespace-nowrap">Deja suivi</span>
+              <span className="text-xs text-app-text-faint whitespace-nowrap">{t('search.alreadyFollowed')}</span>
             ) : (
               <button
                 onClick={() => follow(r)}
@@ -232,7 +239,7 @@ export default function SearchPage() {
                 className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
               >
                 {busyId === r.musicbrainz_id && <Spinner className="w-3 h-3" />}
-                Suivre
+                {t('search.follow')}
               </button>
             )}
           </div>
@@ -240,7 +247,7 @@ export default function SearchPage() {
       </div>
 
       <div ref={sentinelRef} />
-      {loadingMore && <LoadingBlock label="Chargement de plus de resultats..." />}
+      {loadingMore && <LoadingBlock label={t('search.loadingMore')} />}
     </div>
   )
 }

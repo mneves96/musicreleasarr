@@ -2,11 +2,13 @@ import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type ArtistSortBy } from '../api'
 import ArtistListView from '../components/ArtistListView'
+import { useLanguage } from '../context/LanguageContext'
 
 const POLL_INTERVAL_MS = 4000
 const POLL_MAX_TICKS = 15 // ~1 minute
 
 export default function FollowedListPage() {
+  const { t } = useLanguage()
   const [total, setTotal] = useState<number | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   const [importing, setImporting] = useState(false)
@@ -35,7 +37,7 @@ export default function FollowedListPage() {
         }
       }, POLL_INTERVAL_MS)
     } catch (err) {
-      setImportMessage(err instanceof Error ? err.message : 'Erreur')
+      setImportMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setImporting(false)
     }
@@ -44,13 +46,13 @@ export default function FollowedListPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h1 className="text-xl font-semibold">Artistes suivis{total !== null ? ` (${total})` : ''}</h1>
+        <h1 className="text-xl font-semibold">{t('artists.followedHeading')}{total !== null ? ` (${total})` : ''}</h1>
         <button
           onClick={importFavorites}
           disabled={importing}
           className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
         >
-          {importing ? 'Import en cours...' : 'Importer mes favoris Navidrome'}
+          {importing ? t('artists.importing') : t('artists.importFavorites')}
         </button>
       </div>
       {importMessage && <p className="text-sm text-app-text-muted mb-4">{importMessage}</p>}
@@ -62,10 +64,13 @@ export default function FollowedListPage() {
         onTotalChange={setTotal}
         emptyMessage={
           <div className="text-app-text-muted">
-            <p>Tu ne suis encore aucun artiste.</p>
+            <p>{t('artists.noFollowedYet')}</p>
             <p className="mt-2">
-              Utilise la barre de recherche en haut, <Link to="/search" className="text-app-accent-text hover:underline">clique ici</Link>{' '}
-              pour en trouver un, ou importe tes favoris Navidrome ci-dessus.
+              {t('artists.useSearchBarPrefix')}{' '}
+              <Link to="/search" className="text-app-accent-text hover:underline">
+                {t('artists.clickHere')}
+              </Link>{' '}
+              {t('artists.findOneOrImportSuffix')}
             </p>
           </div>
         }

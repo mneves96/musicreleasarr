@@ -3,6 +3,7 @@ import type { ReleaseCard, TaggingItem, TrackChoice } from '../api'
 import { TaggingBadge } from './StatusBadge'
 import Spinner from './Spinner'
 import type { DragPayload } from './FileTree'
+import { useLanguage } from '../context/LanguageContext'
 
 export interface Edit {
   trackTitle: string
@@ -35,6 +36,7 @@ function parseDragPayload(e: DragEvent): AlbumDropPayload | null {
 }
 
 function FileChip({ item, onDiscard }: { item: TaggingItem; onDiscard: () => void }) {
+  const { t } = useLanguage()
   return (
     <div
       draggable
@@ -55,7 +57,7 @@ function FileChip({ item, onDiscard }: { item: TaggingItem; onDiscard: () => voi
       {item.match_score != null && (
         <span className="text-[10px] text-app-text-faint whitespace-nowrap">{Math.round(item.match_score * 100)}%</span>
       )}
-      <button onClick={onDiscard} className="text-app-text-faint hover:text-red-400 text-xs px-1" title="Ignorer ce fichier">
+      <button onClick={onDiscard} className="text-app-text-faint hover:text-red-400 text-xs px-1" title={t('tagging.discardFileTitle')}>
         ✕
       </button>
     </div>
@@ -83,6 +85,7 @@ function TrackSlot({
   onUnassign: () => void
   onConfirm: () => void
 }) {
+  const { t } = useLanguage()
   const label = `${track.disc_number > 1 ? `${track.disc_number}-` : ''}${String(track.position).padStart(2, '0')}. ${track.title}`
   return (
     <div
@@ -107,7 +110,7 @@ function TrackSlot({
             ← {assignedItem.original_filename}
           </span>
         ) : (
-          <span className="text-xs text-app-text-faint">Glisse un fichier ici...</span>
+          <span className="text-xs text-app-text-faint">{t('albumCard.dropFileHint')}</span>
         )}
       </span>
       {assignedItem && (
@@ -116,16 +119,16 @@ function TrackSlot({
             onClick={onConfirm}
             disabled={busy}
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
-            title="Taguer et ranger cette piste"
+            title={t('albumCard.confirmTagFile')}
           >
             {busy && <Spinner className="w-3 h-3" />}
-            Confirmer
+            {t('albumCard.confirm')}
           </button>
           <button
             onClick={onUnassign}
             disabled={busy}
             className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
-            title="Detacher ce fichier"
+            title={t('albumCard.detachFile')}
           >
             ✕
           </button>
@@ -150,6 +153,7 @@ function FallbackRow({
   onDiscard: () => void
   busy: boolean
 }) {
+  const { t } = useLanguage()
   return (
     <div className="bg-app-bg border border-app-border rounded-lg p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
@@ -158,27 +162,25 @@ function FallbackRow({
         </span>
         <TaggingBadge status={item.status} error={item.error_message} />
       </div>
-      <p className="text-xs text-app-text-faint">
-        Tracklist MusicBrainz indisponible pour cet album - saisis les informations a la main.
-      </p>
+      <p className="text-xs text-app-text-faint">{t('albumCard.noTracklistHint')}</p>
       <div className="flex gap-2">
         <input
           value={edit.trackTitle}
           onChange={(e) => onEditChange({ ...edit, trackTitle: e.target.value })}
-          placeholder="Titre de la piste"
+          placeholder={t('albumCard.trackTitlePlaceholder')}
           className="flex-1 bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
         />
         <input
           value={edit.trackNumber}
           onChange={(e) => onEditChange({ ...edit, trackNumber: e.target.value })}
-          placeholder="N°"
+          placeholder={t('albumCard.trackNumberPlaceholder')}
           type="number"
           className="w-16 bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
         />
         <input
           value={edit.discNumber}
           onChange={(e) => onEditChange({ ...edit, discNumber: e.target.value })}
-          placeholder="Disque"
+          placeholder={t('albumCard.discNumberPlaceholder')}
           type="number"
           className="w-20 bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
         />
@@ -190,14 +192,14 @@ function FallbackRow({
           className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
         >
           {busy && <Spinner className="w-3 h-3" />}
-          Confirmer (taguer + ranger)
+          {t('albumCard.confirmTagFileLong')}
         </button>
         <button
           onClick={onDiscard}
           disabled={busy}
           className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50"
         >
-          Ignorer
+          {t('common.discard')}
         </button>
       </div>
     </div>
@@ -205,6 +207,7 @@ function FallbackRow({
 }
 
 function ErrorRow({ item, onRescan, onDiscard, busy }: { item: TaggingItem; onRescan: () => void; onDiscard: () => void; busy: boolean }) {
+  const { t } = useLanguage()
   return (
     <div className="bg-app-bg border border-red-900/60 rounded-lg p-3 flex items-center justify-between gap-3">
       <div className="min-w-0">
@@ -213,10 +216,10 @@ function ErrorRow({ item, onRescan, onDiscard, busy }: { item: TaggingItem; onRe
       </div>
       <div className="flex gap-2 shrink-0">
         <button onClick={onRescan} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50">
-          Reessayer
+          {t('metubeRow.retry')}
         </button>
         <button onClick={onDiscard} disabled={busy} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50">
-          Ignorer
+          {t('common.discard')}
         </button>
       </div>
     </div>
@@ -262,6 +265,7 @@ export default function AlbumCard({
   onDelete: () => void
   onDrop: (payload: AlbumDropPayload) => void
 }) {
+  const { t } = useLanguage()
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
   const [cardDragOver, setCardDragOver] = useState(false)
 
@@ -305,9 +309,9 @@ export default function AlbumCard({
           <div className="text-xs text-app-text-faint">
             {year && <span>{year} · </span>}
             {tracklist && tracklist.length > 0 ? (
-              <span>{assignedCount}/{tracklist.length} pistes assignees</span>
+              <span>{t('albumCard.tracksAssigned', { assigned: assignedCount, total: tracklist.length })}</span>
             ) : (
-              <span>{items.length} fichier{items.length > 1 ? 's' : ''}</span>
+              <span>{t('albumCard.filesCount', { count: items.length })}</span>
             )}
           </div>
         </div>
@@ -319,32 +323,32 @@ export default function AlbumCard({
               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
             >
               {busy && <Spinner className="w-3 h-3" />}
-              Confirmer l'album
+              {t('albumCard.confirmAlbum')}
             </button>
           )}
           <button
             onClick={onDelete}
             className="text-app-text-faint hover:text-red-400 text-sm px-1"
-            title="Retirer cet album (les fichiers redeviennent non identifies)"
+            title={t('albumCard.removeAlbumTitle')}
           >
             ✕
           </button>
         </div>
       </div>
 
-      {tracklist === undefined && <p className="text-xs text-app-text-faint">Chargement de la tracklist...</p>}
+      {tracklist === undefined && <p className="text-xs text-app-text-faint">{t('albumCard.loadingTracklist')}</p>}
 
       {tracklist && tracklist.length > 0 ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
-            <div className="text-xs text-app-text-faint mb-1">Sans correspondance ({unmatched.length})</div>
+            <div className="text-xs text-app-text-faint mb-1">{t('albumCard.unmatchedHeading', { count: unmatched.length })}</div>
             {unmatched.map((item) => (
               <FileChip key={item.id} item={item} onDiscard={() => onDiscard(item)} />
             ))}
-            {unmatched.length === 0 && <p className="text-xs text-app-text-faint italic">Tous les fichiers sont assignes.</p>}
+            {unmatched.length === 0 && <p className="text-xs text-app-text-faint italic">{t('albumCard.allFilesAssigned')}</p>}
           </div>
           <div className="flex flex-col gap-1.5">
-            <div className="text-xs text-app-text-faint mb-1">Pistes ({tracklist.length})</div>
+            <div className="text-xs text-app-text-faint mb-1">{t('albumCard.tracksHeading', { count: tracklist.length })}</div>
             {[...tracklist]
               .sort((a, b) => a.disc_number - b.disc_number || a.position - b.position)
               .map((track) => {

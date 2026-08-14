@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { api, type Settings, type TestConnectionResult } from '../api'
 import Spinner, { LoadingBlock } from '../components/Spinner'
 import { ACCENT_COLORS, useTheme, type AccentColor } from '../context/ThemeContext'
+import { useLanguage, type Language } from '../context/LanguageContext'
+import type { TranslationKey } from '../i18n/en'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -42,6 +44,7 @@ function ResultLine({ result }: { result: TestConnectionResult | null }) {
 }
 
 function LastfmSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+  const { t } = useLanguage()
   const [pendingToken, setPendingToken] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +61,7 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
       setPendingToken(token)
       window.open(auth_url, '_blank', 'noopener,noreferrer')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
@@ -73,7 +76,7 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
       setSettings(updated)
       setPendingToken(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
@@ -86,7 +89,7 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
       const updated = await api.lastfmDisconnect()
       setSettings(updated)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
@@ -95,18 +98,18 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
   return (
     <Section title="Last.fm">
       <Field
-        label="Cle API (la meme que celle de Navidrome fonctionne)"
+        label={t('settings.lastfm.apiKeyLabel')}
         value={settings.lastfm_api_key ?? ''}
         onChange={(v) => set('lastfm_api_key', v)}
       />
       <Field
-        label="Secret partage (necessaire uniquement pour se connecter et recevoir des recommandations personnalisees)"
+        label={t('settings.lastfm.secretLabel')}
         type="password"
         value={settings.lastfm_api_secret ?? ''}
         onChange={(v) => set('lastfm_api_secret', v)}
       />
       <p className="text-xs text-app-text-faint">
-        Cle API et secret se recuperent sur{' '}
+        {t('settings.lastfm.getKeysPrefix')}{' '}
         <a
           href="https://www.last.fm/api/account/create"
           target="_blank"
@@ -115,37 +118,31 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
         >
           last.fm/api/account/create
         </a>{' '}
-        - pense a enregistrer la page Reglages (bouton en bas) avant de te connecter.
+        {t('settings.lastfm.getKeysSuffix')}
       </p>
 
       {settings.lastfm_username ? (
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-sm text-green-400">Connecte en tant que {settings.lastfm_username}</span>
+            <span className="text-sm text-green-400">{t('settings.connectedAs', { username: settings.lastfm_username })}</span>
             <button
               onClick={disconnect}
               disabled={busy}
               className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50"
             >
-              Deconnecter
+              {t('settings.disconnect')}
             </button>
           </div>
           <Field
-            label="Planification du rafraichissement des recommandations (ex: 0 3 * * * = tous les jours a 3h)"
+            label={t('settings.recommendationsCronLabel')}
             value={settings.lastfm_recommendations_cron}
             onChange={(v) => set('lastfm_recommendations_cron', v)}
           />
-          <p className="text-xs text-app-text-faint">
-            Chaque nuit, les anciennes recommandations non suivies sont supprimees et remplacees par les
-            nouvelles - un bouton "Rafraichir" dans l'onglet Recommandations declenche le meme rafraichissement
-            a la demande.
-          </p>
+          <p className="text-xs text-app-text-faint">{t('settings.lastfm.nightlyRefreshHint')}</p>
         </div>
       ) : pendingToken ? (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-app-text-muted">
-            Une page Last.fm vient de s'ouvrir dans un nouvel onglet : autorise l'acces, puis reviens ici et valide.
-          </p>
+          <p className="text-xs text-app-text-muted">{t('settings.lastfm.authOpenedHint')}</p>
           <div className="flex items-center gap-3">
             <button
               onClick={finishConnect}
@@ -153,10 +150,10 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
             >
               {busy && <Spinner className="w-3 h-3" />}
-              J'ai autorise l'acces, valider
+              {t('settings.lastfm.confirmAuth')}
             </button>
             <button onClick={() => setPendingToken(null)} className="text-xs text-app-text-faint hover:text-app-text">
-              Annuler
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -168,7 +165,7 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
             className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
           >
             {busy && <Spinner className="w-3 h-3" />}
-            Connecter Last.fm
+            {t('settings.lastfm.connect')}
           </button>
         </div>
       )}
@@ -184,37 +181,32 @@ function LastfmSection({ settings, setSettings }: { settings: Settings; setSetti
 // Pas de cle API/OAuth a gerer ici : juste le nom d'utilisateur, les
 // stats/recommandations d'un profil ListenBrainz sont publiques par defaut.
 function ListenbrainzSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+  const { t } = useLanguage()
+
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
     setSettings({ ...settings, [key]: value })
   }
 
   return (
     <Section title="ListenBrainz">
-      <p className="text-xs text-app-text-faint">
-        Recommandations basees sur ce que tu ecoutes vraiment (scrobbles) plutot que sur les artistes suivis dans
-        l'app - assure-toi que Navidrome scrobble bien vers ce compte (voir ses propres reglages), sinon
-        ListenBrainz n'a aucune donnee d'ecoute a exploiter.
-      </p>
+      <p className="text-xs text-app-text-faint">{t('settings.listenbrainz.description')}</p>
       <Field
-        label="Nom d'utilisateur ListenBrainz"
+        label={t('settings.listenbrainz.usernameLabel')}
         value={settings.listenbrainz_username ?? ''}
         onChange={(v) => set('listenbrainz_username', v)}
       />
       <Field
-        label="Planification du rafraichissement des recommandations (ex: 0 3 * * * = tous les jours a 3h)"
+        label={t('settings.recommendationsCronLabel')}
         value={settings.listenbrainz_recommendations_cron}
         onChange={(v) => set('listenbrainz_recommendations_cron', v)}
       />
-      <p className="text-xs text-app-text-faint">
-        Chaque nuit, les anciennes recommandations non suivies sont supprimees et remplacees par les nouvelles -
-        un bouton "Rafraichir" dans l'onglet Recommandations ListenBrainz declenche le meme rafraichissement a la
-        demande.
-      </p>
+      <p className="text-xs text-app-text-faint">{t('settings.listenbrainz.nightlyRefreshHint')}</p>
     </Section>
   )
 }
 
 function CalendarSection({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+  const { t } = useLanguage()
   const [copied, setCopied] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const url = settings.calendar_token ? `${window.location.origin}/api/calendar/${settings.calendar_token}.ics` : null
@@ -236,16 +228,13 @@ function CalendarSection({ settings, setSettings }: { settings: Settings; setSet
   }
 
   return (
-    <Section title="Calendrier">
-      <p className="text-sm text-app-text-muted">
-        Abonne-toi a ce lien depuis Google Calendar, Apple Calendar ou Outlook pour voir les sorties directement
-        dans ton calendrier - il se met a jour automatiquement, comme la page Calendrier de l'app.
-      </p>
+    <Section title={t('settings.calendar.title')}>
+      <p className="text-sm text-app-text-muted">{t('settings.calendar.description')}</p>
       {url && (
         <div className="flex items-center gap-2">
           <input readOnly value={url} className="flex-1 bg-app-bg border border-app-border-strong rounded-md px-3 py-1.5 text-sm text-app-text-muted" />
           <button onClick={copy} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong whitespace-nowrap">
-            {copied ? 'Copie !' : 'Copier'}
+            {copied ? t('settings.calendar.copied') : t('settings.calendar.copy')}
           </button>
         </div>
       )}
@@ -256,24 +245,24 @@ function CalendarSection({ settings, setSettings }: { settings: Settings; setSet
           className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
         >
           {regenerating && <Spinner className="w-3 h-3" />}
-          Regenerer le lien
+          {t('settings.calendar.regenerate')}
         </button>
-        <p className="text-xs text-app-text-faint mt-1">L'ancien lien cessera de fonctionner immediatement.</p>
+        <p className="text-xs text-app-text-faint mt-1">{t('settings.calendar.regenerateHint')}</p>
       </div>
     </Section>
   )
 }
 
-const ACCENT_LABELS: Record<AccentColor, string> = {
-  violet: 'Violet',
-  blue: 'Bleu',
-  sky: 'Ciel',
-  emerald: 'Emeraude',
-  amber: 'Ambre',
-  rose: 'Rose',
-  pink: 'Rose vif',
-  indigo: 'Indigo',
-}
+const ACCENT_LABEL_KEYS: Record<AccentColor, TranslationKey> = {
+  violet: 'settings.accent.violet',
+  blue: 'settings.accent.blue',
+  sky: 'settings.accent.sky',
+  emerald: 'settings.accent.emerald',
+  amber: 'settings.accent.amber',
+  rose: 'settings.accent.rose',
+  pink: 'settings.accent.pink',
+  indigo: 'settings.accent.indigo',
+} as const
 
 const ACCENT_SWATCH_CLASS: Record<AccentColor, string> = {
   violet: 'bg-violet-600',
@@ -288,11 +277,23 @@ const ACCENT_SWATCH_CLASS: Record<AccentColor, string> = {
 
 function AppearanceSection() {
   const { theme, accent, setTheme, setAccent } = useTheme()
+  const { language, setLanguage, t } = useLanguage()
 
   return (
-    <Section title="Apparence">
+    <Section title={t('settings.appearance.title')}>
       <div>
-        <span className="text-sm text-app-text-muted block mb-2">Theme</span>
+        <span className="text-sm text-app-text-muted block mb-2">{t('settings.language.label')}</span>
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as Language)}
+          className="bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
+        >
+          <option value="en">{t('settings.language.english')}</option>
+          <option value="fr">{t('settings.language.french')}</option>
+        </select>
+      </div>
+      <div>
+        <span className="text-sm text-app-text-muted block mb-2">{t('settings.appearance.theme')}</span>
         <div className="flex gap-2">
           {(['dark', 'light'] as const).map((mode) => (
             <button
@@ -304,20 +305,20 @@ function AppearanceSection() {
                   : 'border-app-border-strong text-app-text-muted hover:bg-app-surface-hover'
               }`}
             >
-              {mode === 'dark' ? 'Sombre' : 'Clair'}
+              {mode === 'dark' ? t('settings.appearance.dark') : t('settings.appearance.light')}
             </button>
           ))}
         </div>
       </div>
       <div>
-        <span className="text-sm text-app-text-muted block mb-2">Couleur d'accent</span>
+        <span className="text-sm text-app-text-muted block mb-2">{t('settings.appearance.accentColor')}</span>
         <div className="flex flex-wrap gap-2">
           {ACCENT_COLORS.map((color) => (
             <button
               key={color}
               onClick={() => setAccent(color)}
-              title={ACCENT_LABELS[color]}
-              aria-label={ACCENT_LABELS[color]}
+              title={t(ACCENT_LABEL_KEYS[color])}
+              aria-label={t(ACCENT_LABEL_KEYS[color])}
               className={`w-8 h-8 rounded-full ${ACCENT_SWATCH_CLASS[color]} ${
                 accent === color ? 'ring-2 ring-offset-2 ring-offset-app-bg ring-app-text' : ''
               }`}
@@ -330,6 +331,7 @@ function AppearanceSection() {
 }
 
 function SecuritySection() {
+  const { t } = useLanguage()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -339,32 +341,32 @@ function SecuritySection() {
   async function submit() {
     setResult(null)
     if (next !== confirm) {
-      setResult({ ok: false, message: 'Les deux mots de passe ne correspondent pas' })
+      setResult({ ok: false, message: t('settings.security.passwordMismatch') })
       return
     }
     if (next.length < 8) {
-      setResult({ ok: false, message: 'Nouveau mot de passe trop court (8 caracteres minimum)' })
+      setResult({ ok: false, message: t('settings.security.newPasswordTooShort') })
       return
     }
     setBusy(true)
     try {
       await api.changePassword(current, next)
-      setResult({ ok: true, message: 'Mot de passe mis a jour' })
+      setResult({ ok: true, message: t('settings.security.passwordUpdated') })
       setCurrent('')
       setNext('')
       setConfirm('')
     } catch (err) {
-      setResult({ ok: false, message: err instanceof Error ? err.message : 'Erreur' })
+      setResult({ ok: false, message: err instanceof Error ? err.message : t('common.error') })
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Section title="Securite">
-      <Field label="Mot de passe actuel" type="password" value={current} onChange={setCurrent} />
-      <Field label="Nouveau mot de passe" type="password" value={next} onChange={setNext} />
-      <Field label="Confirmer le nouveau mot de passe" type="password" value={confirm} onChange={setConfirm} />
+    <Section title={t('settings.security.title')}>
+      <Field label={t('settings.security.currentPassword')} type="password" value={current} onChange={setCurrent} />
+      <Field label={t('settings.security.newPassword')} type="password" value={next} onChange={setNext} />
+      <Field label={t('settings.security.confirmPassword')} type="password" value={confirm} onChange={setConfirm} />
       <div className="flex items-center gap-3">
         <button
           onClick={submit}
@@ -372,7 +374,7 @@ function SecuritySection() {
           className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
         >
           {busy && <Spinner className="w-3 h-3" />}
-          Changer le mot de passe
+          {t('settings.security.changePassword')}
         </button>
         <ResultLine result={result} />
       </div>
@@ -381,6 +383,7 @@ function SecuritySection() {
 }
 
 export default function SettingsPage() {
+  const { t } = useLanguage()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -388,10 +391,11 @@ export default function SettingsPage() {
   const [results, setResults] = useState<Record<string, TestConnectionResult>>({})
 
   useEffect(() => {
-    api.getSettings().then(setSettings).catch((err) => setLoadError(err instanceof Error ? err.message : 'Erreur'))
+    api.getSettings().then(setSettings).catch((err) => setLoadError(err instanceof Error ? err.message : t('common.error')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- charge une seule fois au montage
   }, [])
 
-  if (loadError) return <p className="text-sm text-red-400">Impossible de charger les reglages : {loadError}</p>
+  if (loadError) return <p className="text-sm text-red-400">{t('settings.loadError', { error: loadError })}</p>
   if (!settings) return <LoadingBlock />
 
   function set<K extends keyof Settings>(key: K, value: Settings[K]) {
@@ -417,32 +421,32 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Reglages</h1>
+      <h1 className="text-xl font-semibold mb-4">{t('common.settings')}</h1>
 
       <AppearanceSection />
 
       <Section title="MeTube">
-        <Field label="URL de MeTube (ex: http://metube:8081)" value={settings.metube_url ?? ''} onChange={(v) => set('metube_url', v)} />
+        <Field label={t('settings.metube.urlLabel')} value={settings.metube_url ?? ''} onChange={(v) => set('metube_url', v)} />
         <div className="flex items-center gap-3">
           <button onClick={() => runTest('metube', api.testMetube)} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong">
-            Tester la connexion
+            {t('settings.testConnection')}
           </button>
           <ResultLine result={results.metube ?? null} />
         </div>
         <Field
-          label="URL publique de MeTube (optionnel, accessible depuis ton navigateur - permet d'ouvrir l'interface MeTube complete pour les fonctionnalites avancees non reprises ici, ex: http://192.168.1.128:8081)"
+          label={t('settings.metube.publicUrlLabel')}
           value={settings.metube_public_url ?? ''}
           onChange={(v) => set('metube_public_url', v)}
         />
       </Section>
 
-      <Section title="Navidrome (verification de possession)">
-        <Field label="URL de Navidrome" value={settings.navidrome_url ?? ''} onChange={(v) => set('navidrome_url', v)} />
-        <Field label="Utilisateur" value={settings.navidrome_username ?? ''} onChange={(v) => set('navidrome_username', v)} />
-        <Field label="Mot de passe" type="password" value={settings.navidrome_password ?? ''} onChange={(v) => set('navidrome_password', v)} />
+      <Section title={t('settings.navidrome.title')}>
+        <Field label={t('settings.navidrome.urlLabel')} value={settings.navidrome_url ?? ''} onChange={(v) => set('navidrome_url', v)} />
+        <Field label={t('settings.usernameLabel')} value={settings.navidrome_username ?? ''} onChange={(v) => set('navidrome_username', v)} />
+        <Field label={t('settings.passwordLabel')} type="password" value={settings.navidrome_password ?? ''} onChange={(v) => set('navidrome_password', v)} />
         <div className="flex items-center gap-3">
           <button onClick={() => runTest('navidrome', api.testNavidrome)} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong">
-            Tester la connexion
+            {t('settings.testConnection')}
           </button>
           <ResultLine result={results.navidrome ?? null} />
         </div>
@@ -451,66 +455,62 @@ export default function SettingsPage() {
       <LastfmSection settings={settings} setSettings={setSettings} />
       <ListenbrainzSection settings={settings} setSettings={setSettings} />
 
-      <Section title="Notifications par email">
+      <Section title={t('settings.email.title')}>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={settings.notify_email_enabled} onChange={(e) => set('notify_email_enabled', e.target.checked)} />
-          Activer les notifications par email
+          {t('settings.email.enable')}
         </label>
-        <Field label="Serveur SMTP" value={settings.smtp_host ?? ''} onChange={(v) => set('smtp_host', v)} />
-        <Field label="Port SMTP" type="number" value={settings.smtp_port?.toString() ?? ''} onChange={(v) => set('smtp_port', v ? Number(v) : null)} />
-        <Field label="Utilisateur SMTP" value={settings.smtp_user ?? ''} onChange={(v) => set('smtp_user', v)} />
-        <Field label="Mot de passe SMTP" type="password" value={settings.smtp_password ?? ''} onChange={(v) => set('smtp_password', v)} />
-        <Field label="Adresse expediteur" value={settings.smtp_from ?? ''} onChange={(v) => set('smtp_from', v)} />
-        <Field label="Adresse destinataire" value={settings.smtp_to ?? ''} onChange={(v) => set('smtp_to', v)} />
+        <Field label={t('settings.email.smtpHost')} value={settings.smtp_host ?? ''} onChange={(v) => set('smtp_host', v)} />
+        <Field label={t('settings.email.smtpPort')} type="number" value={settings.smtp_port?.toString() ?? ''} onChange={(v) => set('smtp_port', v ? Number(v) : null)} />
+        <Field label={t('settings.email.smtpUser')} value={settings.smtp_user ?? ''} onChange={(v) => set('smtp_user', v)} />
+        <Field label={t('settings.email.smtpPassword')} type="password" value={settings.smtp_password ?? ''} onChange={(v) => set('smtp_password', v)} />
+        <Field label={t('settings.email.fromAddress')} value={settings.smtp_from ?? ''} onChange={(v) => set('smtp_from', v)} />
+        <Field label={t('settings.email.toAddress')} value={settings.smtp_to ?? ''} onChange={(v) => set('smtp_to', v)} />
         <div className="flex items-center gap-3">
           <button onClick={() => runTest('email', api.testEmail)} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong">
-            Envoyer un email de test
+            {t('settings.email.sendTest')}
           </button>
           <ResultLine result={results.email ?? null} />
         </div>
       </Section>
 
-      <Section title="Notifications Pushbullet">
+      <Section title={t('settings.pushbullet.title')}>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={settings.notify_pushbullet_enabled}
             onChange={(e) => set('notify_pushbullet_enabled', e.target.checked)}
           />
-          Activer les notifications Pushbullet
+          {t('settings.pushbullet.enable')}
         </label>
-        <Field label="Token d'acces Pushbullet" value={settings.pushbullet_token ?? ''} onChange={(v) => set('pushbullet_token', v)} />
+        <Field label={t('settings.pushbullet.tokenLabel')} value={settings.pushbullet_token ?? ''} onChange={(v) => set('pushbullet_token', v)} />
         <div className="flex items-center gap-3">
           <button onClick={() => runTest('pushbullet', api.testPushbullet)} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong">
-            Envoyer une notification de test
+            {t('settings.pushbullet.sendTest')}
           </button>
           <ResultLine result={results.pushbullet ?? null} />
         </div>
       </Section>
 
-      <Section title="Organisation automatique">
-        <p className="text-sm text-app-text-muted">
-          Chemins vus depuis le conteneur "releases" (le meme volume musical doit y etre monte en ecriture).
-          Utilises par le backlog de redressage metadata pour detecter les telechargements MeTube et ranger les
-          fichiers confirmes.
-        </p>
+      <Section title={t('settings.organization.title')}>
+        <p className="text-sm text-app-text-muted">{t('settings.organization.description')}</p>
         <Field
-          label="Dossier des telechargements MeTube (ex: /music/youtube)"
+          label={t('settings.organization.downloadsPathLabel')}
           value={settings.tagging_downloads_path}
           onChange={(v) => set('tagging_downloads_path', v)}
         />
         <Field
-          label="Dossier racine de la bibliotheque rangee (ex: /music)"
+          label={t('settings.organization.libraryPathLabel')}
           value={settings.tagging_library_path}
           onChange={(v) => set('tagging_library_path', v)}
         />
       </Section>
 
-      <Section title="Planification du scan">
-        <Field label="Expression cron (ex: 0 6 * * * = tous les jours a 6h)" value={settings.scan_cron} onChange={(v) => set('scan_cron', v)} />
+      <Section title={t('settings.scan.title')}>
+        <Field label={t('settings.scan.cronLabel')} value={settings.scan_cron} onChange={(v) => set('scan_cron', v)} />
         <div className="flex items-center gap-3">
           <button onClick={() => runTest('scan', api.runScanNow)} className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong">
-            Lancer un scan maintenant
+            {t('settings.scan.runNow')}
           </button>
           <ResultLine result={results.scan ?? null} />
         </div>
@@ -522,9 +522,9 @@ export default function SettingsPage() {
 
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={saving} className="px-4 py-2 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50">
-          {saving ? 'Enregistrement...' : 'Enregistrer'}
+          {saving ? t('settings.saving') : t('common.save')}
         </button>
-        {savedAt && <span className="text-sm text-green-400">Enregistre</span>}
+        {savedAt && <span className="text-sm text-green-400">{t('settings.saved')}</span>}
       </div>
     </div>
   )

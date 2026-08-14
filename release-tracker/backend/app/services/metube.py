@@ -20,8 +20,8 @@ def queue_download(metube_url: str, url: str, folder: str | None = None) -> tupl
         resp.raise_for_status()
         data = resp.json()
         if data.get("status") == "error":
-            return False, data.get("msg", "MeTube a refuse le telechargement")
-        return True, "Telechargement mis en file d'attente"
+            return False, data.get("msg", "MeTube a refusé le téléchargement")
+        return True, "Téléchargement mis en file d'attente"
     except httpx.HTTPError as exc:
         return False, f"Impossible de joindre MeTube : {exc}"
 

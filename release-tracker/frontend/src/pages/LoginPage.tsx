@@ -1,8 +1,10 @@
 import { type FormEvent, useState } from 'react'
 import { api } from '../api'
 import Spinner from '../components/Spinner'
+import { useLanguage } from '../context/LanguageContext'
 
 export default function LoginPage({ onDone }: { onDone: () => void }) {
+  const { t } = useLanguage()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -16,7 +18,7 @@ export default function LoginPage({ onDone }: { onDone: () => void }) {
       await api.authLogin(username, password)
       onDone()
     } catch {
-      setError('Identifiants incorrects')
+      setError(t('auth.incorrectCredentials'))
     } finally {
       setBusy(false)
     }
@@ -30,7 +32,7 @@ export default function LoginPage({ onDone }: { onDone: () => void }) {
           <h1 className="text-lg font-semibold">MusicReleasarr</h1>
         </div>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-app-text-muted">Nom d'utilisateur</span>
+          <span className="text-app-text-muted">{t('auth.usernameLabel')}</span>
           <input
             autoFocus
             value={username}
@@ -39,7 +41,7 @@ export default function LoginPage({ onDone }: { onDone: () => void }) {
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-app-text-muted">Mot de passe</span>
+          <span className="text-app-text-muted">{t('settings.passwordLabel')}</span>
           <input
             type="password"
             value={password}
@@ -54,10 +56,10 @@ export default function LoginPage({ onDone }: { onDone: () => void }) {
           className="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
         >
           {busy && <Spinner />}
-          Se connecter
+          {t('auth.login')}
         </button>
         <p className="text-xs text-app-text-faint text-center">
-          Mot de passe perdu ? Voir la commande <code>reset-password</code> dans le README.
+          {t('auth.forgotPasswordPrefix')} <code>reset-password</code> {t('auth.forgotPasswordSuffix')}
         </p>
       </form>
     </div>

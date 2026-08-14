@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { ALL_RELEASE_TYPES, api, RELEASE_TYPE_LABELS, type ArtistWithReleases, type ReleaseType, type Track } from '../api'
+import { ALL_RELEASE_TYPES, api, getReleaseTypeLabels, type ArtistWithReleases, type ReleaseType, type Track } from '../api'
 import ReleaseRow from '../components/ReleaseRow'
 import TopTracksSection from '../components/TopTracksSection'
 import SimilarArtistsSection from '../components/SimilarArtistsSection'
 import ServiceLink from '../components/ServiceLink'
 import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from '../components/ServiceIcons'
 import Spinner, { LoadingBlock } from '../components/Spinner'
+import { useLanguage } from '../context/LanguageContext'
 
 const FILTER_TYPES: (ReleaseType | 'all')[] = ['all', 'album', 'ep', 'single', 'compilation', 'other']
 
@@ -17,6 +18,8 @@ const SCAN_POLL_INTERVAL_MS = 3000
 const SCAN_POLL_MAX_TICKS = 20 // ~1 minute
 
 export default function ArtistPage() {
+  const { t } = useLanguage()
+  const releaseTypeLabels = getReleaseTypeLabels(t)
   const { id } = useParams()
   const artistId = Number(id)
   const [artist, setArtist] = useState<ArtistWithReleases | null>(null)
@@ -97,9 +100,9 @@ export default function ArtistPage() {
     try {
       await api.scanArtist(artistId)
       await load()
-      setScanMessage('A jour')
+      setScanMessage(t('navidrome.stats.upToDate'))
     } catch (err) {
-      setScanMessage(err instanceof Error ? err.message : 'Echec du scan')
+      setScanMessage(err instanceof Error ? err.message : t('artist.scanFailed'))
     } finally {
       setScanning(false)
     }
@@ -128,7 +131,7 @@ export default function ArtistPage() {
               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50 whitespace-nowrap"
             >
               {scanning && <Spinner className="w-3 h-3" />}
-              {scanning ? 'Scan en cours...' : '↻ Actualiser'}
+              {scanning ? t('navidrome.stats.scanning') : t('metube.refresh')}
             </button>
             {scanMessage && <span className="text-xs text-app-text-muted">{scanMessage}</span>}
           </div>
@@ -150,7 +153,7 @@ export default function ArtistPage() {
       </div>
 
       <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
-        <h2 className="font-medium mb-3">Parametres de suivi</h2>
+        <h2 className="font-medium mb-3">{t('artist.followSettings')}</h2>
         <div className="flex flex-col gap-3">
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -159,7 +162,7 @@ export default function ArtistPage() {
               disabled={saving}
               onChange={(e) => updateFollow({ is_followed: e.target.checked })}
             />
-            Suivre cet artiste
+            {t('artist.followThisArtist')}
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -168,7 +171,7 @@ export default function ArtistPage() {
               disabled={saving}
               onChange={(e) => updateFollow({ notify_enabled: e.target.checked })}
             />
-            Me notifier des nouvelles sorties
+            {t('artist.notifyNewReleases')}
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -177,10 +180,10 @@ export default function ArtistPage() {
               disabled={saving}
               onChange={(e) => updateFollow({ auto_download: e.target.checked })}
             />
-            Telecharger automatiquement les sorties manquantes
+            {t('artist.autoDownloadMissing')}
           </label>
           <div>
-            <div className="text-sm text-app-text-muted mb-1">Types de sortie suivis :</div>
+            <div className="text-sm text-app-text-muted mb-1">{t('artist.followedTypesLabel')}</div>
             <div className="flex gap-2 flex-wrap">
               {ALL_RELEASE_TYPES.map((type) => (
                 <button
@@ -193,7 +196,7 @@ export default function ArtistPage() {
                       : 'bg-app-surface-hover border-app-border-strong text-app-text-muted'
                   }`}
                 >
-                  {RELEASE_TYPE_LABELS[type]}
+                  {releaseTypeLabels[type]}
                 </button>
               ))}
             </div>
@@ -208,7 +211,7 @@ export default function ArtistPage() {
       {awaitingScan && (
         <div className="flex items-center gap-2 text-sm text-app-text-muted mb-4 bg-app-surface border border-app-border rounded-lg px-3 py-2">
           <Spinner className="w-4 h-4" />
-          Scan en cours, ca peut prendre jusqu'a une minute pour un catalogue important...
+          {t('artist.scanningHint')}
         </div>
       )}
 
@@ -230,22 +233,22 @@ export default function ArtistPage() {
           <>
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <h2 className="font-medium">
-                Sorties ({filtered.length}
+                {t('artist.releasesWord')} ({filtered.length}
                 {(typeFilter !== 'all' || q) && ` / ${artist.releases.length}`})
               </h2>
               <div className="flex gap-2 flex-wrap items-center">
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Rechercher un titre (release ou piste deja consultee)..."
+                  placeholder={t('artist.searchPlaceholder')}
                   className="bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
                 />
                 <button
                   onClick={() => setSortDesc((v) => !v)}
-                  title={sortDesc ? 'Plus recentes en premier' : 'Plus anciennes en premier'}
+                  title={sortDesc ? t('calendar.sortNewestFirst') : t('calendar.sortOldestFirst')}
                   className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover border border-app-border-strong hover:bg-app-border-strong whitespace-nowrap"
                 >
-                  Date {sortDesc ? '↓' : '↑'}
+                  {t('calendar.dateLabel')} {sortDesc ? '↓' : '↑'}
                 </button>
                 {FILTER_TYPES.map((type) => (
                   <button
@@ -257,7 +260,7 @@ export default function ArtistPage() {
                         : 'bg-app-surface-hover border-app-border-strong text-app-text-muted'
                     }`}
                   >
-                    {type === 'all' ? 'Toutes' : RELEASE_TYPE_LABELS[type]}
+                    {type === 'all' ? t('artist.allTypes') : releaseTypeLabels[type]}
                   </button>
                 ))}
               </div>
@@ -267,9 +270,9 @@ export default function ArtistPage() {
                 <p className="text-app-text-muted text-sm">
                   {artist.releases.length === 0
                     ? artist.is_recommended || artist.is_recommended_lb
-                      ? 'Aucune sortie chargee pour le moment - clique sur "Actualiser" pour decouvrir la discographie de cet artiste.'
-                      : 'Aucune sortie trouvee pour le moment (le premier scan n\'a peut-etre pas encore tourne).'
-                    : 'Aucune sortie ne correspond au filtre.'}
+                      ? t('artist.noReleasesLoadedYet')
+                      : t('artist.noReleasesFoundYet')
+                    : t('calendar.noMatch')}
                 </p>
               )}
               {filtered.map((r) => (

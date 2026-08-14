@@ -4,6 +4,7 @@ import { api } from '../api'
 import PlayerBar from './PlayerBar'
 import { usePlayer } from '../context/PlayerContext'
 import { useSwipe } from '../hooks/useSwipe'
+import { useLanguage } from '../context/LanguageContext'
 import AppLogo from './AppLogo'
 import DownloadGlyph from './DownloadGlyph'
 import {
@@ -32,6 +33,7 @@ const settingsLinkClass = ({ isActive }: { isActive: boolean }) =>
   }`
 
 export default function Layout() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const location = useLocation()
   const [params] = useSearchParams()
@@ -146,7 +148,7 @@ export default function Layout() {
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden p-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover shrink-0"
-            title="Fermer le menu"
+            title={t('nav.closeMenu')}
           >
             <CloseIcon className="w-5 h-5" />
           </button>
@@ -154,15 +156,15 @@ export default function Layout() {
         <nav className="flex flex-col gap-1 px-2 py-2 flex-1 overflow-y-auto">
           <NavLink to="/" end className={navLinkClass}>
             <DashboardIcon className="w-4 h-4 shrink-0" />
-            Tableau de bord
+            {t('nav.dashboard')}
           </NavLink>
           <NavLink to="/artists" className={navLinkClass}>
             <ArtistsIcon className="w-4 h-4 shrink-0" />
-            Artistes
+            {t('nav.artists')}
           </NavLink>
           <NavLink to="/calendar" className={navLinkClass}>
             <CalendarIcon className="w-4 h-4 shrink-0" />
-            Calendrier
+            {t('calendar.title')}
           </NavLink>
           <NavLink to="/metube" className={navLinkClass}>
             <DownloadGlyph className={`w-4 h-4 shrink-0 ${downloading ? 'animate-bounce' : ''}`} />
@@ -187,7 +189,7 @@ export default function Layout() {
         <div className="px-2 py-2 border-t border-app-border">
           <NavLink to="/settings" className={settingsLinkClass}>
             <SettingsIcon className="w-4 h-4 shrink-0" />
-            Reglages
+            {t('common.settings')}
           </NavLink>
         </div>
       </aside>
@@ -198,7 +200,7 @@ export default function Layout() {
             <button
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden p-1.5 -ml-1 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover shrink-0"
-              title="Ouvrir le menu"
+              title={t('nav.openMenu')}
             >
               <MenuIcon className="w-5 h-5" />
             </button>
@@ -206,17 +208,17 @@ export default function Layout() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Rechercher un artiste..."
+                placeholder={t('nav.searchPlaceholder')}
                 className="w-full bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
               />
             </form>
             <button
               onClick={logout}
-              title="Se deconnecter"
+              title={t('nav.logout')}
               className="flex items-center gap-1.5 text-xs px-2 sm:px-3 py-2 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover whitespace-nowrap shrink-0"
             >
               <LogoutIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Deconnexion</span>
+              <span className="hidden sm:inline">{t('nav.logoutShort')}</span>
             </button>
           </div>
         </header>

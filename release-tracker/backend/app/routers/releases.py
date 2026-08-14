@@ -70,7 +70,7 @@ def _resolve_release_download_url(release: Release) -> str:
         release.artist.name, release.title, release.artist.ytmusic_browse_id
     )
     if not browse_id:
-        raise HTTPException(422, "Aucun resultat YouTube Music trouve pour cette release")
+        raise HTTPException(422, "Aucun résultat YouTube Music trouvé pour cette release")
     url = ytmusic.album_url(browse_id)
     release.youtube_music_url = url
     return url
@@ -81,7 +81,7 @@ def download_release(release_id: int, db: Session = Depends(get_db)):
     release = _get_release_or_404(release_id, db)
     settings = get_settings(db)
     if not settings.metube_url:
-        raise HTTPException(422, "URL MeTube non configuree dans les reglages")
+        raise HTTPException(422, "URL MeTube non configurée dans les réglages")
 
     url = _resolve_release_download_url(release)
     ok, message = metube.queue_download(settings.metube_url, url, folder=normalize_text(release.artist.name))
@@ -98,7 +98,7 @@ def list_tracks(release_id: int, db: Session = Depends(get_db)):
         release.artist.name, release.title, release.artist.ytmusic_browse_id
     )
     if not browse_id:
-        raise HTTPException(422, "Aucun resultat YouTube Music trouve pour cette release")
+        raise HTTPException(422, "Aucun résultat YouTube Music trouvé pour cette release")
     details = ytmusic.get_release_details(browse_id)
     if not release.youtube_music_url:
         release.youtube_music_url = details["album_url"]
@@ -136,7 +136,7 @@ def download_track(release_id: int, video_id: str, db: Session = Depends(get_db)
     release = _get_release_or_404(release_id, db)
     settings = get_settings(db)
     if not settings.metube_url:
-        raise HTTPException(422, "URL MeTube non configuree dans les reglages")
+        raise HTTPException(422, "URL MeTube non configurée dans les réglages")
 
     ok, message = metube.queue_download(
         settings.metube_url,

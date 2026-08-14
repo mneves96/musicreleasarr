@@ -46,7 +46,7 @@ def update_settings(payload: SettingsUpdateIn, db: Session = Depends(get_db)):
 def test_metube(db: Session = Depends(get_db)):
     settings = scheduler.get_settings(db)
     if not settings.metube_url:
-        return TestConnectionResult(ok=False, message="URL MeTube non renseignee")
+        return TestConnectionResult(ok=False, message="URL MeTube non renseignée")
     try:
         resp = httpx.get(settings.metube_url, timeout=10)
         resp.raise_for_status()
@@ -86,12 +86,12 @@ def test_pushbullet(db: Session = Depends(get_db)):
 @router.post("/run-scan", response_model=TestConnectionResult)
 def run_scan_now():
     scheduler.run_full_cycle()
-    return TestConnectionResult(ok=True, message="Scan execute")
+    return TestConnectionResult(ok=True, message="Scan exécuté")
 
 
 def _require_lastfm_credentials(settings) -> None:
     if not settings.lastfm_api_key or not settings.lastfm_api_secret:
-        raise HTTPException(422, "Renseigne la cle API et le secret Last.fm avant de te connecter")
+        raise HTTPException(422, "Renseigne la clé API et le secret Last.fm avant de te connecter")
 
 
 @router.post("/lastfm-auth-start", response_model=LastfmAuthStartOut)
@@ -117,7 +117,7 @@ def lastfm_auth_finish(payload: LastfmAuthFinishIn, db: Session = Depends(get_db
     try:
         session = lastfm.get_session(settings.lastfm_api_key, settings.lastfm_api_secret, payload.token)
     except Exception as exc:
-        raise HTTPException(502, f"Autorisation Last.fm echouee (as-tu bien valide sur last.fm ?) : {exc}") from exc
+        raise HTTPException(502, f"Autorisation Last.fm échouée (as-tu bien validé sur last.fm ?) : {exc}") from exc
     settings.lastfm_session_key = session.get("key")
     settings.lastfm_username = session.get("name")
     db.commit()

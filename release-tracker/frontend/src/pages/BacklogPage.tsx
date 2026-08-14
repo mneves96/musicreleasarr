@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   api,
-  RELEASE_TYPE_LABELS,
+  getReleaseTypeLabels,
   type ArtistSearchResult,
   type ReleaseCard,
   type ReleaseGroupChoice,
@@ -13,6 +13,7 @@ import AlbumCard, { type AlbumDropPayload, editFromItem, trackKey, type Edit } f
 import FileTree from '../components/FileTree'
 import Spinner, { LoadingBlock } from '../components/Spinner'
 import { useSwipe } from '../hooks/useSwipe'
+import { useLanguage } from '../context/LanguageContext'
 
 const POLL_MS = 15000
 const COLUMN_HEIGHT = 'calc(100vh - 15rem)'
@@ -61,6 +62,7 @@ type ReleaseSearchStep = 'search' | 'artists' | 'releases'
 // d'autocomplete positionne en overlay pour ne jamais pousser la liste des
 // albums vers le bas.
 function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void }) {
+  const { t } = useLanguage()
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<ReleaseSearchStep>('search')
@@ -80,7 +82,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
       setStep('artists')
       setOpen(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
@@ -95,7 +97,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
       setReleaseGroups(groups)
       setStep('releases')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
@@ -120,7 +122,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
       setQuery('')
       setSelectedArtist(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur')
+      setError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
@@ -136,7 +138,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
             if (e.target.value.trim()) setOpen(true)
           }}
           onKeyDown={(e) => e.key === 'Enter' && searchArtists()}
-          placeholder="Ajouter un album (recherche artiste)..."
+          placeholder={t('backlog.searchPlaceholder')}
           className="flex-1 bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
         />
         <button
@@ -144,7 +146,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
           disabled={busy || !query.trim()}
           className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
         >
-          {busy ? '...' : 'Rechercher'}
+          {busy ? '...' : t('backlog.searchButton')}
         </button>
       </div>
 
@@ -153,8 +155,8 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
           {error && <p className="text-xs text-red-400 mb-1">{error}</p>}
           {step === 'artists' && (
             <div className="flex flex-col gap-1">
-              {busy && <p className="text-xs text-app-text-faint">Chargement...</p>}
-              {!busy && artists.length === 0 && <p className="text-xs text-app-text-faint">Aucun resultat.</p>}
+              {busy && <p className="text-xs text-app-text-faint">{t('common.loading')}</p>}
+              {!busy && artists.length === 0 && <p className="text-xs text-app-text-faint">{t('backlog.noResult')}</p>}
               {artists.map((a) => (
                 <button
                   key={a.musicbrainz_id}
@@ -170,10 +172,10 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
           {step === 'releases' && (
             <div className="flex flex-col gap-1">
               <button onClick={() => setStep('artists')} className="text-xs text-app-text-faint hover:text-app-text self-start">
-                ← Autre artiste
+                {t('backlog.otherArtist')}
               </button>
-              {busy && <p className="text-xs text-app-text-faint">Chargement...</p>}
-              {!busy && releaseGroups.length === 0 && <p className="text-xs text-app-text-faint">Aucune release trouvee.</p>}
+              {busy && <p className="text-xs text-app-text-faint">{t('common.loading')}</p>}
+              {!busy && releaseGroups.length === 0 && <p className="text-xs text-app-text-faint">{t('backlog.noReleaseFound')}</p>}
               {releaseGroups.map((rg) => (
                 <button
                   key={rg.musicbrainz_id}
@@ -183,7 +185,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
                 >
                   <span className="truncate">{rg.title}</span>
                   <span className="text-xs text-app-text-faint whitespace-nowrap">
-                    {RELEASE_TYPE_LABELS[rg.release_type]}
+                    {getReleaseTypeLabels(t)[rg.release_type]}
                     {rg.release_date ? ` - ${rg.release_date.slice(0, 4)}` : ''}
                   </span>
                 </button>
@@ -191,7 +193,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
             </div>
           )}
           <button onClick={() => setOpen(false)} className="text-xs text-app-text-faint hover:text-app-text mt-2">
-            Fermer
+            {t('backlog.closeButton')}
           </button>
         </div>
       )}
@@ -200,6 +202,7 @@ function ReleaseSearchBar({ onAdded }: { onAdded: (card: ReleaseCard) => void })
 }
 
 export default function BacklogPage() {
+  const { t } = useLanguage()
   const [items, setItems] = useState<TaggingItem[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -248,7 +251,7 @@ export default function BacklogPage() {
         return next
       })
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur')
+      setLoadError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       if (showSpinner) setRefreshing(false)
     }
@@ -294,7 +297,7 @@ export default function BacklogPage() {
       setScanMessage(result.message)
       await refresh()
     } catch (err) {
-      setScanMessage(err instanceof Error ? err.message : 'Erreur')
+      setScanMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setScanning(false)
     }
@@ -363,7 +366,7 @@ export default function BacklogPage() {
       removeFromAssignments([itemId], releaseId)
       assign(releaseId, key, itemId)
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur lors du glisser-deposer')
+      setLoadError(err instanceof Error ? err.message : t('backlog.dragDropError'))
     }
   }
 
@@ -439,7 +442,7 @@ export default function BacklogPage() {
         mergeUpdatedItems([updated])
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur lors de la confirmation')
+      setLoadError(err instanceof Error ? err.message : t('backlog.confirmError'))
     } finally {
       setBusy(item.id, false)
     }
@@ -487,7 +490,7 @@ export default function BacklogPage() {
       const failedResults = results.filter((r) => r && r.status !== 'done')
       if (failedResults.length > 0) {
         mergeUpdatedItems(failedResults as TaggingItem[])
-        setLoadError(`${failedResults.length} piste(s) n'ont pas pu etre rangees (voir les erreurs ci-dessous)`)
+        setLoadError(t('backlog.tracksNotFiled', { count: failedResults.length }))
       }
     } finally {
       setReleaseBusy(releaseId, false)
@@ -516,7 +519,7 @@ export default function BacklogPage() {
     try {
       await api.tagging.discard(item.id)
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur')
+      setLoadError(err instanceof Error ? err.message : t('common.error'))
       refresh()
     } finally {
       setBusy(item.id, false)
@@ -530,7 +533,7 @@ export default function BacklogPage() {
       mergeUpdatedItems([updated])
       setEdits((prev) => ({ ...prev, [item.id]: editFromItem(updated) }))
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur')
+      setLoadError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(item.id, false)
     }
@@ -552,7 +555,7 @@ export default function BacklogPage() {
         mergeUpdatedItems([updated])
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur lors de la confirmation')
+      setLoadError(err instanceof Error ? err.message : t('backlog.confirmError'))
     } finally {
       setBusy(item.id, false)
     }
@@ -601,10 +604,12 @@ export default function BacklogPage() {
         })
       }
       setSearchMessage(
-        matched.length === 0 ? 'Aucune correspondance trouvee.' : `${matched.length}/${requested} fichier(s) trouve(s).`
+        matched.length === 0
+          ? t('backlog.noMatchFound')
+          : t('backlog.matchesFound', { matched: matched.length, requested })
       )
     } catch (err) {
-      setSearchMessage(err instanceof Error ? err.message : 'Erreur')
+      setSearchMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setSearching(false)
     }
@@ -631,7 +636,7 @@ export default function BacklogPage() {
         return next
       })
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur')
+      setLoadError(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setReleaseBusy(releaseId, false)
     }
@@ -677,7 +682,7 @@ export default function BacklogPage() {
         })
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur lors du glisser-deposer')
+      setLoadError(err instanceof Error ? err.message : t('backlog.dragDropError'))
     }
   }
 
@@ -694,31 +699,28 @@ export default function BacklogPage() {
             onClick={scanNow}
             disabled={scanning}
             className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
-            title="Relit le contenu du dossier de telechargements (aucun appel a MusicBrainz), sans attendre le job planifie (5 min)"
+            title={t('backlog.rescanTitle')}
           >
-            {scanning ? 'Actualisation...' : 'Actualiser les fichiers'}
+            {scanning ? t('metube.refreshing') : t('backlog.refreshFilesButton')}
           </button>
           <button
             onClick={() => refresh(true)}
             disabled={refreshing}
             className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
           >
-            {refreshing ? 'Actualisation...' : '↻ Actualiser'}
+            {refreshing ? t('metube.refreshing') : t('metube.refresh')}
           </button>
         </div>
       </div>
 
-      <p className="text-sm text-app-text-muted mb-4">
-        Selectionne des fichiers/dossiers a gauche pour les rechercher sur MusicBrainz, ou glisse-les directement sur
-        un album a droite (comme dans Picard) - rien n'est ecrit sur le disque avant confirmation.
-      </p>
+      <p className="text-sm text-app-text-muted mb-4">{t('backlog.description')}</p>
 
       <div className="flex lg:hidden items-center gap-2 mb-3">
         <button onClick={() => setMobileColumn('files')} className={mobileTabClass(mobileColumn === 'files')}>
-          Fichiers ({unclusteredItems.length})
+          {t('backlog.filesTab', { count: unclusteredItems.length })}
         </button>
         <button onClick={() => setMobileColumn('albums')} className={mobileTabClass(mobileColumn === 'albums')}>
-          Albums ({openReleases.size})
+          {t('backlog.albumsTab', { count: openReleases.size })}
         </button>
       </div>
 
@@ -734,13 +736,13 @@ export default function BacklogPage() {
                 onClick={() => setSearchScope('followed')}
                 className={`text-xs px-3 py-1.5 ${searchScope === 'followed' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
               >
-                Artistes suivis
+                {t('backlog.followedArtists')}
               </button>
               <button
                 onClick={() => setSearchScope('musicbrainz')}
                 className={`text-xs px-3 py-1.5 ${searchScope === 'musicbrainz' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
               >
-                Tout MusicBrainz
+                {t('backlog.allMusicbrainz')}
               </button>
             </div>
             <button
@@ -749,15 +751,15 @@ export default function BacklogPage() {
               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
             >
               {searching && <Spinner className="w-3 h-3" />}
-              Rechercher ({selectedIds.size})
+              {t('backlog.searchWithCount', { count: selectedIds.size })}
             </button>
             <button
               onClick={discardSelected}
               disabled={selectedIds.size === 0}
               className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50 whitespace-nowrap"
-              title="Ignorer les fichiers selectionnes (ils disparaissent du backlog sans etre ranges)"
+              title={t('backlog.discardSelectedTitle')}
             >
-              Supprimer ({selectedIds.size})
+              {t('backlog.deleteWithCount', { count: selectedIds.size })}
             </button>
             {searchMessage && <span className="text-xs text-app-text-faint">{searchMessage}</span>}
           </div>
@@ -778,7 +780,7 @@ export default function BacklogPage() {
           />
           <div className="flex-1 overflow-y-auto min-h-0 pr-1">
             {openReleases.size === 0 ? (
-              <p className="text-sm text-app-text-faint">Aucun album ouvert - selectionne des fichiers a gauche et lance une recherche.</p>
+              <p className="text-sm text-app-text-faint">{t('backlog.noAlbumOpen')}</p>
             ) : (
               [...openReleases.values()].map((release) => (
                 <AlbumCard

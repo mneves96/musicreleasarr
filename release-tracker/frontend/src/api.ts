@@ -1,3 +1,5 @@
+import type { TranslationKey } from './i18n/en'
+
 export type ReleaseType = 'album' | 'ep' | 'single' | 'compilation' | 'other'
 export type OwnershipStatus = 'unknown' | 'owned' | 'missing'
 export type DownloadStatus = 'not_requested' | 'queued' | 'downloaded' | 'failed'
@@ -526,12 +528,25 @@ export function navidromeCoverArtUrl(coverArtId: string): string {
   return `/api/navidrome/cover-art/${encodeURIComponent(coverArtId)}`
 }
 
-export const RELEASE_TYPE_LABELS: Record<ReleaseType, string> = {
-  album: 'Album',
-  ep: 'EP',
-  single: 'Single',
-  compilation: 'Compilation',
-  other: 'Autre',
+// Fonction plutot qu'un Record statique (comme avant l'i18n) : le libelle de
+// "other" differe selon la langue (Autre/Other), les autres valeurs sont des
+// mots identiques en anglais et en francais - voir useLanguage().
+const RELEASE_TYPE_KEYS: Record<ReleaseType, TranslationKey> = {
+  album: 'releaseType.album',
+  ep: 'releaseType.ep',
+  single: 'releaseType.single',
+  compilation: 'releaseType.compilation',
+  other: 'releaseType.other',
+}
+
+export function getReleaseTypeLabels(t: (key: TranslationKey) => string): Record<ReleaseType, string> {
+  return {
+    album: t(RELEASE_TYPE_KEYS.album),
+    ep: t(RELEASE_TYPE_KEYS.ep),
+    single: t(RELEASE_TYPE_KEYS.single),
+    compilation: t(RELEASE_TYPE_KEYS.compilation),
+    other: t(RELEASE_TYPE_KEYS.other),
+  }
 }
 
 export const ALL_RELEASE_TYPES: ReleaseType[] = ['album', 'ep', 'single', 'compilation']

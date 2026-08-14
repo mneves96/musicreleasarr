@@ -1,3 +1,5 @@
+import { useLanguage } from '../context/LanguageContext'
+
 export default function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
   return (
     <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -11,11 +13,12 @@ export default function Spinner({ className = 'w-4 h-4' }: { className?: string 
   )
 }
 
-export function LoadingBlock({ label = 'Chargement...' }: { label?: string }) {
+export function LoadingBlock({ label }: { label?: string }) {
+  const { t } = useLanguage()
   return (
     <div className="flex items-center gap-2 text-app-text-muted py-4">
       <Spinner />
-      <span>{label}</span>
+      <span>{label ?? t('common.loading')}</span>
     </div>
   )
 }

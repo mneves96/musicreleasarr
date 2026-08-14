@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
 import { useSwipe } from '../hooks/useSwipe'
+import { useLanguage } from '../context/LanguageContext'
 
 function PlayPauseIcon({ playing }: { playing: boolean }) {
   return playing ? (
@@ -127,6 +128,7 @@ function ProgressWave({ playing }: { playing: boolean }) {
 }
 
 export default function PlayerBar() {
+  const { t } = useLanguage()
   const {
     queue,
     currentIndex,
@@ -196,7 +198,7 @@ export default function PlayerBar() {
             onPointerDown={() => setSeeking(true)}
             onPointerUp={() => setSeeking(false)}
             className="seek-slider seek-slider-hidden-thumb relative z-10 w-full"
-            title="Avancer/reculer dans la piste"
+            title={t('player.seekTitle')}
           />
         </div>
         <span className="w-9 shrink-0">{formatTime(duration)}</span>
@@ -214,7 +216,7 @@ export default function PlayerBar() {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{track.title}</div>
           <div className="text-xs text-app-text-muted truncate">
-            <Link to={`/artists/${track.artist_id}`} className="hover:underline hover:text-app-text" title="Voir la fiche artiste">
+            <Link to={`/artists/${track.artist_id}`} className="hover:underline hover:text-app-text" title={t('player.viewArtistTitle')}>
               {track.artist_name}
             </Link>{' '}
             - {track.album_title}
@@ -226,14 +228,14 @@ export default function PlayerBar() {
             onClick={previous}
             disabled={currentIndex === 0}
             className="hidden sm:inline-flex p-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover disabled:opacity-30 disabled:hover:bg-transparent"
-            title="Piste precedente"
+            title={t('player.previousTrack')}
           >
             <PreviousIcon />
           </button>
           <button
             onClick={togglePlayPause}
             className="p-2 rounded-full bg-app-accent hover:bg-app-accent-hover text-white"
-            title={isPlaying ? 'Pause' : 'Lecture'}
+            title={isPlaying ? t('player.pause') : t('player.play')}
           >
             <PlayPauseIcon playing={isPlaying} />
           </button>
@@ -241,7 +243,7 @@ export default function PlayerBar() {
             onClick={next}
             disabled={currentIndex >= queue.length - 1}
             className="hidden sm:inline-flex p-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover disabled:opacity-30 disabled:hover:bg-transparent"
-            title="Piste suivante"
+            title={t('player.nextTrack')}
           >
             <NextIcon />
           </button>
@@ -256,14 +258,14 @@ export default function PlayerBar() {
             value={volume}
             onChange={(e) => setVolume(Number(e.target.value))}
             className="w-full accent-(--app-accent)"
-            title="Volume"
+            title={t('player.volume')}
           />
         </div>
 
         <button
           onClick={close}
           className="p-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover shrink-0"
-          title="Fermer le lecteur"
+          title={t('player.closePlayer')}
         >
           <CloseIcon />
         </button>

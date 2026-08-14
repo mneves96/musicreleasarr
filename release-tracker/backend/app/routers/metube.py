@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/metube", tags=["metube"])
 def _base_url(db: Session) -> str:
     settings = get_settings(db)
     if not settings.metube_url:
-        raise HTTPException(422, "URL MeTube non configuree dans les reglages")
+        raise HTTPException(422, "URL MeTube non configurée dans les réglages")
     return settings.metube_url.rstrip("/")
 
 
@@ -35,7 +35,7 @@ def _proxy(method: str, db: Session, path: str, json_body: dict | None = None) -
             detail = resp.json().get("msg") or resp.text
         except ValueError:
             detail = resp.text or resp.reason_phrase
-        raise HTTPException(502, f"MeTube a refuse la requete : {detail}")
+        raise HTTPException(502, f"MeTube a refusé la requête : {detail}")
 
     if not resp.content:
         return {"status": "ok"}
@@ -78,7 +78,7 @@ class IdsIn(BaseModel):
 @router.post("/delete")
 def delete(payload: IdsIn, db: Session = Depends(get_db)):
     if payload.where not in ("queue", "done"):
-        raise HTTPException(422, "'where' doit etre 'queue' ou 'done'")
+        raise HTTPException(422, "'where' doit être 'queue' ou 'done'")
     return _proxy("POST", db, "/delete", payload.model_dump())
 
 

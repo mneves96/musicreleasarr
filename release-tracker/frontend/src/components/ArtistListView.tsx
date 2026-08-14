@@ -3,6 +3,7 @@ import type { Artist, ArtistSortBy } from '../api'
 import ArtistCard from './ArtistCard'
 import ArtistListRow from './ArtistListRow'
 import Spinner, { LoadingBlock } from './Spinner'
+import { useLanguage } from '../context/LanguageContext'
 
 type ViewMode = 'grid' | 'list'
 
@@ -29,7 +30,7 @@ export default function ArtistListView({
   storageKeyPrefix,
   fetchPage,
   emptyMessage,
-  emptyFilterMessage = 'Aucun artiste ne correspond au filtre.',
+  emptyFilterMessage,
   reloadToken,
   onTotalChange,
   onError,
@@ -50,6 +51,7 @@ export default function ArtistListView({
   onTotalChange?: (total: number) => void
   onError?: (err: unknown) => void
 }) {
+  const { t } = useLanguage()
   const [view, setView] = useState<ViewMode>(() =>
     readStored(`${storageKeyPrefix}.view`, ['grid', 'list'] as const, 'grid')
   )
@@ -139,7 +141,7 @@ export default function ArtistListView({
         <input
           value={queryInput}
           onChange={(e) => setQueryInput(e.target.value)}
-          placeholder="Filtrer par nom..."
+          placeholder={t('artistList.filterByName')}
           className="bg-app-surface border border-app-border-strong rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
         />
         <select
@@ -147,22 +149,22 @@ export default function ArtistListView({
           onChange={(e) => setSortBy(e.target.value as ArtistSortBy)}
           className="bg-app-surface border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
         >
-          <option value="name">Trier : Nom (A-Z)</option>
-          <option value="albums">Trier : Nombre d'albums</option>
-          <option value="latest">Trier : Sortie la plus recente</option>
+          <option value="name">{t('artistList.sortName')}</option>
+          <option value="albums">{t('artistList.sortAlbums')}</option>
+          <option value="latest">{t('artistList.sortLatest')}</option>
         </select>
         <div className="flex gap-1 ml-auto">
           <button
             onClick={() => setView('grid')}
             className={`text-xs px-3 py-1.5 rounded-md ${view === 'grid' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
           >
-            Details
+            {t('artistList.viewDetails')}
           </button>
           <button
             onClick={() => setView('list')}
             className={`text-xs px-3 py-1.5 rounded-md ${view === 'list' ? 'bg-app-border-strong' : 'bg-app-surface text-app-text-muted'}`}
           >
-            Liste
+            {t('artistList.viewList')}
           </button>
         </div>
       </div>
@@ -170,7 +172,7 @@ export default function ArtistListView({
       {initialLoading ? (
         <LoadingBlock />
       ) : items.length === 0 ? (
-        <p className="text-app-text-muted text-sm">{emptyFilterMessage}</p>
+        <p className="text-app-text-muted text-sm">{emptyFilterMessage ?? t('artistList.noMatch')}</p>
       ) : (
         <>
           {view === 'grid' ? (

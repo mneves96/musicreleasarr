@@ -123,7 +123,7 @@ def _get_or_create_artist(db: Session, musicbrainz_id: str) -> Artist:
     except Exception as exc:
         # MusicBrainz est rate-limite/parfois lent : mieux vaut un 502 clair et
         # invitant a reessayer qu'un 500 brut qui laisse croire a un bug.
-        raise HTTPException(502, f"MusicBrainz indisponible, reessaie dans un instant : {exc}") from exc
+        raise HTTPException(502, f"MusicBrainz indisponible, réessaie dans un instant : {exc}") from exc
 
 
 def _scan_in_background(artist_id: int) -> None:
@@ -186,22 +186,22 @@ def follow_artist(payload: FollowArtistIn, background_tasks: BackgroundTasks, db
 def import_favorites(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     settings = scheduler.get_settings(db)
     if not (settings.navidrome_url and settings.navidrome_username and settings.navidrome_password):
-        raise HTTPException(422, "Connexion Navidrome non configuree dans les reglages")
+        raise HTTPException(422, "Connexion Navidrome non configurée dans les réglages")
 
     try:
         names = navidrome.get_starred_artists(
             settings.navidrome_url, settings.navidrome_username, settings.navidrome_password
         )
     except Exception as exc:
-        raise HTTPException(502, f"Impossible de recuperer les favoris Navidrome : {exc}") from exc
+        raise HTTPException(502, f"Impossible de récupérer les favoris Navidrome : {exc}") from exc
 
     if not names:
-        return TestConnectionResult(ok=True, message="Aucun artiste favori trouve dans Navidrome")
+        return TestConnectionResult(ok=True, message="Aucun artiste favori trouvé dans Navidrome")
 
     background_tasks.add_task(scheduler.import_navidrome_favorite_artists, names)
     return TestConnectionResult(
         ok=True,
-        message=f"Import lance pour {len(names)} artiste(s) favori(s) - ca peut prendre plusieurs minutes",
+        message=f"Import lancé pour {len(names)} artiste(s) favori(s) - ça peut prendre plusieurs minutes",
     )
 
 
@@ -235,9 +235,9 @@ def refresh_recommended_artists(background_tasks: BackgroundTasks, db: Session =
     MusicBrainz limitees a 1 req/s)."""
     settings = scheduler.get_settings(db)
     if not (settings.lastfm_api_key and settings.lastfm_api_secret and settings.lastfm_session_key):
-        raise HTTPException(422, "Connecte Last.fm dans Reglages pour rafraichir les recommandations")
+        raise HTTPException(422, "Connecte Last.fm dans Réglages pour rafraîchir les recommandations")
     background_tasks.add_task(scheduler.run_refresh_lastfm_recommendations)
-    return TestConnectionResult(ok=True, message="Rafraichissement des recommandations lance")
+    return TestConnectionResult(ok=True, message="Rafraîchissement des recommandations lancé")
 
 
 @router.get("/recommended-listenbrainz", response_model=ArtistPageOut)
@@ -271,9 +271,9 @@ def refresh_recommended_artists_listenbrainz(background_tasks: BackgroundTasks, 
     aucune throttle cote ListenBrainz contrairement a MusicBrainz)."""
     settings = scheduler.get_settings(db)
     if not settings.listenbrainz_username:
-        raise HTTPException(422, "Renseigne ton nom d'utilisateur ListenBrainz dans Reglages")
+        raise HTTPException(422, "Renseigne ton nom d'utilisateur ListenBrainz dans Réglages")
     background_tasks.add_task(scheduler.run_refresh_listenbrainz_recommendations)
-    return TestConnectionResult(ok=True, message="Rafraichissement des recommandations lance")
+    return TestConnectionResult(ok=True, message="Rafraîchissement des recommandations lancé")
 
 
 def _enrich_track_album(releases: list[Release], lastfm_album: dict) -> tuple[str | None, str | None, date | None, int | None]:
@@ -318,7 +318,7 @@ def top_tracks(artist_id: int, limit: int = Query(default=TOP_TRACKS_LIMIT, ge=1
 
     settings = scheduler.get_settings(db)
     if not settings.lastfm_api_key:
-        raise HTTPException(422, "Cle API Last.fm requise dans Reglages pour les titres populaires")
+        raise HTTPException(422, "Clé API Last.fm requise dans Réglages pour les titres populaires")
 
     try:
         raw_tracks = lastfm.get_top_tracks(artist.name, settings.lastfm_api_key, limit=limit)
@@ -394,7 +394,7 @@ def similar_artists(artist_id: int, db: Session = Depends(get_db)):
 
     settings = scheduler.get_settings(db)
     if not settings.lastfm_api_key:
-        raise HTTPException(422, "Cle API Last.fm requise dans Reglages pour les artistes similaires")
+        raise HTTPException(422, "Clé API Last.fm requise dans Réglages pour les artistes similaires")
 
     try:
         candidates = lastfm.get_similar_artists(artist.name, settings.lastfm_api_key, limit=15)
@@ -461,9 +461,9 @@ def scan_artist_now(artist_id: int, db: Session = Depends(get_db)):
     try:
         scheduler.scan_artist(db, artist)
     except Exception as exc:
-        raise HTTPException(502, f"Echec du scan : {exc}") from exc
+        raise HTTPException(502, f"Échec du scan : {exc}") from exc
 
-    return TestConnectionResult(ok=True, message="Scan termine")
+    return TestConnectionResult(ok=True, message="Scan terminé")
 
 
 @router.get("/{artist_id}", response_model=ArtistWithReleases)

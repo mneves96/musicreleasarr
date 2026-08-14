@@ -29,7 +29,7 @@ RECENTLY_ADDED_DEFAULT_LIMIT = 5
 def _require_navidrome(db: Session) -> Settings:
     settings = get_settings(db)
     if not (settings.navidrome_url and settings.navidrome_username and settings.navidrome_password):
-        raise HTTPException(422, "Connexion Navidrome non configuree dans les reglages")
+        raise HTTPException(422, "Connexion Navidrome non configurée dans les réglages")
     return settings
 
 

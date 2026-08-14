@@ -1,8 +1,10 @@
 import { type FormEvent, useState } from 'react'
 import { api } from '../api'
 import Spinner from '../components/Spinner'
+import { useLanguage } from '../context/LanguageContext'
 
 export default function SetupPage({ onDone }: { onDone: () => void }) {
+  const { t } = useLanguage()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -13,11 +15,11 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
     e.preventDefault()
     setError(null)
     if (password !== confirm) {
-      setError('Les deux mots de passe ne correspondent pas')
+      setError(t('settings.security.passwordMismatch'))
       return
     }
     if (password.length < 8) {
-      setError('Mot de passe trop court (8 caracteres minimum)')
+      setError(t('auth.passwordTooShort'))
       return
     }
     setBusy(true)
@@ -25,7 +27,7 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
       await api.authSetup(username, password)
       onDone()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la creation du compte')
+      setError(err instanceof Error ? err.message : t('auth.accountCreationError'))
     } finally {
       setBusy(false)
     }
@@ -38,11 +40,9 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
           <img src="/favicon.svg" alt="" className="w-8 h-8" />
           <h1 className="text-lg font-semibold">MusicReleasarr</h1>
         </div>
-        <p className="text-sm text-app-text-muted text-center">
-          Premiere connexion - cree le compte qui protegera l'acces a l'app.
-        </p>
+        <p className="text-sm text-app-text-muted text-center">{t('auth.firstLoginHint')}</p>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-app-text-muted">Nom d'utilisateur</span>
+          <span className="text-app-text-muted">{t('auth.usernameLabel')}</span>
           <input
             autoFocus
             value={username}
@@ -51,7 +51,7 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-app-text-muted">Mot de passe</span>
+          <span className="text-app-text-muted">{t('settings.passwordLabel')}</span>
           <input
             type="password"
             value={password}
@@ -60,7 +60,7 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-app-text-muted">Confirmer le mot de passe</span>
+          <span className="text-app-text-muted">{t('auth.confirmPasswordLabel')}</span>
           <input
             type="password"
             value={confirm}
@@ -75,7 +75,7 @@ export default function SetupPage({ onDone }: { onDone: () => void }) {
           className="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
         >
           {busy && <Spinner />}
-          Creer le compte
+          {t('auth.createAccount')}
         </button>
       </form>
     </div>

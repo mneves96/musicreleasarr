@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import type { Artist } from '../api'
+import { useLanguage } from '../context/LanguageContext'
 
 export default function ArtistListRow({ artist }: { artist: Artist }) {
+  const { t } = useLanguage()
   // Voir ArtistCard.tsx : meme repli entre les deux sources de recommandation.
   const recommendedBecause = artist.recommended_because.length > 0 ? artist.recommended_because : artist.recommended_because_lb
 
@@ -26,18 +28,18 @@ export default function ArtistListRow({ artist }: { artist: Artist }) {
         {recommendedBecause.length > 0 && (
           <span
             className="text-xs px-1.5 py-0.5 rounded bg-app-surface-hover"
-            title={`Base sur : ${recommendedBecause.map((s) => s.name).join(', ')}`}
+            title={t('artistCard.basedOn', { names: recommendedBecause.map((s) => s.name).join(', ') })}
           >
             🔗
           </span>
         )}
         {artist.notify_enabled && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-app-surface-hover" title="Notifications activees">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-app-surface-hover" title={t('artistCard.notificationsEnabledTitle')}>
             🔔
           </span>
         )}
         {artist.auto_download && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-app-surface-hover" title="Telechargement automatique">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-app-surface-hover" title={t('artistCard.autoDownloadTitle')}>
             ⬇
           </span>
         )}

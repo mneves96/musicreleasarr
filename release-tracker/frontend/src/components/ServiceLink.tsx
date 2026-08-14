@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useLanguage } from '../context/LanguageContext'
 
 export default function ServiceLink({
   href,
@@ -11,6 +12,7 @@ export default function ServiceLink({
   icon: ReactNode
   compact?: boolean
 }) {
+  const { t } = useLanguage()
   const available = Boolean(href)
 
   const base = compact
@@ -21,7 +23,7 @@ export default function ServiceLink({
     return (
       <span
         className={`${base} ${compact ? '' : 'border-app-border'} text-app-text-faint opacity-40 cursor-not-allowed`}
-        title={`${label} : lien non disponible`}
+        title={t('serviceLink.linkUnavailable', { label })}
       >
         <span className={`${compact ? 'w-4 h-4' : 'w-3.5 h-3.5'} grayscale`}>{icon}</span>
         {!compact && label}

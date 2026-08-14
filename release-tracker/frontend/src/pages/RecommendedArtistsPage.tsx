@@ -2,11 +2,13 @@ import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type ArtistSortBy } from '../api'
 import ArtistListView from '../components/ArtistListView'
+import { useLanguage } from '../context/LanguageContext'
 
 const POLL_INTERVAL_MS = 4000
 const POLL_MAX_TICKS = 15 // ~1 minute
 
 export default function RecommendedArtistsPage() {
+  const { t } = useLanguage()
   const [total, setTotal] = useState<number | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   const [configError, setConfigError] = useState<string | null>(null)
@@ -41,7 +43,7 @@ export default function RecommendedArtistsPage() {
         }
       }, POLL_INTERVAL_MS)
     } catch (err) {
-      setRefreshMessage(err instanceof Error ? err.message : 'Erreur')
+      setRefreshMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setRefreshing(false)
     }
@@ -52,11 +54,11 @@ export default function RecommendedArtistsPage() {
       <div className="text-app-text-muted">
         <p>{configError}</p>
         <p className="mt-2">
-          Renseigne une cle API + secret Last.fm et connecte ton compte dans{' '}
+          {t('recommendations.lastfm.configHintPrefix')}{' '}
           <Link to="/settings" className="text-app-accent-text hover:underline">
-            Reglages
+            {t('common.settings')}
           </Link>{' '}
-          pour voir des recommandations personnalisees.
+          {t('recommendations.lastfm.configHintSuffix')}
         </p>
       </div>
     )
@@ -65,13 +67,13 @@ export default function RecommendedArtistsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h1 className="text-xl font-semibold">Recommandations Last.fm{total !== null ? ` (${total})` : ''}</h1>
+        <h1 className="text-xl font-semibold">{t('artists.tabRecommendedLastfm')}{total !== null ? ` (${total})` : ''}</h1>
         <button
           onClick={refresh}
           disabled={refreshing}
           className="text-xs px-3 py-1.5 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 whitespace-nowrap"
         >
-          {refreshing ? 'Rafraichissement...' : 'Rafraichir'}
+          {refreshing ? t('recommendations.refreshing') : t('recommendations.refresh')}
         </button>
       </div>
       {refreshMessage && <p className="text-sm text-app-text-muted mb-4">{refreshMessage}</p>}
@@ -81,14 +83,9 @@ export default function RecommendedArtistsPage() {
         fetchPage={fetchPage}
         reloadToken={reloadToken}
         onTotalChange={setTotal}
-        emptyMessage={
-          <p className="text-app-text-muted text-sm">
-            Aucune recommandation disponible pour le moment - reessaie apres un rafraichissement, ou attends le
-            prochain rafraichissement automatique planifie dans Reglages.
-          </p>
-        }
-        emptyFilterMessage="Aucune recommandation ne correspond au filtre."
-        onError={(err) => setConfigError(err instanceof Error ? err.message : 'Erreur')}
+        emptyMessage={<p className="text-app-text-muted text-sm">{t('recommendations.emptyMessage')}</p>}
+        emptyFilterMessage={t('recommendations.emptyFilterMessage')}
+        onError={(err) => setConfigError(err instanceof Error ? err.message : t('common.error'))}
       />
     </div>
   )

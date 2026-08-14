@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { api, type MetubeHistory, type MetubeItem } from '../api'
 import MetubeItemRow from '../components/MetubeItemRow'
+import { useLanguage } from '../context/LanguageContext'
 
 const ACTIVE_POLL_MS = 1000
 const IDLE_POLL_MS = 8000
@@ -28,6 +29,7 @@ function Section({
   actions?: ReactNode
   children: ReactNode
 }) {
+  const { t } = useLanguage()
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-2">
@@ -39,7 +41,7 @@ function Section({
       </div>
       {!collapsed &&
         (items.length === 0 ? (
-          <p className="text-sm text-app-text-faint">Rien ici.</p>
+          <p className="text-sm text-app-text-faint">{t('metube.nothingHere')}</p>
         ) : (
           <div className="flex flex-col gap-1.5">{children}</div>
         ))}
@@ -48,6 +50,7 @@ function Section({
 }
 
 export default function MetubePage() {
+  const { t } = useLanguage()
   const [publicUrl, setPublicUrl] = useState<string | null>(null)
   const [history, setHistory] = useState<MetubeHistory | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -82,7 +85,7 @@ export default function MetubePage() {
       setLoadError(null)
       setNotConfigured(false)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erreur'
+      const msg = err instanceof Error ? err.message : t('common.error')
       if (msg.includes('422')) {
         setNotConfigured(true)
       } else {
@@ -151,14 +154,14 @@ export default function MetubePage() {
         auto_start: true,
       })
       if (result.status === 'error') {
-        setAddMessage(result.msg || "Echec de l'ajout")
+        setAddMessage(result.msg || t('metube.addFailed'))
       } else {
         setUrl('')
         setAddMessage(null)
         refresh()
       }
     } catch (err) {
-      setAddMessage(err instanceof Error ? err.message : 'Erreur')
+      setAddMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setAdding(false)
     }
@@ -182,7 +185,7 @@ export default function MetubePage() {
     try {
       await api.metubeDelete([item.url], bucket === 'done' ? 'done' : 'queue')
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur de suppression')
+      setLoadError(err instanceof Error ? err.message : t('metube.deleteFailed'))
       refresh()
     }
   }
@@ -196,7 +199,7 @@ export default function MetubePage() {
     try {
       await api.metubeDelete(items.map((i) => i.url), 'done')
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur')
+      setLoadError(err instanceof Error ? err.message : t('common.error'))
       refresh()
     }
   }
@@ -226,10 +229,10 @@ export default function MetubePage() {
     try {
       const result = await retryOne(item)
       if (!result.ok) {
-        setLoadError(result.msg || 'MeTube a refuse de relancer ce telechargement')
+        setLoadError(result.msg || t('metube.refuseRetry'))
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur lors de la relance')
+      setLoadError(err instanceof Error ? err.message : t('metube.retryFailed'))
     } finally {
       refresh()
     }
@@ -244,10 +247,10 @@ export default function MetubePage() {
       const results = await Promise.all(errorItems.map((i) => retryOne(i)))
       const failures = results.filter((r) => !r.ok)
       if (failures.length > 0) {
-        setLoadError(`${failures.length} relance(s) refusee(s) par MeTube`)
+        setLoadError(t('metube.retriesRefused', { count: failures.length }))
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur lors de la relance')
+      setLoadError(err instanceof Error ? err.message : t('metube.retryFailed'))
     } finally {
       refresh()
     }
@@ -258,10 +261,10 @@ export default function MetubePage() {
     try {
       const result = await api.metubeStart([item.url])
       if (result.status === 'error') {
-        setLoadError('MeTube a refuse de demarrer ce telechargement')
+        setLoadError(t('metube.refuseStart'))
       }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Erreur lors du demarrage')
+      setLoadError(err instanceof Error ? err.message : t('metube.startFailed'))
     } finally {
       refresh()
     }
@@ -270,10 +273,10 @@ export default function MetubePage() {
   if (notConfigured) {
     return (
       <div className="text-app-text-muted">
-        <p>URL MeTube non configuree.</p>
+        <p>{t('metube.notConfiguredTitle')}</p>
         <p className="mt-2">
-          Renseigne-la dans <span className="text-app-text-muted">Reglages</span> (section MeTube) pour gerer tes
-          telechargements ici.
+          {t('metube.setItPrefix')} <span className="text-app-text-muted">{t('common.settings')}</span>
+          {t('metube.setItSuffix')}
         </p>
       </div>
     )
@@ -290,7 +293,7 @@ export default function MetubePage() {
             disabled={refreshing}
             className="text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
           >
-            {refreshing ? 'Actualisation...' : '↻ Actualiser'}
+            {refreshing ? t('metube.refreshing') : t('metube.refresh')}
           </button>
           {publicUrl && (
             <a
@@ -298,9 +301,9 @@ export default function MetubePage() {
               target="_blank"
               rel="noreferrer"
               className="text-xs text-app-text-muted hover:text-app-text"
-              title="Fonctionnalites avancees (cookies, abonnements...) non reprises ici"
+              title={t('metube.fullInterfaceTitle')}
             >
-              Interface complete ↗
+              {t('metube.fullInterface')}
             </a>
           )}
         </div>
@@ -311,7 +314,7 @@ export default function MetubePage() {
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Colle un lien YouTube / YouTube Music..."
+            placeholder={t('metube.urlPlaceholder')}
             className="flex-1 bg-app-bg border border-app-border-strong rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-app-accent"
           />
           <button
@@ -319,7 +322,7 @@ export default function MetubePage() {
             disabled={adding || !url.trim()}
             className="px-4 py-2 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 text-sm whitespace-nowrap"
           >
-            {adding ? 'Ajout...' : 'Telecharger'}
+            {adding ? t('metube.adding') : t('metube.download')}
           </button>
         </div>
 
@@ -328,28 +331,28 @@ export default function MetubePage() {
           onClick={() => setAdvancedOpen((v) => !v)}
           className="text-xs text-app-text-muted hover:text-app-text mt-2"
         >
-          {advancedOpen ? '▾' : '▸'} Options avancees
+          {advancedOpen ? '▾' : '▸'} {t('metube.advancedOptions')}
         </button>
 
         {advancedOpen && (
           <div className="flex gap-3 mt-2 flex-wrap items-end">
             <label className="flex flex-col gap-1 text-xs text-app-text-muted">
-              Type
+              {t('metube.type')}
               <select
                 value={downloadType}
                 onChange={(e) => onTypeChange(e.target.value as DownloadType)}
                 className="bg-app-bg border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
               >
-                <option value="audio">Audio</option>
-                <option value="video">Video</option>
-                <option value="captions">Sous-titres</option>
-                <option value="thumbnail">Miniature</option>
+                <option value="audio">{t('metube.typeAudio')}</option>
+                <option value="video">{t('metube.typeVideo')}</option>
+                <option value="captions">{t('metube.typeCaptions')}</option>
+                <option value="thumbnail">{t('metube.typeThumbnail')}</option>
               </select>
             </label>
             {(downloadType === 'audio' || downloadType === 'video') && (
               <>
                 <label className="flex flex-col gap-1 text-xs text-app-text-muted">
-                  Format
+                  {t('metube.format')}
                   <select
                     value={format}
                     onChange={(e) => setFormat(e.target.value)}
@@ -363,7 +366,7 @@ export default function MetubePage() {
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-app-text-muted">
-                  Qualite
+                  {t('metube.quality')}
                   <select
                     value={quality}
                     onChange={(e) => setQuality(e.target.value)}
@@ -379,11 +382,11 @@ export default function MetubePage() {
               </>
             )}
             <label className="flex flex-col gap-1 text-xs text-app-text-muted">
-              Dossier (optionnel)
+              {t('metube.folderOptional')}
               <input
                 value={folder}
                 onChange={(e) => setFolder(e.target.value)}
-                placeholder="ex: artiste"
+                placeholder={t('metube.folderPlaceholder')}
                 className="bg-app-bg border border-app-border-strong rounded-md px-2 py-1.5 text-sm"
               />
             </label>
@@ -396,7 +399,7 @@ export default function MetubePage() {
       {history && (
         <>
           <Section
-            title="En cours"
+            title={t('metube.sectionInProgress')}
             items={history.queue}
             collapsed={collapsed.queue}
             onToggle={() => toggleSection('queue')}
@@ -407,7 +410,7 @@ export default function MetubePage() {
           </Section>
 
           <Section
-            title="En attente"
+            title={t('metube.sectionPending')}
             items={history.pending}
             collapsed={collapsed.pending}
             onToggle={() => toggleSection('pending')}
@@ -423,7 +426,7 @@ export default function MetubePage() {
           </Section>
 
           <Section
-            title="Termine"
+            title={t('metube.sectionDone')}
             items={history.done}
             collapsed={collapsed.done}
             onToggle={() => toggleSection('done')}
@@ -433,25 +436,25 @@ export default function MetubePage() {
                   onClick={retryAllErrors}
                   className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong"
                 >
-                  Reessayer les echecs
+                  {t('metube.retryFailedAll')}
                 </button>
                 <button
                   onClick={() => clearDone('finished')}
                   className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong"
                 >
-                  Effacer les reussis
+                  {t('metube.clearSucceeded')}
                 </button>
                 <button
                   onClick={() => clearDone('error')}
                   className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong"
                 >
-                  Effacer les echecs
+                  {t('metube.clearFailed')}
                 </button>
                 <button
                   onClick={() => clearDone('all')}
                   className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-red-900/50"
                 >
-                  Tout effacer
+                  {t('metube.clearAll')}
                 </button>
               </div>
             }

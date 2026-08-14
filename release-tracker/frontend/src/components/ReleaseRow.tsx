@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, RELEASE_TYPE_LABELS, type Release, type Track } from '../api'
+import { api, getReleaseTypeLabels, type Release, type Track } from '../api'
 import { OwnershipBadge } from './StatusBadge'
 import ServiceLink from './ServiceLink'
 import { DeezerIcon, LastfmIcon, MusicBrainzIcon, YoutubeMusicIcon } from './ServiceIcons'
 import { usePlayer, type QueueTrack } from '../context/PlayerContext'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 import Spinner from './Spinner'
 import PlayGlyph from './PlayGlyph'
 import DownloadGlyph from './DownloadGlyph'
@@ -21,6 +22,8 @@ export default function ReleaseRow({
   onChanged?: () => void
   onTracksLoaded?: (releaseId: number, tracks: Track[]) => void
 }) {
+  const { t } = useLanguage()
+  const releaseTypeLabels = getReleaseTypeLabels(t)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [tracks, setTracks] = useState<Track[] | null>(null)
@@ -56,7 +59,7 @@ export default function ReleaseRow({
       onTracksLoaded?.(release.id, result)
       playQueue(toQueue(result), startIndex)
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Impossible de recuperer les pistes')
+      setMessage(err instanceof Error ? err.message : t('release.fetchTracksError'))
     } finally {
       setPlayLoading(false)
     }
@@ -67,11 +70,11 @@ export default function ReleaseRow({
     setMessage(null)
     try {
       const result = await api.downloadRelease(release.id)
-      if (result.ok) showToast('Telechargement envoye a MeTube')
+      if (result.ok) showToast(t('calendar.downloadSentToast'))
       else setMessage(result.message)
       onChanged?.()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erreur')
+      setMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setBusy(false)
     }
@@ -89,7 +92,7 @@ export default function ReleaseRow({
       setTracks(result)
       onTracksLoaded?.(release.id, result)
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Impossible de recuperer les pistes')
+      setMessage(err instanceof Error ? err.message : t('release.fetchTracksError'))
     } finally {
       setTracksLoading(false)
     }
@@ -98,10 +101,10 @@ export default function ReleaseRow({
   async function downloadTrack(videoId: string) {
     try {
       const result = await api.downloadTrack(release.id, videoId)
-      if (result.ok) showToast('Telechargement envoye a MeTube')
+      if (result.ok) showToast(t('calendar.downloadSentToast'))
       else setMessage(result.message)
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erreur')
+      setMessage(err instanceof Error ? err.message : t('common.error'))
     }
   }
 
@@ -113,16 +116,16 @@ export default function ReleaseRow({
     setMessage(null)
     try {
       await Promise.all(missing.map((t) => api.downloadTrack(release.id, t.video_id)))
-      showToast(`${missing.length} piste(s) envoyee(s) a MeTube`)
+      showToast(t('release.tracksSentToast', { count: missing.length }))
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erreur')
+      setMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setMissingBusy(false)
     }
   }
 
   const missingTrackCount = tracks?.filter((t) => t.owned === false).length ?? 0
-  const downloadLabel = release.ownership_status === 'owned' ? 'Retelecharger' : 'Telecharger'
+  const downloadLabel = release.ownership_status === 'owned' ? t('calendar.redownload') : t('metube.download')
 
   return (
     <div className="py-2 border-b border-app-border last:border-0">
@@ -131,7 +134,7 @@ export default function ReleaseRow({
           onClick={() => play(0)}
           disabled={playLoading}
           className="group/cover relative w-12 h-12 rounded overflow-hidden shrink-0 bg-app-surface-hover"
-          title="Ecouter cette release avant de telecharger"
+          title={t('release.previewTitle')}
         >
           {release.cover_url ? (
             <>
@@ -165,7 +168,7 @@ export default function ReleaseRow({
               </Link>
             )}
             {showArtist && ' - '}
-            {RELEASE_TYPE_LABELS[release.release_type]}
+            {releaseTypeLabels[release.release_type]}
             {release.release_date && ` - ${release.release_date}`}
           </div>
           <div className="flex gap-1 mt-1">
@@ -198,7 +201,7 @@ export default function ReleaseRow({
           onClick={toggleTracks}
           disabled={tracksLoading}
           className="text-xs px-2 py-1.5 rounded-md text-app-text-muted hover:text-app-text hover:bg-app-surface-hover"
-          title="Voir les pistes"
+          title={t('release.viewTracks')}
         >
           {tracksLoading ? '...' : tracks ? '▾' : '▸'}
         </button>
@@ -212,15 +215,15 @@ export default function ReleaseRow({
               disabled={missingBusy}
               className="text-xs px-2 py-1 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50 mb-2"
             >
-              {missingBusy ? '...' : `Telecharger les ${missingTrackCount} piste(s) manquante(s)`}
+              {missingBusy ? '...' : t('release.missingTracksButton', { count: missingTrackCount })}
             </button>
           )}
           <ul className="flex flex-col">
-            {tracks.map((t, idx) => {
-              const trackDownloadLabel = t.owned === true ? 'Retelecharger' : 'Telecharger'
+            {tracks.map((track, idx) => {
+              const trackDownloadLabel = track.owned === true ? t('calendar.redownload') : t('metube.download')
               return (
                 <li
-                  key={t.video_id}
+                  key={track.video_id}
                   className={`flex items-center justify-between text-sm text-app-text-muted gap-2 px-2 py-1.5 rounded ${
                     idx % 2 === 1 ? 'bg-app-surface/60' : ''
                   }`}
@@ -228,29 +231,29 @@ export default function ReleaseRow({
                   <button
                     onClick={() => play(idx)}
                     className="flex items-center justify-center w-5 h-5 rounded-full border border-app-text-faint text-app-text-muted text-[10px] hover:text-app-text hover:border-app-text-faint shrink-0"
-                    title="Ecouter cette piste"
+                    title={t('release.listenTrackTitle')}
                   >
                     ▶
                   </button>
                   <span className="truncate flex-1">
-                    {t.title}
-                    {t.featured_artists.length > 0 && (
-                      <span className="text-app-text-faint"> (feat. {t.featured_artists.join(', ')})</span>
+                    {track.title}
+                    {track.featured_artists.length > 0 && (
+                      <span className="text-app-text-faint"> (feat. {track.featured_artists.join(', ')})</span>
                     )}{' '}
-                    {t.duration && <span className="text-app-text-faint">({t.duration})</span>}
+                    {track.duration && <span className="text-app-text-faint">({track.duration})</span>}
                   </span>
-                  {t.owned === true && (
+                  {track.owned === true && (
                     <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-900/50 text-green-300 whitespace-nowrap">
-                      Possedee
+                      {t('release.owned')}
                     </span>
                   )}
-                  {t.owned === false && (
+                  {track.owned === false && (
                     <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-900/50 text-amber-300 whitespace-nowrap">
-                      Manquante
+                      {t('release.missing')}
                     </span>
                   )}
                   <button
-                    onClick={() => downloadTrack(t.video_id)}
+                    onClick={() => downloadTrack(track.video_id)}
                     title={trackDownloadLabel}
                     className="flex items-center justify-center w-6 h-6 rounded-md bg-app-surface-hover hover:bg-app-border-strong shrink-0"
                   >

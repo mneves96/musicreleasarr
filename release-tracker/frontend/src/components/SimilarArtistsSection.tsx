@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, type SimilarArtist } from '../api'
 import Spinner from './Spinner'
+import { useLanguage } from '../context/LanguageContext'
 
 // Section "Artistes similaires" (Last.fm artist.getSimilar), affichee
 // uniquement sur la fiche d'un artiste suivi. Cliquer sur un artiste ouvre la
@@ -11,6 +12,7 @@ import Spinner from './Spinner'
 // nom + pays a droite) que ArtistListRow.tsx, pour rester coherent avec la
 // liste des artistes suivis plutot qu'une grille de vignettes.
 export default function SimilarArtistsSection({ artistId }: { artistId: number }) {
+  const { t } = useLanguage()
   const [artists, setArtists] = useState<SimilarArtist[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -50,7 +52,7 @@ export default function SimilarArtistsSection({ artistId }: { artistId: number }
     return (
       <div className="flex items-center gap-2 text-sm text-app-text-muted mb-6">
         <Spinner className="w-4 h-4" />
-        Chargement des artistes similaires...
+        {t('similarArtists.loading')}
       </div>
     )
   }
@@ -59,7 +61,7 @@ export default function SimilarArtistsSection({ artistId }: { artistId: number }
 
   return (
     <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
-      <h2 className="font-medium mb-3">Artistes similaires</h2>
+      <h2 className="font-medium mb-3">{t('similarArtists.heading')}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {artists.map((a) => (
           <button
@@ -67,7 +69,7 @@ export default function SimilarArtistsSection({ artistId }: { artistId: number }
             onClick={() => open(a)}
             disabled={busyId === a.musicbrainz_id}
             className="flex items-center gap-3 px-3 py-2 rounded-md bg-app-bg border border-app-border hover:border-app-text-faint transition-colors text-left disabled:opacity-50"
-            title={`Voir la fiche de ${a.name}`}
+            title={t('similarArtists.viewArtistTitle', { name: a.name })}
           >
             <span className="relative shrink-0">
               {a.image_url ? (

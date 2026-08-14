@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   api,
+  getReleaseTypeLabels,
   navidromeCoverArtUrl,
-  RELEASE_TYPE_LABELS,
   type MetubeHistory,
   type NavidromeStats,
   type NowPlayingEntry,
@@ -16,6 +16,7 @@ import { LoadingBlock } from '../components/Spinner'
 import { ArtistsIcon } from '../components/NavIcons'
 import DownloadGlyph from '../components/DownloadGlyph'
 import { AlbumIcon, CheckCircleIcon, ClockIcon, ErrorCircleIcon, GenreIcon, ScrobbleIcon, TrackIcon } from '../components/DashboardIcons'
+import { useLanguage } from '../context/LanguageContext'
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -34,11 +35,12 @@ function DashboardCard({ title, action, children }: { title: string; action?: Re
 }
 
 function ConfigHint({ text }: { text: string }) {
+  const { t } = useLanguage()
   return (
     <p className="text-sm text-app-text-faint">
-      {text} Configure ca dans{' '}
+      {text} {t('dashboard.configHintPrefix')}{' '}
       <Link to="/settings" className="text-app-accent-text hover:underline">
-        Reglages
+        {t('common.settings')}
       </Link>
       .
     </p>
@@ -46,6 +48,8 @@ function ConfigHint({ text }: { text: string }) {
 }
 
 function ReleaseListWidget({ releases, emptyText }: { releases: Release[]; emptyText: string }) {
+  const { t } = useLanguage()
+  const releaseTypeLabels = getReleaseTypeLabels(t)
   if (releases.length === 0) return <p className="text-sm text-app-text-faint">{emptyText}</p>
   return (
     <div className="flex flex-col gap-2">
@@ -65,7 +69,7 @@ function ReleaseListWidget({ releases, emptyText }: { releases: Release[]; empty
               <span className="font-medium">{r.artist_name}</span> - {r.title}
             </div>
             <div className="text-xs text-app-text-faint">
-              {RELEASE_TYPE_LABELS[r.release_type]} · {r.release_date}
+              {releaseTypeLabels[r.release_type]} · {r.release_date}
             </div>
           </div>
         </Link>
@@ -79,6 +83,7 @@ function ReleaseListWidget({ releases, emptyText }: { releases: Release[]; empty
 // forcement de fiche artiste correspondante cote app (aucun artist_id fiable
 // vers lequel naviguer), contrairement a une Release.
 function RecentlyAddedWidget({ albums, emptyText }: { albums: RecentlyAddedAlbum[]; emptyText: string }) {
+  const { t } = useLanguage()
   if (albums.length === 0) return <p className="text-sm text-app-text-faint">{emptyText}</p>
   return (
     <div className="flex flex-col gap-2">
@@ -98,7 +103,9 @@ function RecentlyAddedWidget({ albums, emptyText }: { albums: RecentlyAddedAlbum
               {a.artist && <span className="font-medium">{a.artist} - </span>}
               {a.name}
             </div>
-            <div className="text-xs text-app-text-faint">Ajoute le {a.created ? a.created.slice(0, 10) : '?'}</div>
+            <div className="text-xs text-app-text-faint">
+              {t('dashboard.addedOn', { date: a.created ? a.created.slice(0, 10) : '?' })}
+            </div>
           </div>
         </div>
       ))}
@@ -135,6 +142,7 @@ function MetubeStatTile({
 // seule vue. Chaque widget se degrade silencieusement (ConfigHint) si le
 // service correspondant n'est pas configure.
 export default function DashboardPage() {
+  const { t, language } = useLanguage()
   const [loading, setLoading] = useState(true)
   const [recentReleases, setRecentReleases] = useState<Release[]>([])
   const [upcomingReleases, setUpcomingReleases] = useState<Release[]>([])
@@ -207,21 +215,23 @@ export default function DashboardPage() {
           { pending: 0, inProgress: 0, done: 0, error: 0 }
         )
 
+  const localeTag = language === 'fr' ? 'fr-FR' : 'en-US'
+
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Tableau de bord</h1>
+      <h1 className="text-xl font-semibold mb-4">{t('dashboard.title')}</h1>
 
       <div className="mb-4">
         <DashboardCard
           title="Navidrome"
           action={
             <Link to="/navidrome" className="text-xs text-app-accent-text hover:underline">
-              Voir tout →
+              {t('dashboard.viewAll')}
             </Link>
           }
         >
           {navidromeStats === 'not_configured' ? (
-            <ConfigHint text="Navidrome n'est pas configure." />
+            <ConfigHint text={t('dashboard.navidromeNotConfigured')} />
           ) : navidromeStats ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="flex items-center gap-5">
@@ -229,21 +239,21 @@ export default function DashboardPage() {
                   <ArtistsIcon className="w-5 h-5 text-app-text-faint shrink-0" />
                   <div>
                     <p className="text-lg font-semibold leading-none">{navidromeStats.artist_count}</p>
-                    <p className="text-xs text-app-text-faint">artistes</p>
+                    <p className="text-xs text-app-text-faint">{t('dashboard.artists')}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <AlbumIcon className="w-5 h-5 text-app-text-faint shrink-0" />
                   <div>
                     <p className="text-lg font-semibold leading-none">{navidromeStats.album_count}</p>
-                    <p className="text-xs text-app-text-faint">albums</p>
+                    <p className="text-xs text-app-text-faint">{t('dashboard.albums')}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <TrackIcon className="w-5 h-5 text-app-text-faint shrink-0" />
                   <div>
                     <p className="text-lg font-semibold leading-none">{navidromeStats.song_count}</p>
-                    <p className="text-xs text-app-text-faint">titres</p>
+                    <p className="text-xs text-app-text-faint">{t('dashboard.tracks')}</p>
                   </div>
                 </div>
               </div>
@@ -252,7 +262,7 @@ export default function DashboardPage() {
                 <div>
                   <div className="flex items-center gap-1.5 text-xs text-app-text-faint mb-1.5">
                     <GenreIcon className="w-3.5 h-3.5" />
-                    Genres les plus representes
+                    {t('dashboard.topGenres')}
                   </div>
                   <div className="flex flex-col gap-1">
                     {navidromeStats.top_genres.map((g) => (
@@ -272,7 +282,7 @@ export default function DashboardPage() {
 
               {nowPlaying !== 'not_configured' && nowPlaying.length > 0 && (
                 <div>
-                  <div className="text-xs text-app-text-faint mb-1.5">Sessions en cours</div>
+                  <div className="text-xs text-app-text-faint mb-1.5">{t('dashboard.activeSessions')}</div>
                   <div className="flex flex-col gap-2">
                     {nowPlaying.map((entry, idx) => (
                       <div key={idx} className="flex items-center gap-2">
@@ -287,12 +297,12 @@ export default function DashboardPage() {
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="text-sm truncate">
-                            <span className="font-medium">{entry.title ?? 'Titre inconnu'}</span>
+                            <span className="font-medium">{entry.title ?? t('dashboard.unknownTitle')}</span>
                             {entry.artist && <span className="text-app-text-muted"> - {entry.artist}</span>}
                           </div>
                           {entry.username && <div className="text-xs text-app-text-faint truncate">{entry.username}</div>}
                         </div>
-                        <span className="equalizer-bars shrink-0" title="Lecture en cours">
+                        <span className="equalizer-bars shrink-0" title={t('dashboard.nowPlayingTitle')}>
                           <span />
                           <span />
                           <span />
@@ -308,19 +318,19 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-        <DashboardCard title="Sorties recentes">
-          <ReleaseListWidget releases={recentReleases} emptyText="Aucune sortie recente." />
+        <DashboardCard title={t('dashboard.recentReleases')}>
+          <ReleaseListWidget releases={recentReleases} emptyText={t('dashboard.noRecentRelease')} />
         </DashboardCard>
 
-        <DashboardCard title="Sorties a venir">
-          <ReleaseListWidget releases={upcomingReleases} emptyText="Aucune sortie prevue." />
+        <DashboardCard title={t('dashboard.upcomingReleases')}>
+          <ReleaseListWidget releases={upcomingReleases} emptyText={t('dashboard.noUpcomingRelease')} />
         </DashboardCard>
 
         <DashboardCard
           title="Backlog"
           action={
             <Link to="/backlog" className="text-xs text-app-accent-text hover:underline">
-              Voir tout →
+              {t('dashboard.viewAll')}
             </Link>
           }
         >
@@ -328,27 +338,27 @@ export default function DashboardPage() {
             <div>
               <p className="text-2xl font-semibold">{backlogItems.length}</p>
               <p className="text-sm text-app-text-faint">
-                fichier{backlogItems.length > 1 ? 's' : ''} en attente
-                {errorCount > 0 && <span className="text-red-400"> - {errorCount} en erreur</span>}
+                {t('dashboard.backlogPending', { count: backlogItems.length })}
+                {errorCount > 0 && <span className="text-red-400">{t('dashboard.filesError', { count: errorCount })}</span>}
               </p>
             </div>
           ) : (
-            <p className="text-sm text-app-text-faint">Rien a traiter pour le moment.</p>
+            <p className="text-sm text-app-text-faint">{t('dashboard.nothingToProcess')}</p>
           )}
         </DashboardCard>
 
         <DashboardCard
-          title="Ajouts recents"
+          title={t('dashboard.recentAdditions')}
           action={
             <Link to="/navidrome" className="text-xs text-app-accent-text hover:underline">
-              Voir tout →
+              {t('dashboard.viewAll')}
             </Link>
           }
         >
           {recentlyAdded === 'not_configured' ? (
-            <ConfigHint text="Navidrome n'est pas configure." />
+            <ConfigHint text={t('dashboard.navidromeNotConfigured')} />
           ) : (
-            <RecentlyAddedWidget albums={recentlyAdded} emptyText="Aucun album ajoute recemment." />
+            <RecentlyAddedWidget albums={recentlyAdded} emptyText={t('dashboard.noRecentAlbum')} />
           )}
         </DashboardCard>
 
@@ -356,36 +366,36 @@ export default function DashboardPage() {
           title="MeTube"
           action={
             <Link to="/metube" className="text-xs text-app-accent-text hover:underline">
-              Voir tout →
+              {t('dashboard.viewAll')}
             </Link>
           }
         >
           {metubeCounts === null ? (
-            <ConfigHint text="MeTube n'est pas configure." />
+            <ConfigHint text={t('dashboard.metubeNotConfigured')} />
           ) : (
             <div className="grid grid-cols-2 gap-4">
               <MetubeStatTile
                 icon={<ClockIcon className="w-5 h-5" />}
                 count={metubeCounts.pending}
-                label="en attente"
+                label={t('dashboard.metubePending')}
                 colorClass="text-app-text-faint"
               />
               <MetubeStatTile
                 icon={<DownloadGlyph className="w-5 h-5" />}
                 count={metubeCounts.inProgress}
-                label="en cours"
+                label={t('dashboard.metubeInProgress')}
                 colorClass="text-blue-400"
               />
               <MetubeStatTile
                 icon={<CheckCircleIcon className="w-5 h-5" />}
                 count={metubeCounts.done}
-                label="reussis"
+                label={t('dashboard.metubeSucceeded')}
                 colorClass="text-green-400"
               />
               <MetubeStatTile
                 icon={<ErrorCircleIcon className="w-5 h-5" />}
                 count={metubeCounts.error}
-                label="en erreur"
+                label={t('dashboard.metubeFailed')}
                 colorClass="text-red-400"
               />
             </div>
@@ -394,7 +404,7 @@ export default function DashboardPage() {
 
         <DashboardCard title="Scrobbling">
           {!scrobbling || (!scrobbling.lastfm && !scrobbling.listenbrainz) ? (
-            <ConfigHint text="Ni Last.fm ni ListenBrainz ne sont connectes." />
+            <ConfigHint text={t('dashboard.scrobblingNotConnected')} />
           ) : (
             <div className="flex flex-col gap-3">
               {scrobbling.lastfm && (
@@ -406,9 +416,11 @@ export default function DashboardPage() {
                 >
                   <ScrobbleIcon className="w-6 h-6 text-red-400 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-lg font-semibold leading-none">{scrobbling.lastfm.playcount.toLocaleString()}</p>
+                    <p className="text-lg font-semibold leading-none">
+                      {scrobbling.lastfm.playcount.toLocaleString(localeTag)}
+                    </p>
                     <p className="text-xs text-app-text-faint truncate">
-                      scrobbles Last.fm · {scrobbling.lastfm.username}
+                      {t('dashboard.lastfmScrobbles', { username: scrobbling.lastfm.username })}
                     </p>
                   </div>
                 </a>
@@ -423,10 +435,10 @@ export default function DashboardPage() {
                   <ScrobbleIcon className="w-6 h-6 text-orange-400 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-lg font-semibold leading-none">
-                      {scrobbling.listenbrainz.listen_count.toLocaleString()}
+                      {scrobbling.listenbrainz.listen_count.toLocaleString(localeTag)}
                     </p>
                     <p className="text-xs text-app-text-faint truncate">
-                      ecoutes ListenBrainz · {scrobbling.listenbrainz.username}
+                      {t('dashboard.listenbrainzListens', { username: scrobbling.listenbrainz.username })}
                     </p>
                   </div>
                 </a>

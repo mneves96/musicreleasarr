@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api/tagging", tags=["tagging"])
 def _get_item_or_404(item_id: int, db: Session) -> TaggingItem:
     item = db.get(TaggingItem, item_id)
     if item is None:
-        raise HTTPException(404, "Element de backlog introuvable")
+        raise HTTPException(404, "Élément de backlog introuvable")
     return item
 
 
@@ -49,7 +49,7 @@ def _get_release_or_404(release_id: int, db: Session) -> Release:
 
 def _require_release(item: TaggingItem) -> None:
     if item.release_id is None:
-        raise HTTPException(422, "Ce fichier n'est pas encore identifie")
+        raise HTTPException(422, "Ce fichier n'est pas encore identifié")
 
 
 def _to_out(item: TaggingItem, downloads_root: str) -> TaggingItemOut:
@@ -99,12 +99,12 @@ def scan_now(db: Session = Depends(get_db)):
     except Exception as exc:
         db.rollback()
         logger.exception("Echec du scan du dossier de telechargements")
-        raise HTTPException(500, f"Echec du scan : {exc}") from exc
+        raise HTTPException(500, f"Échec du scan : {exc}") from exc
     total_backlog = (
         db.query(TaggingItem).filter(TaggingItem.status.in_([TaggingStatus.needs_review, TaggingStatus.error])).count()
     )
     return TestConnectionResult(
-        ok=True, message=f"{len(created)} fichier(s) (re)detecte(s) - {total_backlog} au total dans le backlog"
+        ok=True, message=f"{len(created)} fichier(s) (re)détecté(s) - {total_backlog} au total dans le backlog"
     )
 
 
@@ -192,7 +192,7 @@ def assign_items(release_id: int, payload: AssignItemsIn, db: Session = Depends(
     settings = get_settings(db)
     items = tagging.assign_items_to_release(db, payload.item_ids, release)
     if not items:
-        raise HTTPException(404, "Aucun fichier a reassigner")
+        raise HTTPException(404, "Aucun fichier à réassigner")
     return [_to_out(item, settings.tagging_downloads_path) for item in items]
 
 

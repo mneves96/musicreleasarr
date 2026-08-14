@@ -1,4 +1,6 @@
 import type { OwnershipStatus, TaggingStatus } from '../api'
+import { useLanguage } from '../context/LanguageContext'
+import type { TranslationKey } from '../i18n/en'
 
 const OWNERSHIP_STYLES: Record<OwnershipStatus, string> = {
   owned: 'bg-green-900/50 text-green-300 border-green-700',
@@ -6,10 +8,10 @@ const OWNERSHIP_STYLES: Record<OwnershipStatus, string> = {
   unknown: 'bg-app-surface-hover text-app-text-muted border-app-border-strong',
 }
 
-const OWNERSHIP_LABELS: Record<OwnershipStatus, string> = {
-  owned: 'Possedee',
-  missing: 'Manquante',
-  unknown: 'Statut inconnu',
+const OWNERSHIP_LABEL_KEYS: Record<OwnershipStatus, TranslationKey> = {
+  owned: 'release.owned',
+  missing: 'release.missing',
+  unknown: 'status.unknown',
 }
 
 function Badge({
@@ -29,7 +31,8 @@ function Badge({
 }
 
 export function OwnershipBadge({ status }: { status: OwnershipStatus }) {
-  return <Badge className={OWNERSHIP_STYLES[status]}>{OWNERSHIP_LABELS[status]}</Badge>
+  const { t } = useLanguage()
+  return <Badge className={OWNERSHIP_STYLES[status]}>{t(OWNERSHIP_LABEL_KEYS[status])}</Badge>
 }
 
 const TAGGING_STYLES: Record<TaggingStatus, string> = {
@@ -38,16 +41,17 @@ const TAGGING_STYLES: Record<TaggingStatus, string> = {
   error: 'bg-red-900/50 text-red-300 border-red-700',
 }
 
-const TAGGING_LABELS: Record<TaggingStatus, string> = {
-  needs_review: 'A verifier',
-  done: 'Range',
-  error: 'Erreur',
+const TAGGING_LABEL_KEYS: Record<TaggingStatus, TranslationKey> = {
+  needs_review: 'status.needsReview',
+  done: 'status.filed',
+  error: 'common.error',
 }
 
 export function TaggingBadge({ status, error }: { status: TaggingStatus; error?: string | null }) {
+  const { t } = useLanguage()
   return (
     <Badge className={TAGGING_STYLES[status]} title={status === 'error' ? error ?? undefined : undefined}>
-      {TAGGING_LABELS[status]}
+      {t(TAGGING_LABEL_KEYS[status])}
     </Badge>
   )
 }

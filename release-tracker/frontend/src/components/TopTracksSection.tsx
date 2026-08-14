@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, type TopTrack } from '../api'
 import { usePlayer, type QueueTrack } from '../context/PlayerContext'
 import { useToast } from '../context/ToastContext'
+import { useLanguage } from '../context/LanguageContext'
 import PlayGlyph from './PlayGlyph'
 import DownloadGlyph from './DownloadGlyph'
 import Spinner from './Spinner'
@@ -14,6 +15,7 @@ const PAGE_SIZE = 5
 // donnees (ex: cle API Last.fm non configuree) plutot que d'afficher un
 // bandeau d'erreur sur chaque fiche artiste visitee.
 export default function TopTracksSection({ artistId, artistName }: { artistId: number; artistName: string }) {
+  const { t, language } = useLanguage()
   const [tracks, setTracks] = useState<TopTrack[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [limit, setLimit] = useState(PAGE_SIZE)
@@ -85,7 +87,7 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
     setDownloadingVideoId(track.video_id)
     try {
       const result = await api.downloadTrack(track.release_id, track.video_id)
-      if (result.ok) showToast('Telechargement envoye a MeTube')
+      if (result.ok) showToast(t('calendar.downloadSentToast'))
     } finally {
       setDownloadingVideoId(null)
     }
@@ -95,31 +97,33 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
     return (
       <div className="flex items-center gap-2 text-sm text-app-text-muted mb-6">
         <Spinner className="w-4 h-4" />
-        Chargement des titres populaires...
+        {t('topTracks.loading')}
       </div>
     )
   }
 
   if (!tracks || tracks.length === 0) return null
 
+  const localeTag = language === 'fr' ? 'fr-FR' : 'en-US'
+
   return (
     <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
-      <h2 className="font-medium mb-3">Titres populaires</h2>
+      <h2 className="font-medium mb-3">{t('topTracks.heading')}</h2>
       <ul className="flex flex-col gap-1">
-        {tracks.map((t) => (
-          <li key={t.title} className="flex items-center gap-3 py-1.5">
+        {tracks.map((track) => (
+          <li key={track.title} className="flex items-center gap-3 py-1.5">
             <button
-              onClick={() => play(t)}
-              disabled={!t.video_id}
+              onClick={() => play(track)}
+              disabled={!track.video_id}
               className="group/cover relative w-10 h-10 rounded overflow-hidden shrink-0 bg-app-surface-hover disabled:cursor-default"
-              title={t.video_id ? 'Ecouter ce titre' : 'Aucune source audio trouvee'}
+              title={track.video_id ? t('topTracks.listenTitle') : t('topTracks.noAudioSource')}
             >
-              {t.cover_url ? (
-                <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+              {track.cover_url ? (
+                <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
                 <span className="absolute inset-0 flex items-center justify-center text-sm">🎧</span>
               )}
-              {t.video_id && (
+              {track.video_id && (
                 <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/cover:bg-black/50 transition-colors">
                   <PlayGlyph className="w-4 h-4 text-white opacity-0 group-hover/cover:opacity-100 transition-opacity" />
                 </span>
@@ -127,30 +131,30 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
             </button>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">
-                {t.title}
-                {t.featured_artists.length > 0 && (
-                  <span className="text-app-text-faint font-normal"> (feat. {t.featured_artists.join(', ')})</span>
+                {track.title}
+                {track.featured_artists.length > 0 && (
+                  <span className="text-app-text-faint font-normal"> (feat. {track.featured_artists.join(', ')})</span>
                 )}
               </div>
               <div className="truncate text-xs text-app-text-muted">
-                {t.album_title}
-                {t.album_title && t.release_date && ' · '}
-                {t.release_date}
+                {track.album_title}
+                {track.album_title && track.release_date && ' · '}
+                {track.release_date}
               </div>
             </div>
-            {t.playcount != null && (
+            {track.playcount != null && (
               <span className="text-xs text-app-text-faint whitespace-nowrap shrink-0">
-                {t.playcount.toLocaleString('fr-FR')} lectures
+                {t('topTracks.playsCount', { count: track.playcount.toLocaleString(localeTag) })}
               </span>
             )}
-            {t.release_id != null && t.video_id && (
+            {track.release_id != null && track.video_id && (
               <button
-                onClick={() => download(t)}
-                disabled={downloadingVideoId === t.video_id}
-                title="Telecharger ce titre"
+                onClick={() => download(track)}
+                disabled={downloadingVideoId === track.video_id}
+                title={t('topTracks.downloadTrackTitle')}
                 className="flex items-center justify-center w-8 h-8 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50 shrink-0"
               >
-                {downloadingVideoId === t.video_id ? <Spinner className="w-4 h-4" /> : <DownloadGlyph className="w-4 h-4" />}
+                {downloadingVideoId === track.video_id ? <Spinner className="w-4 h-4" /> : <DownloadGlyph className="w-4 h-4" />}
               </button>
             )}
           </li>
@@ -163,7 +167,7 @@ export default function TopTracksSection({ artistId, artistName }: { artistId: n
           className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
         >
           {loadingMore && <Spinner className="w-3 h-3" />}
-          Afficher plus
+          {t('topTracks.showMore')}
         </button>
       </div>
     </div>

@@ -40,7 +40,7 @@ def ping(base_url: str, username: str, password: str) -> tuple[bool, str]:
         if body.get("status") == "ok":
             return True, "Connexion Navidrome OK"
         error = body.get("error", {}).get("message", "erreur inconnue")
-        return False, f"Navidrome a repondu une erreur : {error}"
+        return False, f"Navidrome a répondu une erreur : {error}"
     except httpx.HTTPError as exc:
         return False, f"Impossible de joindre Navidrome : {exc}"
 
@@ -183,9 +183,9 @@ def start_scan(base_url: str, username: str, password: str, full: bool = False) 
         resp.raise_for_status()
         body = resp.json().get("subsonic-response", {})
         if body.get("status") == "ok":
-            return True, "Scan complet lance" if full else "Scan lance"
+            return True, "Scan complet lancé" if full else "Scan lancé"
         error = body.get("error", {}).get("message", "erreur inconnue")
-        return False, f"Navidrome a repondu une erreur : {error}"
+        return False, f"Navidrome a répondu une erreur : {error}"
     except httpx.HTTPError as exc:
         return False, f"Impossible de joindre Navidrome : {exc}"
 

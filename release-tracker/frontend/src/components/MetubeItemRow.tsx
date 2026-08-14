@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { MetubeItem } from '../api'
+import { useLanguage } from '../context/LanguageContext'
+import type { TranslationKey } from '../i18n/en'
 
 function formatBytes(n: number | null): string {
   if (n == null) return ''
@@ -25,13 +27,13 @@ const STATUS_STYLES: Record<string, string> = {
   error: 'bg-red-900/50 text-red-300',
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'En attente',
-  scheduled: 'Programme',
-  preparing: 'Preparation...',
-  downloading: 'Telechargement',
-  finished: 'Termine',
-  error: 'Erreur',
+const STATUS_LABEL_KEYS: Record<string, TranslationKey> = {
+  pending: 'metube.sectionPending',
+  scheduled: 'metubeRow.statusScheduled',
+  preparing: 'metubeRow.statusPreparing',
+  downloading: 'metubeRow.statusDownloading',
+  finished: 'metubeRow.statusFinished',
+  error: 'common.error',
 }
 
 function ProgressBar({ percent }: { percent: number }) {
@@ -61,8 +63,10 @@ export default function MetubeItemRow({
   onRetry?: () => Promise<void>
   onStart?: () => Promise<void>
 }) {
+  const { t } = useLanguage()
   const [busyAction, setBusyAction] = useState<'delete' | 'retry' | 'start' | null>(null)
   const percent = item.percent != null ? Math.max(0, Math.min(100, Math.round(item.percent))) : null
+  const statusLabel = STATUS_LABEL_KEYS[item.status] ? t(STATUS_LABEL_KEYS[item.status]) : item.status
 
   async function run(action: 'delete' | 'retry' | 'start', fn: () => Promise<void>) {
     setBusyAction(action)
@@ -81,18 +85,18 @@ export default function MetubeItemRow({
         </div>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status] ?? 'bg-app-surface-hover text-app-text-muted'}`}>
-            {STATUS_LABELS[item.status] ?? item.status}
+            {statusLabel}
           </span>
           {item.status === 'downloading' && percent != null && (
             <span className="text-[11px] text-app-text-muted">
               {item.speed != null && `${formatBytes(item.speed)}/s`}
-              {item.eta != null && ` - reste ${formatEta(item.eta)}`}
+              {item.eta != null && ` ${t('metubeRow.etaRemaining', { eta: formatEta(item.eta) })}`}
             </span>
           )}
           {item.status === 'finished' && item.size != null && (
             <span className="text-[11px] text-app-text-muted">{formatBytes(item.size)}</span>
           )}
-          {item.folder && <span className="text-[11px] text-app-text-faint">dossier: {item.folder}</span>}
+          {item.folder && <span className="text-[11px] text-app-text-faint">{t('metubeRow.folderLabel', { folder: item.folder })}</span>}
         </div>
         {item.status === 'downloading' && percent != null && <ProgressBar percent={percent} />}
         {item.status === 'error' && (item.error || item.msg) && (
@@ -108,7 +112,7 @@ export default function MetubeItemRow({
             disabled={busyAction !== null}
             className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
           >
-            {busyAction === 'start' ? '...' : 'Demarrer'}
+            {busyAction === 'start' ? '...' : t('metubeRow.start')}
           </button>
         )}
         {item.status === 'error' && onRetry && (
@@ -117,14 +121,14 @@ export default function MetubeItemRow({
             disabled={busyAction !== null}
             className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
           >
-            {busyAction === 'retry' ? '...' : 'Reessayer'}
+            {busyAction === 'retry' ? '...' : t('metubeRow.retry')}
           </button>
         )}
         <button
           onClick={() => run('delete', onDelete)}
           disabled={busyAction !== null}
           className="text-xs px-2 py-1 rounded-md bg-app-surface-hover hover:bg-red-900/50 disabled:opacity-50"
-          title="Supprimer"
+          title={t('metubeRow.delete')}
         >
           {busyAction === 'delete' ? '...' : '✕'}
         </button>

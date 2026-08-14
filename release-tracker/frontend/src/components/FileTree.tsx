@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { TaggingItem } from '../api'
+import { useLanguage } from '../context/LanguageContext'
 
 interface FolderNode {
   name: string
@@ -49,6 +50,7 @@ interface FileTreeProps {
 // cocher individuelle. Fichiers et dossiers sont tous deux glissables vers la
 // colonne de droite (voir BacklogPage.tsx pour la gestion du drop).
 export default function FileTree({ items, selectedIds, onToggleSelect, onDiscard }: FileTreeProps) {
+  const { t } = useLanguage()
   const tree = useMemo(() => buildTree(items), [items])
   const [expanded, setExpanded] = useState<Set<string> | null>(null)
   // Deplie les dossiers de premier niveau par defaut, une seule fois (pas a
@@ -66,7 +68,7 @@ export default function FileTree({ items, selectedIds, onToggleSelect, onDiscard
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-app-text-faint">Aucun fichier en attente.</p>
+    return <p className="text-sm text-app-text-faint">{t('fileTree.noFilesPending')}</p>
   }
 
   return (
@@ -107,6 +109,7 @@ function FolderRow({
   onToggleSelect: (ids: number[], selected: boolean) => void
   onDiscard: (itemId: number) => void
 }) {
+  const { t } = useLanguage()
   const isOpen = expanded.has(node.path)
   const descendantIds = useMemo(() => collectIds(node), [node])
   const selectedCount = descendantIds.filter((id) => selectedIds.has(id)).length
@@ -127,7 +130,7 @@ function FolderRow({
         <button
           onClick={() => onToggleExpand(node.path)}
           className="text-app-text-faint w-4 shrink-0 text-xs"
-          title={isOpen ? 'Replier' : 'Deplier'}
+          title={isOpen ? t('fileTree.collapse') : t('fileTree.expand')}
         >
           {isOpen ? '▾' : '▸'}
         </button>
@@ -186,6 +189,7 @@ function FileRow({
   onToggleSelect: (ids: number[], selected: boolean) => void
   onDiscard: (itemId: number) => void
 }) {
+  const { t } = useLanguage()
   const checked = selectedIds.has(item.id)
   return (
     <div
@@ -211,7 +215,7 @@ function FileRow({
           onDiscard(item.id)
         }}
         className="text-app-text-faint hover:text-red-400 text-xs px-1 shrink-0"
-        title="Ignorer ce fichier"
+        title={t('tagging.discardFileTitle')}
       >
         ✕
       </button>

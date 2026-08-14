@@ -12,6 +12,7 @@ import {
   type StarredAlbum,
 } from '../api'
 import Spinner, { LoadingBlock } from '../components/Spinner'
+import { useLanguage } from '../context/LanguageContext'
 
 const NOW_PLAYING_POLL_MS = 10000
 const SCAN_POLL_INTERVAL_MS = 4000
@@ -19,10 +20,10 @@ const SCAN_POLL_MAX_TICKS = 15
 const GENRE_LIMIT = 20
 const RECENTLY_ADDED_LIMIT = 24
 
-function formatPlayedDate(iso: string | null): string {
+function formatPlayedDate(iso: string | null, locale: string): string {
   if (!iso) return ''
   const d = new Date(iso)
-  return isNaN(d.getTime()) ? '' : d.toLocaleString('fr-FR')
+  return isNaN(d.getTime()) ? '' : d.toLocaleString(locale)
 }
 
 function StatCard({ label, value }: { label: string; value: number | string | null | undefined }) {
@@ -67,6 +68,7 @@ function AlbumTile({
   webUrl: string | null
   subtitle?: string
 }) {
+  const { t } = useLanguage()
   const href = webUrl ? `${webUrl.replace(/\/$/, '')}/app/#/album/${id}/show` : null
   const content = (
     <>
@@ -83,7 +85,7 @@ function AlbumTile({
     </>
   )
   return href ? (
-    <a href={href} target="_blank" rel="noreferrer" title="Ecouter dans Navidrome" className="block hover:opacity-80 transition-opacity">
+    <a href={href} target="_blank" rel="noreferrer" title={t('navidrome.listenInNavidrome')} className="block hover:opacity-80 transition-opacity">
       {content}
     </a>
   ) : (
@@ -92,6 +94,7 @@ function AlbumTile({
 }
 
 export default function NavidromePage() {
+  const { t, language } = useLanguage()
   const [stats, setStats] = useState<NavidromeStats | null>(null)
   const [nowPlaying, setNowPlaying] = useState<NowPlayingEntry[]>([])
   const [recentlyPlayed, setRecentlyPlayed] = useState<RecentlyPlayedAlbum[]>([])
@@ -113,8 +116,9 @@ export default function NavidromePage() {
 
   useEffect(() => {
     Promise.all([loadStats(), loadNowPlaying(), loadRecentlyPlayed(), loadRecentlyAdded(), loadStarred(), loadDecades()])
-      .catch((err) => setError(err instanceof Error ? err.message : 'Erreur'))
+      .catch((err) => setError(err instanceof Error ? err.message : t('common.error')))
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- charge une seule fois au montage
   }, [loadStats, loadNowPlaying, loadRecentlyPlayed, loadRecentlyAdded, loadStarred, loadDecades])
 
   // Sessions en cours : sondees regulierement tant que la page reste ouverte
@@ -158,7 +162,7 @@ export default function NavidromePage() {
         }
       }, SCAN_POLL_INTERVAL_MS)
     } catch (err) {
-      setScanMessage(err instanceof Error ? err.message : 'Erreur')
+      setScanMessage(err instanceof Error ? err.message : t('common.error'))
     } finally {
       setScanBusy(null)
     }
@@ -171,11 +175,11 @@ export default function NavidromePage() {
       <div className="text-app-text-muted">
         <p>{error}</p>
         <p className="mt-2">
-          Configure la connexion Navidrome dans{' '}
+          {t('navidrome.connectPrefix')}{' '}
           <Link to="/settings" className="text-app-accent-text hover:underline">
-            Reglages
-          </Link>{' '}
-          pour voir cet onglet.
+            {t('common.settings')}
+          </Link>
+          {t('navidrome.connectSuffix')}
         </p>
       </div>
     )
@@ -187,26 +191,26 @@ export default function NavidromePage() {
   const avgAlbumsPerArtist =
     stats && stats.artist_count > 0 ? (stats.album_count / stats.artist_count).toFixed(1) : '-'
   const avgSongsPerAlbum = stats && stats.album_count > 0 ? (stats.song_count / stats.album_count).toFixed(1) : '-'
+  const localeTag = language === 'fr' ? 'fr-FR' : 'en-US'
 
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">Navidrome</h1>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-2">
-        <StatCard label="Artistes" value={stats?.artist_count} />
-        <StatCard label="Albums" value={stats?.album_count} />
-        <StatCard label="Titres" value={stats?.song_count} />
-        <StatCard label="Elements au dernier scan" value={stats?.last_scan_count} />
+        <StatCard label={t('navidrome.stats.artists')} value={stats?.artist_count} />
+        <StatCard label={t('navidrome.stats.albums')} value={stats?.album_count} />
+        <StatCard label={t('navidrome.stats.tracks')} value={stats?.song_count} />
+        <StatCard label={t('navidrome.stats.lastScanItems')} value={stats?.last_scan_count} />
         <div className="bg-app-surface border border-app-border rounded-lg p-4">
-          <div className="text-xs text-app-text-faint mb-1">Etat</div>
+          <div className="text-xs text-app-text-faint mb-1">{t('navidrome.stats.status')}</div>
           <div className={`text-sm font-medium ${stats?.scanning ? 'text-blue-300' : 'text-green-300'}`}>
-            {stats?.scanning ? 'Scan en cours...' : 'A jour'}
+            {stats?.scanning ? t('navidrome.stats.scanning') : t('navidrome.stats.upToDate')}
           </div>
         </div>
       </div>
       <p className="text-xs text-app-text-faint mb-6">
-        En moyenne {avgAlbumsPerArtist} album{avgAlbumsPerArtist !== '1.0' ? 's' : ''} par artiste · {avgSongsPerAlbum} titres par
-        album
+        {t('navidrome.stats.averages', { albums: avgAlbumsPerArtist, songs: avgSongsPerAlbum })}
       </p>
 
       <div className="flex items-center gap-3 mb-6 flex-wrap">
@@ -216,25 +220,25 @@ export default function NavidromePage() {
           className="flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-app-accent hover:bg-app-accent-hover disabled:opacity-50"
         >
           {scanBusy === 'quick' && <Spinner className="w-4 h-4" />}
-          Scanner la bibliotheque
+          {t('navidrome.scanLibrary')}
         </button>
         <button
           onClick={() => scan(true)}
           disabled={scanBusy !== null}
-          title="Reverifie tous les fichiers et retire de Navidrome ceux qui n'existent plus sur le disque"
+          title={t('navidrome.cleanMissingTitle')}
           className="flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-app-surface-hover hover:bg-app-border-strong disabled:opacity-50"
         >
           {scanBusy === 'full' && <Spinner className="w-4 h-4" />}
-          Nettoyer les fichiers manquants
+          {t('navidrome.cleanMissing')}
         </button>
         {scanMessage && <span className="text-sm text-app-text-muted">{scanMessage}</span>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <div className="bg-app-surface border border-app-border rounded-lg p-4">
-          <h2 className="font-medium mb-3">Genres les plus representes</h2>
+          <h2 className="font-medium mb-3">{t('dashboard.topGenres')}</h2>
           {!stats || stats.top_genres.length === 0 ? (
-            <p className="text-sm text-app-text-muted">Aucun genre indexe pour le moment.</p>
+            <p className="text-sm text-app-text-muted">{t('navidrome.noGenre')}</p>
           ) : (
             <div className="flex flex-col gap-1.5">
               {stats.top_genres.map((g) => (
@@ -245,9 +249,9 @@ export default function NavidromePage() {
         </div>
 
         <div className="bg-app-surface border border-app-border rounded-lg p-4">
-          <h2 className="font-medium mb-3">Repartition par decennie</h2>
+          <h2 className="font-medium mb-3">{t('navidrome.decadeBreakdown')}</h2>
           {decades.length === 0 ? (
-            <p className="text-sm text-app-text-muted">Pas assez d'annees de sortie indexees.</p>
+            <p className="text-sm text-app-text-muted">{t('navidrome.notEnoughYears')}</p>
           ) : (
             <div className="flex flex-col gap-1.5">
               {decades.map((d) => (
@@ -259,16 +263,16 @@ export default function NavidromePage() {
       </div>
 
       <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
-        <h2 className="font-medium mb-3">Sessions d'ecoute en cours</h2>
+        <h2 className="font-medium mb-3">{t('dashboard.activeSessions')}</h2>
         {nowPlaying.length === 0 ? (
-          <p className="text-sm text-app-text-muted">Personne n'ecoute quoi que ce soit en ce moment.</p>
+          <p className="text-sm text-app-text-muted">{t('navidrome.noOneListening')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {nowPlaying.map((entry, idx) => (
               <li key={idx} className="flex items-center justify-between text-sm gap-2">
                 <div className="min-w-0">
                   <div className="truncate">
-                    <span className="font-medium">{entry.title ?? 'Titre inconnu'}</span>
+                    <span className="font-medium">{entry.title ?? t('dashboard.unknownTitle')}</span>
                     {entry.artist && <span className="text-app-text-muted"> - {entry.artist}</span>}
                   </div>
                   <div className="text-xs text-app-text-faint truncate">
@@ -279,7 +283,7 @@ export default function NavidromePage() {
                 </div>
                 {entry.minutes_ago != null && (
                   <span className="text-xs text-app-text-faint whitespace-nowrap shrink-0">
-                    {entry.minutes_ago === 0 ? "a l'instant" : `il y a ${entry.minutes_ago} min`}
+                    {entry.minutes_ago === 0 ? t('navidrome.justNow') : t('navidrome.minutesAgo', { n: entry.minutes_ago })}
                   </span>
                 )}
               </li>
@@ -289,9 +293,9 @@ export default function NavidromePage() {
       </div>
 
       <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
-        <h2 className="font-medium mb-3">Ajouts recents</h2>
+        <h2 className="font-medium mb-3">{t('dashboard.recentAdditions')}</h2>
         {recentlyAdded.length === 0 ? (
-          <p className="text-sm text-app-text-muted">Aucun album ajoute recemment.</p>
+          <p className="text-sm text-app-text-muted">{t('dashboard.noRecentAlbum')}</p>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
             {recentlyAdded.map((a) => (
@@ -302,7 +306,7 @@ export default function NavidromePage() {
                 artist={a.artist}
                 coverArtId={a.cover_art_id}
                 webUrl={webUrl}
-                subtitle={a.created ? `Ajoute le ${a.created.slice(0, 10)}` : undefined}
+                subtitle={a.created ? t('dashboard.addedOn', { date: a.created.slice(0, 10) }) : undefined}
               />
             ))}
           </div>
@@ -310,9 +314,9 @@ export default function NavidromePage() {
       </div>
 
       <div className="bg-app-surface border border-app-border rounded-lg p-4 mb-6">
-        <h2 className="font-medium mb-3">Ecoutes recentes</h2>
+        <h2 className="font-medium mb-3">{t('navidrome.recentListens')}</h2>
         {recentlyPlayed.length === 0 ? (
-          <p className="text-sm text-app-text-muted">Aucun historique d'ecoute pour le moment.</p>
+          <p className="text-sm text-app-text-muted">{t('navidrome.noListenHistory')}</p>
         ) : (
           <ul className="flex flex-col">
             {recentlyPlayed.map((album, idx) => (
@@ -327,8 +331,8 @@ export default function NavidromePage() {
                   {album.artist && <div className="truncate text-xs text-app-text-muted">{album.artist}</div>}
                 </div>
                 <div className="text-xs text-app-text-faint whitespace-nowrap text-right shrink-0">
-                  {album.play_count != null && <div>{album.play_count} lecture{album.play_count > 1 ? 's' : ''}</div>}
-                  {album.played && <div>{formatPlayedDate(album.played)}</div>}
+                  {album.play_count != null && <div>{t('navidrome.plays', { count: album.play_count })}</div>}
+                  {album.played && <div>{formatPlayedDate(album.played, localeTag)}</div>}
                 </div>
               </li>
             ))}
@@ -337,19 +341,15 @@ export default function NavidromePage() {
       </div>
 
       <div className="bg-app-surface border border-app-border rounded-lg p-4">
-        <h2 className="font-medium mb-3">Favoris</h2>
+        <h2 className="font-medium mb-3">{t('navidrome.favorites')}</h2>
         {!starred || (starred.artist_names.length === 0 && starred.albums.length === 0 && starred.song_count === 0) ? (
-          <p className="text-sm text-app-text-muted">
-            Aucun favori pour le moment - marque des artistes/albums/titres comme favoris dans Navidrome pour les
-            retrouver ici.
-          </p>
+          <p className="text-sm text-app-text-muted">{t('navidrome.noFavorites')}</p>
         ) : (
           <div className="flex flex-col gap-4">
             {starred.artist_names.length > 0 && (
               <div>
                 <div className="text-xs text-app-text-faint mb-1.5">
-                  {starred.artist_names.length} artiste{starred.artist_names.length > 1 ? 's' : ''} favori
-                  {starred.artist_names.length > 1 ? 's' : ''}
+                  {t('navidrome.favoriteArtists', { count: starred.artist_names.length })}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {starred.artist_names.map((name) => (
@@ -364,7 +364,7 @@ export default function NavidromePage() {
             {starred.albums.length > 0 && (
               <div>
                 <div className="text-xs text-app-text-faint mb-1.5">
-                  {starred.albums.length} album{starred.albums.length > 1 ? 's' : ''} favori{starred.albums.length > 1 ? 's' : ''}
+                  {t('navidrome.favoriteAlbums', { count: starred.albums.length })}
                 </div>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                   {starred.albums.map((a: StarredAlbum) => (
@@ -376,7 +376,7 @@ export default function NavidromePage() {
 
             {starred.song_count > 0 && (
               <p className="text-xs text-app-text-faint">
-                {starred.song_count} titre{starred.song_count > 1 ? 's' : ''} favori{starred.song_count > 1 ? 's' : ''} au total.
+                {t('navidrome.favoriteTracksTotal', { count: starred.song_count })}
               </p>
             )}
           </div>
