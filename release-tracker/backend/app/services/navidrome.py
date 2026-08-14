@@ -110,6 +110,27 @@ def get_starred_artists(base_url: str, username: str, password: str) -> list[str
     return [a["name"] for a in artists if a.get("name")]
 
 
+def get_starred(base_url: str, username: str, password: str) -> dict:
+    """Contenu complet marque favori ("starred") dans Navidrome - artistes,
+    albums et morceaux - utilise pour la section "Favoris" de l'onglet
+    Navidrome (voir routers/navidrome.py:starred), a la difference de
+    get_starred_artists ci-dessus (ne garde que les noms d'artiste, utilise
+    pour l'import automatique en tant qu'artistes suivis)."""
+    resp = httpx.get(
+        f"{base_url.rstrip('/')}/rest/getStarred2.view",
+        params=_auth_params(username, password),
+        timeout=15,
+    )
+    resp.raise_for_status()
+    body = resp.json().get("subsonic-response", {})
+    starred = body.get("starred2", {})
+    return {
+        "artists": starred.get("artist", []),
+        "albums": starred.get("album", []),
+        "song_count": len(starred.get("song", [])),
+    }
+
+
 def get_library_stats(base_url: str, username: str, password: str) -> dict:
     """Nombre d'artistes/albums indexes - pas d'endpoint Subsonic dedie aux
     statistiques globales, on derive donc ces totaux de getArtists (ID3),
@@ -259,6 +280,42 @@ def get_song_count(base_url: str, username: str, password: str) -> int:
             break
         offset += _SONG_COUNT_PAGE_SIZE
     return total
+
+
+def get_album_decades(base_url: str, username: str, password: str) -> dict[str, int]:
+    """Nombre d'albums par decennie de sortie ("year" de chaque album, tel
+    qu'indexe par Navidrome depuis les tags du fichier) - meme principe de
+    pagination que get_song_count (une passe complete sur la bibliotheque),
+    utilise pour le petit histogramme "Repartition par decennie" de l'onglet
+    Navidrome. Les albums sans annee connue (tag manquant) sont ignores
+    plutot que comptes dans un seau "inconnu" qui n'apporterait rien a un
+    histogramme centre sur le temps."""
+    counts: dict[str, int] = {}
+    offset = 0
+    while True:
+        resp = httpx.get(
+            f"{base_url.rstrip('/')}/rest/getAlbumList2.view",
+            params={
+                **_auth_params(username, password),
+                "type": "alphabeticalByName",
+                "size": str(_SONG_COUNT_PAGE_SIZE),
+                "offset": str(offset),
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        body = resp.json().get("subsonic-response", {})
+        albums = body.get("albumList2", {}).get("album", [])
+        for a in albums:
+            year = a.get("year")
+            if not year:
+                continue
+            decade = f"{(int(year) // 10) * 10}s"
+            counts[decade] = counts.get(decade, 0) + 1
+        if len(albums) < _SONG_COUNT_PAGE_SIZE:
+            break
+        offset += _SONG_COUNT_PAGE_SIZE
+    return counts
 
 
 def get_cover_art(base_url: str, username: str, password: str, cover_id: str) -> tuple[bytes, str]:

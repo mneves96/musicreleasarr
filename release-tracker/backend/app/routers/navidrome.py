@@ -1,17 +1,20 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Settings
 from ..schemas import (
+    AlbumDecadeOut,
     GenreStatOut,
     NavidromeScanIn,
+    NavidromeStarredOut,
     NavidromeStatsOut,
     NowPlayingEntryOut,
     RecentlyAddedAlbumOut,
     RecentlyPlayedAlbumOut,
+    StarredAlbumOut,
     TestConnectionResult,
 )
 from ..scheduler import get_settings
@@ -20,6 +23,7 @@ from ..services import navidrome
 router = APIRouter(prefix="/api/navidrome", tags=["navidrome"])
 
 TOP_GENRES_LIMIT = 5
+RECENTLY_ADDED_DEFAULT_LIMIT = 5
 
 
 def _require_navidrome(db: Session) -> Settings:
@@ -30,7 +34,13 @@ def _require_navidrome(db: Session) -> Settings:
 
 
 @router.get("/stats", response_model=NavidromeStatsOut)
-def stats(db: Session = Depends(get_db)):
+def stats(
+    genre_limit: int = Query(default=TOP_GENRES_LIMIT, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """genre_limit permet a l'onglet Navidrome (detaille) de demander la
+    repartition complete des genres, tandis que le widget condense du
+    tableau de bord garde le defaut (5) - meme endpoint, pas de doublon."""
     settings = _require_navidrome(db)
     try:
         lib = navidrome.get_library_stats(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password)
@@ -40,7 +50,7 @@ def stats(db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(502, f"Navidrome indisponible : {exc}") from exc
 
-    top_genres = sorted(genres, key=lambda g: g.get("songCount") or 0, reverse=True)[:TOP_GENRES_LIMIT]
+    top_genres = sorted(genres, key=lambda g: g.get("songCount") or 0, reverse=True)[:genre_limit]
 
     return NavidromeStatsOut(
         artist_count=lib["artist_count"],
@@ -56,6 +66,7 @@ def stats(db: Session = Depends(get_db)):
             )
             for g in top_genres
         ],
+        web_url=settings.navidrome_url,
     )
 
 
@@ -125,13 +136,20 @@ def recently_played(db: Session = Depends(get_db)):
 
 
 @router.get("/recently-added", response_model=list[RecentlyAddedAlbumOut])
-def recently_added(db: Session = Depends(get_db)):
+def recently_added(
+    limit: int = Query(default=RECENTLY_ADDED_DEFAULT_LIMIT, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
     """Albums les plus recemment ajoutes a la bibliotheque - utilise par le
-    widget "Ajouts recents" du tableau de bord (voir DashboardPage.tsx),
-    presente comme les widgets "Sorties recentes"/"Sorties a venir"."""
+    widget condense "Ajouts recents" du tableau de bord (voir
+    DashboardPage.tsx, presente comme les widgets "Sorties recentes"/
+    "Sorties a venir", limit par defaut) et par la version detaillee de
+    l'onglet Navidrome (NavidromePage.tsx, limit plus genereux)."""
     settings = _require_navidrome(db)
     try:
-        albums = navidrome.get_recently_added(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password, size=5)
+        albums = navidrome.get_recently_added(
+            settings.navidrome_url, settings.navidrome_username, settings.navidrome_password, size=limit
+        )
     except Exception as exc:
         raise HTTPException(502, f"Navidrome indisponible : {exc}") from exc
 
@@ -154,6 +172,47 @@ def recently_added(db: Session = Depends(get_db)):
             )
         )
     return results
+
+
+@router.get("/starred", response_model=NavidromeStarredOut)
+def starred(db: Session = Depends(get_db)):
+    """Artistes/albums/morceaux marques favoris ("starred") dans Navidrome -
+    section "Favoris" de l'onglet Navidrome (NavidromePage.tsx), donnee deja
+    trackee par Navidrome mais jusque-la jamais affichee dans l'app."""
+    settings = _require_navidrome(db)
+    try:
+        data = navidrome.get_starred(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password)
+    except Exception as exc:
+        raise HTTPException(502, f"Navidrome indisponible : {exc}") from exc
+
+    return NavidromeStarredOut(
+        artist_names=[a["name"] for a in data["artists"] if a.get("name")],
+        albums=[
+            StarredAlbumOut(
+                id=str(a.get("id", "")),
+                name=a.get("name") or a.get("title") or "",
+                artist=a.get("artist"),
+                cover_art_id=a.get("coverArt"),
+            )
+            for a in data["albums"]
+        ],
+        song_count=data["song_count"],
+    )
+
+
+@router.get("/album-decades", response_model=list[AlbumDecadeOut])
+def album_decades(db: Session = Depends(get_db)):
+    """Repartition du nombre d'albums par decennie de sortie - petit
+    histogramme "Repartition par decennie" de l'onglet Navidrome
+    (NavidromePage.tsx). Trie chronologiquement (pas par nombre d'albums)
+    pour que l'histogramme se lise naturellement de gauche a droite."""
+    settings = _require_navidrome(db)
+    try:
+        counts = navidrome.get_album_decades(settings.navidrome_url, settings.navidrome_username, settings.navidrome_password)
+    except Exception as exc:
+        raise HTTPException(502, f"Navidrome indisponible : {exc}") from exc
+
+    return [AlbumDecadeOut(decade=decade, count=count) for decade, count in sorted(counts.items())]
 
 
 @router.post("/scan", response_model=TestConnectionResult)

@@ -228,6 +228,7 @@ export interface NavidromeStats {
   scanning: boolean
   last_scan_count: number | null
   top_genres: GenreStat[]
+  web_url: string | null
 }
 
 export interface NowPlayingEntry {
@@ -254,6 +255,24 @@ export interface RecentlyAddedAlbum {
   artist: string | null
   cover_art_id: string | null
   created: string | null
+}
+
+export interface StarredAlbum {
+  id: string
+  name: string
+  artist: string | null
+  cover_art_id: string | null
+}
+
+export interface NavidromeStarred {
+  artist_names: string[]
+  albums: StarredAlbum[]
+  song_count: number
+}
+
+export interface AlbumDecade {
+  decade: string
+  count: number
 }
 
 export interface LastfmScrobbleStats {
@@ -452,10 +471,14 @@ export const api = {
 
   regenerateCalendarToken: () => request<Settings>('/settings/regenerate-calendar-token', { method: 'POST' }),
 
-  navidromeStats: () => request<NavidromeStats>('/navidrome/stats'),
+  navidromeStats: (genreLimit?: number) =>
+    request<NavidromeStats>(`/navidrome/stats${genreLimit ? `?genre_limit=${genreLimit}` : ''}`),
   navidromeNowPlaying: () => request<NowPlayingEntry[]>('/navidrome/now-playing'),
   navidromeRecentlyPlayed: () => request<RecentlyPlayedAlbum[]>('/navidrome/recently-played'),
-  navidromeRecentlyAdded: () => request<RecentlyAddedAlbum[]>('/navidrome/recently-added'),
+  navidromeRecentlyAdded: (limit?: number) =>
+    request<RecentlyAddedAlbum[]>(`/navidrome/recently-added${limit ? `?limit=${limit}` : ''}`),
+  navidromeStarred: () => request<NavidromeStarred>('/navidrome/starred'),
+  navidromeAlbumDecades: () => request<AlbumDecade[]>('/navidrome/album-decades'),
   navidromeScan: (full: boolean) =>
     request<TestConnectionResult>('/navidrome/scan', { method: 'POST', body: JSON.stringify({ full }) }),
 

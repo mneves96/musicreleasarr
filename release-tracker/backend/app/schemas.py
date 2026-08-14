@@ -305,6 +305,11 @@ class NavidromeStatsOut(BaseModel):
     scanning: bool
     last_scan_count: int | None = None
     top_genres: list[GenreStatOut] = []
+    # URL de base Navidrome (pas de secret : le mot de passe/token Subsonic
+    # n'est jamais renvoye) - utilisee cote frontend pour construire des liens
+    # directs vers un album/artiste dans l'interface web native de Navidrome,
+    # voir NavidromePage.tsx.
+    web_url: str | None = None
 
 
 class NowPlayingEntryOut(BaseModel):
@@ -331,6 +336,24 @@ class RecentlyAddedAlbumOut(BaseModel):
     artist: str | None = None
     cover_art_id: str | None = None
     created: datetime | None = None
+
+
+class StarredAlbumOut(BaseModel):
+    id: str
+    name: str
+    artist: str | None = None
+    cover_art_id: str | None = None
+
+
+class NavidromeStarredOut(BaseModel):
+    artist_names: list[str] = []
+    albums: list[StarredAlbumOut] = []
+    song_count: int = 0
+
+
+class AlbumDecadeOut(BaseModel):
+    decade: str
+    count: int
 
 
 class NavidromeScanIn(BaseModel):
