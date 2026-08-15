@@ -390,5 +390,13 @@ class ScrobblingStatsOut(BaseModel):
     listenbrainz: ListenbrainzScrobbleStatsOut | None = None
 
 
+class RedditPostOut(BaseModel):
+    title: str
+    url: str | None = None
+    author: str
+    published_at: str | None = None
+    preview: str
+
+
 class LastfmAuthFinishIn(BaseModel):
     token: str

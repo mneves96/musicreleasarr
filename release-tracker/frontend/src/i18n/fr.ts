@@ -44,6 +44,10 @@ export const fr: Record<TranslationKey, TranslationValue> = {
   'dashboard.scrobblingNotConnected': 'Ni Last.fm ni ListenBrainz ne sont connectés.',
   'dashboard.lastfmScrobbles': (vars) => `scrobbles Last.fm · ${vars.username}`,
   'dashboard.listenbrainzListens': (vars) => `écoutes ListenBrainz · ${vars.username}`,
+  'dashboard.redditUnavailable': "Impossible de charger r/navidrome pour le moment.",
+  'dashboard.redditNoPosts': 'Aucun post récent.',
+  'dashboard.redditViewOnReddit': 'Voir sur Reddit ↗',
+  'dashboard.redditByOn': (vars) => `u/${vars.author} · ${vars.date}`,
 
   'settings.title': 'Réglages',
   'settings.loadError': (vars) => `Impossible de charger les réglages : ${vars.error}`,

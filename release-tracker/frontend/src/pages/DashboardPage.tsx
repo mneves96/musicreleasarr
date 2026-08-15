@@ -8,6 +8,7 @@ import {
   type NavidromeStats,
   type NowPlayingEntry,
   type RecentlyAddedAlbum,
+  type RedditPost,
   type Release,
   type ScrobblingStats,
   type TaggingItem,
@@ -113,6 +114,38 @@ function RecentlyAddedWidget({ albums, emptyText }: { albums: RecentlyAddedAlbum
   )
 }
 
+// Les posts viennent du flux RSS public de r/navidrome (voir
+// services/reddit.py cote backend) - toujours en anglais, Reddit ne propose
+// pas de traduction automatique via son API publique, contrairement a la
+// traduction affichee sur le site pour un visiteur connecte.
+function RedditWidget({ posts, emptyText }: { posts: RedditPost[]; emptyText: string }) {
+  const { t, language } = useLanguage()
+  const localeTag = language === 'fr' ? 'fr-FR' : 'en-US'
+  if (posts.length === 0) return <p className="text-sm text-app-text-faint">{emptyText}</p>
+  return (
+    <div className="flex flex-col gap-3">
+      {posts.map((p) => (
+        <a
+          key={p.url ?? p.title}
+          href={p.url ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          className="block hover:bg-app-surface-hover rounded-md px-1 py-1 -mx-1"
+        >
+          <p className="text-sm font-medium truncate">{p.title}</p>
+          {p.preview && <p className="text-xs text-app-text-muted mt-0.5 line-clamp-2">{p.preview}</p>}
+          <p className="text-xs text-app-text-faint mt-1">
+            {t('dashboard.redditByOn', {
+              author: p.author,
+              date: p.published_at ? new Date(p.published_at).toLocaleDateString(localeTag) : '?',
+            })}
+          </p>
+        </a>
+      ))}
+    </div>
+  )
+}
+
 type MetubeCounts = { pending: number; inProgress: number; done: number; error: number }
 
 function MetubeStatTile({
@@ -152,6 +185,7 @@ export default function DashboardPage() {
   const [navidromeStats, setNavidromeStats] = useState<NavidromeStats | 'not_configured' | null>(null)
   const [nowPlaying, setNowPlaying] = useState<NowPlayingEntry[] | 'not_configured'>([])
   const [scrobbling, setScrobbling] = useState<ScrobblingStats | null>(null)
+  const [redditPosts, setRedditPosts] = useState<RedditPost[] | 'unavailable'>([])
 
   useEffect(() => {
     let cancelled = false
@@ -168,6 +202,7 @@ export default function DashboardPage() {
         statsResult,
         nowPlayingResult,
         scrobblingResult,
+        redditResult,
       ] = await Promise.allSettled([
         api.listReleases({ to: toISODate(today), limit: 5, order: 'desc' }),
         api.listReleases({ from: toISODate(today), limit: 5, order: 'asc' }),
@@ -177,6 +212,7 @@ export default function DashboardPage() {
         api.navidromeStats(),
         api.navidromeNowPlaying(),
         api.scrobblingStats(),
+        api.redditNavidromePosts(),
       ])
       if (cancelled) return
 
@@ -188,6 +224,7 @@ export default function DashboardPage() {
       setNavidromeStats(statsResult.status === 'fulfilled' ? statsResult.value : 'not_configured')
       setNowPlaying(nowPlayingResult.status === 'fulfilled' ? nowPlayingResult.value : 'not_configured')
       setScrobbling(scrobblingResult.status === 'fulfilled' ? scrobblingResult.value : null)
+      setRedditPosts(redditResult.status === 'fulfilled' ? redditResult.value : 'unavailable')
       setLoading(false)
     }
 
@@ -444,6 +481,26 @@ export default function DashboardPage() {
                 </a>
               )}
             </div>
+          )}
+        </DashboardCard>
+
+        <DashboardCard
+          title="r/navidrome"
+          action={
+            <a
+              href="https://www.reddit.com/r/navidrome/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-app-accent-text hover:underline"
+            >
+              {t('dashboard.redditViewOnReddit')}
+            </a>
+          }
+        >
+          {redditPosts === 'unavailable' ? (
+            <p className="text-sm text-app-text-faint">{t('dashboard.redditUnavailable')}</p>
+          ) : (
+            <RedditWidget posts={redditPosts} emptyText={t('dashboard.redditNoPosts')} />
           )}
         </DashboardCard>
       </div>

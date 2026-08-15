@@ -293,6 +293,14 @@ export interface ScrobblingStats {
   listenbrainz: ListenbrainzScrobbleStats | null
 }
 
+export interface RedditPost {
+  title: string
+  url: string | null
+  author: string
+  published_at: string | null
+  preview: string
+}
+
 export interface AuthStatus {
   needs_setup: boolean
   authenticated: boolean
@@ -485,6 +493,7 @@ export const api = {
     request<TestConnectionResult>('/navidrome/scan', { method: 'POST', body: JSON.stringify({ full }) }),
 
   scrobblingStats: () => request<ScrobblingStats>('/scrobbling/stats'),
+  redditNavidromePosts: () => request<RedditPost[]>('/reddit/navidrome-posts'),
 
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),

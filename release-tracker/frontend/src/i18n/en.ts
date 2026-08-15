@@ -45,6 +45,10 @@ export const en = {
   'dashboard.scrobblingNotConnected': 'Neither Last.fm nor ListenBrainz is connected.',
   'dashboard.lastfmScrobbles': (vars) => `Last.fm scrobbles · ${vars.username}`,
   'dashboard.listenbrainzListens': (vars) => `ListenBrainz listens · ${vars.username}`,
+  'dashboard.redditUnavailable': "Couldn't load r/navidrome right now.",
+  'dashboard.redditNoPosts': 'No recent post.',
+  'dashboard.redditViewOnReddit': 'View on Reddit ↗',
+  'dashboard.redditByOn': (vars) => `u/${vars.author} · ${vars.date}`,
 
   'settings.title': 'Settings',
   'settings.loadError': (vars) => `Unable to load settings: ${vars.error}`,
