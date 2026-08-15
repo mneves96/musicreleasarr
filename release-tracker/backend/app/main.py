@@ -8,7 +8,20 @@ from fastapi.staticfiles import StaticFiles
 
 from .auth import require_auth
 from .db import init_db
-from .routers import artists, auth, calendar, metube, navidrome, reddit, releases, scrobbling, search, settings, tagging
+from .routers import (
+    artists,
+    auth,
+    calendar,
+    github_releases,
+    metube,
+    navidrome,
+    reddit,
+    releases,
+    scrobbling,
+    search,
+    settings,
+    tagging,
+)
 from .scheduler import shutdown_scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +53,7 @@ app.include_router(tagging.router, dependencies=protected)
 app.include_router(navidrome.router, dependencies=protected)
 app.include_router(scrobbling.router, dependencies=protected)
 app.include_router(reddit.router, dependencies=protected)
+app.include_router(github_releases.router, dependencies=protected)
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 

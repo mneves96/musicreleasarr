@@ -4,6 +4,7 @@ import {
   api,
   getReleaseTypeLabels,
   navidromeCoverArtUrl,
+  type GithubRelease,
   type MetubeHistory,
   type NavidromeStats,
   type NowPlayingEntry,
@@ -146,6 +147,37 @@ function RedditWidget({ posts, emptyText }: { posts: RedditPost[]; emptyText: st
   )
 }
 
+// Flux Atom natif de GitHub (releases.atom) pour reperer une mise a jour
+// disponible sur les projets dont l'app depend directement (voir
+// services/github_releases.py) - reutilise pour les widgets Navidrome et
+// MeTube ci-dessous.
+function GithubReleasesWidget({ releases, emptyText }: { releases: GithubRelease[]; emptyText: string }) {
+  const { t, language } = useLanguage()
+  const localeTag = language === 'fr' ? 'fr-FR' : 'en-US'
+  if (releases.length === 0) return <p className="text-sm text-app-text-faint">{emptyText}</p>
+  return (
+    <div className="flex flex-col gap-3">
+      {releases.map((r) => (
+        <a
+          key={r.url ?? r.version}
+          href={r.url ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          className="block hover:bg-app-surface-hover rounded-md px-1 py-1 -mx-1"
+        >
+          <p className="text-sm font-medium truncate">{r.version}</p>
+          {r.preview && <p className="text-xs text-app-text-muted mt-0.5 line-clamp-2">{r.preview}</p>}
+          <p className="text-xs text-app-text-faint mt-1">
+            {t('dashboard.githubReleasePublishedOn', {
+              date: r.published_at ? new Date(r.published_at).toLocaleDateString(localeTag) : '?',
+            })}
+          </p>
+        </a>
+      ))}
+    </div>
+  )
+}
+
 type MetubeCounts = { pending: number; inProgress: number; done: number; error: number }
 
 function MetubeStatTile({
@@ -186,6 +218,8 @@ export default function DashboardPage() {
   const [nowPlaying, setNowPlaying] = useState<NowPlayingEntry[] | 'not_configured'>([])
   const [scrobbling, setScrobbling] = useState<ScrobblingStats | null>(null)
   const [redditPosts, setRedditPosts] = useState<RedditPost[] | 'unavailable'>([])
+  const [navidromeReleases, setNavidromeReleases] = useState<GithubRelease[] | 'unavailable'>([])
+  const [metubeReleases, setMetubeReleases] = useState<GithubRelease[] | 'unavailable'>([])
 
   useEffect(() => {
     let cancelled = false
@@ -203,6 +237,8 @@ export default function DashboardPage() {
         nowPlayingResult,
         scrobblingResult,
         redditResult,
+        navidromeReleasesResult,
+        metubeReleasesResult,
       ] = await Promise.allSettled([
         api.listReleases({ to: toISODate(today), limit: 5, order: 'desc' }),
         api.listReleases({ from: toISODate(today), limit: 5, order: 'asc' }),
@@ -213,6 +249,8 @@ export default function DashboardPage() {
         api.navidromeNowPlaying(),
         api.scrobblingStats(),
         api.redditNavidromePosts(),
+        api.githubReleases('navidrome'),
+        api.githubReleases('metube'),
       ])
       if (cancelled) return
 
@@ -225,6 +263,8 @@ export default function DashboardPage() {
       setNowPlaying(nowPlayingResult.status === 'fulfilled' ? nowPlayingResult.value : 'not_configured')
       setScrobbling(scrobblingResult.status === 'fulfilled' ? scrobblingResult.value : null)
       setRedditPosts(redditResult.status === 'fulfilled' ? redditResult.value : 'unavailable')
+      setNavidromeReleases(navidromeReleasesResult.status === 'fulfilled' ? navidromeReleasesResult.value : 'unavailable')
+      setMetubeReleases(metubeReleasesResult.status === 'fulfilled' ? metubeReleasesResult.value : 'unavailable')
       setLoading(false)
     }
 
@@ -501,6 +541,46 @@ export default function DashboardPage() {
             <p className="text-sm text-app-text-faint">{t('dashboard.redditUnavailable')}</p>
           ) : (
             <RedditWidget posts={redditPosts} emptyText={t('dashboard.redditNoPosts')} />
+          )}
+        </DashboardCard>
+
+        <DashboardCard
+          title={`Navidrome — ${t('dashboard.updates')}`}
+          action={
+            <a
+              href="https://github.com/navidrome/navidrome/releases"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-app-accent-text hover:underline"
+            >
+              {t('dashboard.githubReleasesViewAll')}
+            </a>
+          }
+        >
+          {navidromeReleases === 'unavailable' ? (
+            <p className="text-sm text-app-text-faint">{t('dashboard.githubReleasesUnavailable')}</p>
+          ) : (
+            <GithubReleasesWidget releases={navidromeReleases} emptyText={t('dashboard.githubReleasesNone')} />
+          )}
+        </DashboardCard>
+
+        <DashboardCard
+          title={`MeTube — ${t('dashboard.updates')}`}
+          action={
+            <a
+              href="https://github.com/alexta69/metube/releases"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-app-accent-text hover:underline"
+            >
+              {t('dashboard.githubReleasesViewAll')}
+            </a>
+          }
+        >
+          {metubeReleases === 'unavailable' ? (
+            <p className="text-sm text-app-text-faint">{t('dashboard.githubReleasesUnavailable')}</p>
+          ) : (
+            <GithubReleasesWidget releases={metubeReleases} emptyText={t('dashboard.githubReleasesNone')} />
           )}
         </DashboardCard>
       </div>

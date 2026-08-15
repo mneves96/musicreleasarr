@@ -301,6 +301,13 @@ export interface RedditPost {
   preview: string
 }
 
+export interface GithubRelease {
+  version: string
+  url: string | null
+  published_at: string | null
+  preview: string
+}
+
 export interface AuthStatus {
   needs_setup: boolean
   authenticated: boolean
@@ -494,6 +501,7 @@ export const api = {
 
   scrobblingStats: () => request<ScrobblingStats>('/scrobbling/stats'),
   redditNavidromePosts: () => request<RedditPost[]>('/reddit/navidrome-posts'),
+  githubReleases: (project: 'navidrome' | 'metube') => request<GithubRelease[]>(`/github-releases/${project}`),
 
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),

@@ -48,6 +48,11 @@ export const fr: Record<TranslationKey, TranslationValue> = {
   'dashboard.redditNoPosts': 'Aucun post récent.',
   'dashboard.redditViewOnReddit': 'Voir sur Reddit ↗',
   'dashboard.redditByOn': (vars) => `u/${vars.author} · ${vars.date}`,
+  'dashboard.githubReleasesUnavailable': "Impossible de charger les dernières versions.",
+  'dashboard.githubReleasesNone': 'Aucune version trouvée.',
+  'dashboard.githubReleasesViewAll': 'Toutes les versions ↗',
+  'dashboard.githubReleasePublishedOn': (vars) => `Publiée le ${vars.date}`,
+  'dashboard.updates': 'Mises à jour',
 
   'settings.title': 'Réglages',
   'settings.loadError': (vars) => `Impossible de charger les réglages : ${vars.error}`,

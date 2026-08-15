@@ -49,6 +49,11 @@ export const en = {
   'dashboard.redditNoPosts': 'No recent post.',
   'dashboard.redditViewOnReddit': 'View on Reddit ↗',
   'dashboard.redditByOn': (vars) => `u/${vars.author} · ${vars.date}`,
+  'dashboard.githubReleasesUnavailable': "Couldn't load the latest releases.",
+  'dashboard.githubReleasesNone': 'No release found.',
+  'dashboard.githubReleasesViewAll': 'All releases ↗',
+  'dashboard.githubReleasePublishedOn': (vars) => `Published on ${vars.date}`,
+  'dashboard.updates': 'Updates',
 
   'settings.title': 'Settings',
   'settings.loadError': (vars) => `Unable to load settings: ${vars.error}`,

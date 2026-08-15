@@ -398,5 +398,12 @@ class RedditPostOut(BaseModel):
     preview: str
 
 
+class GithubReleaseOut(BaseModel):
+    version: str
+    url: str | None = None
+    published_at: str | None = None
+    preview: str
+
+
 class LastfmAuthFinishIn(BaseModel):
     token: str
