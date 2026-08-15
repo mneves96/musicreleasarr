@@ -4,7 +4,11 @@ MeTube expose un endpoint HTTP POST /add ({url, download_type, quality, format, 
 download_type est obligatoire depuis les versions recentes de MeTube (valeurs
 possibles : video/audio/captions/thumbnail) - on veut "audio" pour de la musique.
 CUSTOM_DIRS=true est deja active sur le conteneur metube existant, ce qui
-permet de ranger le telechargement dans un sous-dossier par artiste.
+permet de ranger le telechargement dans un sous-dossier "Artiste/Album" -
+construit explicitement par les appelants (voir routers/releases.py et
+scheduler.py) plutot que laisse a l'inference automatique de MeTube/yt-dlp,
+qui ne s'applique qu'aux telechargements de playlist complete et disparait
+donc silencieusement quand une piste en echec est relancee individuellement.
 """
 
 import httpx

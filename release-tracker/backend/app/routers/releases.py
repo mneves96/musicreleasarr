@@ -84,7 +84,8 @@ def download_release(release_id: int, db: Session = Depends(get_db)):
         raise HTTPException(422, "URL MeTube non configurée dans les réglages")
 
     url = _resolve_release_download_url(release)
-    ok, message = metube.queue_download(settings.metube_url, url, folder=normalize_text(release.artist.name))
+    folder = f"{normalize_text(release.artist.name)}/{normalize_text(release.title)}"
+    ok, message = metube.queue_download(settings.metube_url, url, folder=folder)
     release.download_status = DownloadStatus.queued if ok else DownloadStatus.failed
     release.download_error = None if ok else message
     db.commit()
@@ -141,6 +142,6 @@ def download_track(release_id: int, video_id: str, db: Session = Depends(get_db)
     ok, message = metube.queue_download(
         settings.metube_url,
         f"https://music.youtube.com/watch?v={video_id}",
-        folder=normalize_text(release.artist.name),
+        folder=f"{normalize_text(release.artist.name)}/{normalize_text(release.title)}",
     )
     return TestConnectionResult(ok=ok, message=message)

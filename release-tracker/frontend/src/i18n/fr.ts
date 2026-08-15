@@ -177,6 +177,7 @@ export const fr: Record<TranslationKey, TranslationValue> = {
   'metube.refuseRetry': 'MeTube a refusé de relancer ce téléchargement',
   'metube.retryFailed': 'Erreur lors de la relance',
   'metube.retriesRefused': (vars) => `${vars.count} relance${Number(vars.count) > 1 ? 's' : ''} refusée${Number(vars.count) > 1 ? 's' : ''} par MeTube`,
+  'metube.autoRetrySuccess': (vars) => `Nouvelle tentative automatique réussie : ${vars.title}`,
   'metube.refuseStart': 'MeTube a refusé de démarrer ce téléchargement',
   'metube.startFailed': 'Erreur lors du démarrage',
   'metube.notConfiguredTitle': 'URL MeTube non configurée.',

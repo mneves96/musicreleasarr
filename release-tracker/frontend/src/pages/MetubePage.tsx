@@ -2,9 +2,19 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { api, type MetubeHistory, type MetubeItem } from '../api'
 import MetubeItemRow from '../components/MetubeItemRow'
 import { useLanguage } from '../context/LanguageContext'
+import { useToast } from '../context/ToastContext'
 
 const ACTIVE_POLL_MS = 1000
 const IDLE_POLL_MS = 8000
+
+// YouTube renvoie de temps en temps un 403 transitoire (throttling cote
+// serveur) qui disparait presque toujours en relancant le meme telechargement
+// quelques secondes plus tard - c'est exactement ce qu'un utilisateur fait a
+// la main aujourd'hui ("je relance et ca marche a force"). On l'automatise
+// pour ce seul motif d'erreur (pas les autres, ex. video indisponible, ou une
+// relance en boucle ne servirait a rien) avec un nombre d'essais borne.
+const TRANSIENT_ERROR_RE = /403|forbidden/i
+const AUTO_RETRY_DELAYS_MS = [5000, 15000, 30000]
 
 const AUDIO_FORMATS = ['mp3', 'm4a', 'opus', 'wav', 'flac']
 const AUDIO_QUALITIES = ['best', '320', '192', '128']
@@ -51,6 +61,7 @@ function Section({
 
 export default function MetubePage() {
   const { t } = useLanguage()
+  const { showToast } = useToast()
   const [publicUrl, setPublicUrl] = useState<string | null>(null)
   const [history, setHistory] = useState<MetubeHistory | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -75,6 +86,39 @@ export default function MetubePage() {
   // plus recente et donner une impression de "sautillement"/instabilite.
   const inFlightRef = useRef(false)
 
+  // Cle = item.url (identifiant reel cote MeTube, voir plus bas). Compte les
+  // essais deja tentes pour ne pas relancer indefiniment un telechargement
+  // qui echoue vraiment, et evite un double declenchement si deux sondages
+  // successifs voient encore l'element en erreur pendant le delai d'attente.
+  const autoRetryAttemptsRef = useRef<Map<string, number>>(new Map())
+  const autoRetryPendingRef = useRef<Set<string>>(new Set())
+
+  const scheduleAutoRetries = useCallback((items: MetubeItem[]) => {
+    for (const item of items) {
+      if (item.status !== 'error') continue
+      const reason = `${item.error ?? ''} ${item.msg ?? ''}`
+      if (!TRANSIENT_ERROR_RE.test(reason)) continue
+      if (autoRetryPendingRef.current.has(item.url)) continue
+      const attempts = autoRetryAttemptsRef.current.get(item.url) ?? 0
+      if (attempts >= AUTO_RETRY_DELAYS_MS.length) continue
+
+      autoRetryPendingRef.current.add(item.url)
+      autoRetryAttemptsRef.current.set(item.url, attempts + 1)
+      window.setTimeout(async () => {
+        try {
+          const result = await retryOne(item)
+          if (result.ok) {
+            autoRetryAttemptsRef.current.delete(item.url)
+            showToast(t('metube.autoRetrySuccess', { title: item.title || item.url }))
+          }
+        } finally {
+          autoRetryPendingRef.current.delete(item.url)
+          refresh()
+        }
+      }, AUTO_RETRY_DELAYS_MS[attempts])
+    }
+  }, [])
+
   const refresh = useCallback(async (showSpinner = false) => {
     if (inFlightRef.current) return
     inFlightRef.current = true
@@ -84,6 +128,7 @@ export default function MetubePage() {
       setHistory(h)
       setLoadError(null)
       setNotConfigured(false)
+      scheduleAutoRetries(h.done)
     } catch (err) {
       const msg = err instanceof Error ? err.message : t('common.error')
       if (msg.includes('422')) {

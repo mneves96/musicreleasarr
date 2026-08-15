@@ -235,9 +235,8 @@ def _trigger_download(db: Session, settings: Settings, artist: Artist, release: 
                 return
             release.youtube_music_url = ytmusic.album_url(browse_id)
 
-        ok, message = metube.queue_download(
-            settings.metube_url, release.youtube_music_url, folder=normalize_text(artist.name)
-        )
+        folder = f"{normalize_text(artist.name)}/{normalize_text(release.title)}"
+        ok, message = metube.queue_download(settings.metube_url, release.youtube_music_url, folder=folder)
         release.download_status = DownloadStatus.queued if ok else DownloadStatus.failed
         release.download_error = None if ok else message
         if not ok:

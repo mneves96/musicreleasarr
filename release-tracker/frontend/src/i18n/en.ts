@@ -176,6 +176,7 @@ export const en = {
   'metube.refuseRetry': 'MeTube refused to retry this download',
   'metube.retryFailed': 'Error while retrying',
   'metube.retriesRefused': (vars) => `${vars.count} retr${Number(vars.count) > 1 ? 'ies' : 'y'} refused by MeTube`,
+  'metube.autoRetrySuccess': (vars) => `Automatic retry succeeded: ${vars.title}`,
   'metube.refuseStart': 'MeTube refused to start this download',
   'metube.startFailed': 'Error while starting',
   'metube.notConfiguredTitle': 'MeTube URL not configured.',
