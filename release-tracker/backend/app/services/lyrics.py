@@ -45,10 +45,13 @@ LOOKUP_RETRY_DELAY = timedelta(days=7)
 DURATION_TOLERANCE_S = 3
 COMMIT_EVERY = 200
 # Erreurs passageres lrclib (limitation de debit, serveur surcharge, reseau) :
-# retentees quelques fois avec un delai croissant avant d'abandonner le titre.
+# retentees avec un delai croissant (5, 10, 20, 40 s) avant d'abandonner le
+# titre. lrclib repond 503 "ServerOverloaded" par pics de quelques minutes,
+# sur tous ses endpoints : un delai court ne suffit pas a passer le pic.
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
-MAX_ATTEMPTS = 3
-RETRY_BACKOFF_S = 2
+MAX_ATTEMPTS = 5
+RETRY_BACKOFF_S = 5
+MAX_RETRY_WAIT_S = 60
 SIDECAR_EXTENSIONS = (".lrc", ".txt")
 
 _SYNCED_RE = re.compile(r"^\s*\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]", re.MULTILINE)
@@ -320,24 +323,31 @@ def scan_library(force: bool = False) -> None:
 # --- Mise a jour via lrclib -------------------------------------------------
 
 
+def _wait_before_retry(seconds: float, reason: str) -> None:
+    _set_state(message=f"{reason} - nouvelle tentative dans {int(seconds)} s")
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline and not _cancel_requested():
+        time.sleep(0.5)
+    _set_state(message=None)
+
+
 def _lrclib_request(client: httpx.Client, endpoint: str, params: dict) -> httpx.Response:
-    # Sur /get, un 503 vient de la recherche externe de lrclib, saturee
-    # durablement : inutile de la retenter (voir find_lyrics).
-    retry_codes = RETRY_STATUS_CODES - {503} if endpoint == "get" else RETRY_STATUS_CODES
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        delay = min(RETRY_BACKOFF_S * 2 ** (attempt - 1), MAX_RETRY_WAIT_S)
         try:
             resp = client.get(f"{LRCLIB_URL}/{endpoint}", params=params)
-        except (httpx.TimeoutException, httpx.TransportError):
-            if attempt == MAX_ATTEMPTS:
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            if attempt == MAX_ATTEMPTS or _cancel_requested():
                 raise
+            reason = f"lrclib injoignable ({type(exc).__name__})"
         else:
-            if resp.status_code not in retry_codes or attempt == MAX_ATTEMPTS:
+            if resp.status_code not in RETRY_STATUS_CODES or attempt == MAX_ATTEMPTS or _cancel_requested():
                 return resp
             retry_after = resp.headers.get("retry-after")
             if retry_after and retry_after.isdigit():
-                time.sleep(min(int(retry_after), 60))
-                continue
-        time.sleep(RETRY_BACKOFF_S * attempt)
+                delay = min(int(retry_after), MAX_RETRY_WAIT_S)
+            reason = "lrclib saturé" if resp.status_code == 503 else f"lrclib HTTP {resp.status_code}"
+        _wait_before_retry(delay, reason)
     raise RuntimeError("unreachable")
 
 
@@ -347,6 +357,8 @@ def describe_error(exc: Exception) -> tuple[str, str]:
     occurrences d'une meme cause dans l'UI."""
     detail = f"{type(exc).__name__}: {exc}"
     if isinstance(exc, httpx.HTTPStatusError):
+        if exc.response.status_code == 503:
+            return "lrclib saturé (HTTP 503)", detail
         return f"HTTP {exc.response.status_code} lrclib", detail
     if isinstance(exc, httpx.TimeoutException):
         return "Timeout lrclib", detail
@@ -401,10 +413,10 @@ def find_lyrics(client: httpx.Client, artist: str, title: str, album: str | None
        album/duree), sans recherche externe - rapide et fiable.
     2. /search : recherche plus large, filtree sur la duree du fichier.
     3. /get : correspondance exacte AVEC recherche externe par lrclib, en
-       dernier recours seulement - cette recherche externe est souvent
-       saturee et repond alors 503 "ServerOverloaded", qu'on traite comme
-       "introuvable" plutot que comme une erreur (c'etait la cause de la
-       majorite des titres en erreur quand /get etait interroge en premier).
+       dernier recours seulement (plus lente et plus sujette a saturation).
+
+    Une saturation persistante malgre les nouvelles tentatives remonte en
+    erreur (titre retente a la mise a jour suivante), jamais en "introuvable".
     """
     synced, plain = _pick(_lrclib_get(client, "get-cached", artist, title, album, duration), None)
     if synced:
@@ -415,12 +427,7 @@ def find_lyrics(client: httpx.Client, artist: str, title: str, album: str | None
         if synced:
             return synced, plain
 
-    try:
-        return _pick(_lrclib_get(client, "get", artist, title, album, duration), plain)
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 503:
-            return None, plain
-        raise
+    return _pick(_lrclib_get(client, "get", artist, title, album, duration), plain)
 
 
 def _write_sidecar(path: str, content: str) -> None:
