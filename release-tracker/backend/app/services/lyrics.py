@@ -331,17 +331,17 @@ def _wait_before_retry(seconds: float, reason: str) -> None:
     _set_state(message=None)
 
 
-def _lrclib_request(client: httpx.Client, endpoint: str, params: dict) -> httpx.Response:
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+def _lrclib_request(client: httpx.Client, endpoint: str, params: dict, max_attempts: int = MAX_ATTEMPTS) -> httpx.Response:
+    for attempt in range(1, max_attempts + 1):
         delay = min(RETRY_BACKOFF_S * 2 ** (attempt - 1), MAX_RETRY_WAIT_S)
         try:
             resp = client.get(f"{LRCLIB_URL}/{endpoint}", params=params)
         except (httpx.TimeoutException, httpx.TransportError) as exc:
-            if attempt == MAX_ATTEMPTS or _cancel_requested():
+            if attempt == max_attempts or _cancel_requested():
                 raise
             reason = f"lrclib injoignable ({type(exc).__name__})"
         else:
-            if resp.status_code not in RETRY_STATUS_CODES or attempt == MAX_ATTEMPTS or _cancel_requested():
+            if resp.status_code not in RETRY_STATUS_CODES or attempt == max_attempts or _cancel_requested():
                 return resp
             retry_after = resp.headers.get("retry-after")
             if retry_after and retry_after.isdigit():
@@ -374,14 +374,20 @@ def describe_error(exc: Exception) -> tuple[str, str]:
 
 
 def _lrclib_get(
-    client: httpx.Client, endpoint: str, artist: str, title: str, album: str | None, duration: float | None
+    client: httpx.Client,
+    endpoint: str,
+    artist: str,
+    title: str,
+    album: str | None,
+    duration: float | None,
+    max_attempts: int = MAX_ATTEMPTS,
 ) -> dict | None:
     params = {"artist_name": artist, "track_name": title}
     if album:
         params["album_name"] = album
     if duration:
         params["duration"] = int(round(duration))
-    resp = _lrclib_request(client, endpoint, params)
+    resp = _lrclib_request(client, endpoint, params, max_attempts)
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
@@ -413,10 +419,14 @@ def find_lyrics(client: httpx.Client, artist: str, title: str, album: str | None
        album/duree), sans recherche externe - rapide et fiable.
     2. /search : recherche plus large, filtree sur la duree du fichier.
     3. /get : correspondance exacte AVEC recherche externe par lrclib, en
-       dernier recours seulement (plus lente et plus sujette a saturation).
+       bonus seulement. Cette recherche externe est saturee (503) ou limitee
+       (429) la plupart du temps : une seule tentative, et son echec vaut
+       "introuvable" - les etapes 1 et 2 ont deja repondu de facon fiable que
+       lrclib n'a pas ces paroles. Avec des nouvelles tentatives, chaque titre
+       introuvable coutait plus d'une minute d'attente pour finir en erreur.
 
-    Une saturation persistante malgre les nouvelles tentatives remonte en
-    erreur (titre retente a la mise a jour suivante), jamais en "introuvable".
+    Les erreurs (retentees a la mise a jour suivante) ne viennent donc que de
+    /get-cached ou /search, apres nouvelles tentatives.
     """
     synced, plain = _pick(_lrclib_get(client, "get-cached", artist, title, album, duration), None)
     if synced:
@@ -427,7 +437,11 @@ def find_lyrics(client: httpx.Client, artist: str, title: str, album: str | None
         if synced:
             return synced, plain
 
-    return _pick(_lrclib_get(client, "get", artist, title, album, duration), plain)
+    try:
+        return _pick(_lrclib_get(client, "get", artist, title, album, duration, max_attempts=1), plain)
+    except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.TransportError) as exc:
+        logger.info("Recherche externe lrclib indisponible pour %s - %s : %s", artist, title, exc)
+        return None, plain
 
 
 def _write_sidecar(path: str, content: str) -> None:
