@@ -503,6 +503,11 @@ export const en = {
   'lyrics.job.updateCounts': (vars) => `${vars.updated} completed · ${vars.notFound} not found · ${vars.errors} error(s)`,
   'lyrics.tracks.title': 'Tracks',
   'lyrics.tracks.filterAll': 'All',
+  'lyrics.tracks.filterErrors': 'In error',
+  'lyrics.errors.title': (vars) => `Lookup errors (${vars.count})`,
+  'lyrics.errors.hint':
+    'Grouped by cause, with one example each. These tracks are retried on the next update. Full details are also in the container logs.',
+  'lyrics.errors.showTracks': 'Show these tracks',
   'lyrics.tracks.search': 'Filter by artist, title or album...',
   'lyrics.tracks.empty': 'No track.',
   'lyrics.tracks.showing': (vars) => `${vars.shown} of ${vars.total}`,

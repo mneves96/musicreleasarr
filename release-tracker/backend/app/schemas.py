@@ -418,7 +418,15 @@ class LyricsStatsOut(BaseModel):
     # titres deja cherches sans succes recemment, voir services/lyrics.py).
     update_candidates: int
     not_found_recently: int
+    errors: int
     last_scan_at: datetime | None
+
+
+class LyricsErrorGroupOut(BaseModel):
+    category: str
+    count: int
+    example_path: str
+    example_detail: str | None
 
 
 class LyricsJobOut(BaseModel):
@@ -450,6 +458,8 @@ class LyricsTrackOut(BaseModel):
     source: str | None
     lookup_at: datetime | None
     lookup_result: str | None
+    lookup_error: str | None
+    lookup_error_detail: str | None
 
 
 class LyricsTrackPage(BaseModel):

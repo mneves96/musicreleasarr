@@ -332,3 +332,7 @@ class LyricsTrack(Base):
     # de re-solliciter lrclib a chaque mise a jour pour des titres introuvables.
     lookup_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     lookup_result: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Renseignes quand lookup_result == "error" : categorie (regroupable dans
+    # l'UI, ex: "HTTP 429 lrclib") et message brut de l'exception.
+    lookup_error: Mapped[str | None] = mapped_column(String, nullable=True)
+    lookup_error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)

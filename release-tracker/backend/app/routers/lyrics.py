@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import LyricsStatus, LyricsTrack
-from ..schemas import LyricsJobIn, LyricsJobOut, LyricsStatsOut, LyricsTrackPage
+from ..schemas import LyricsErrorGroupOut, LyricsJobIn, LyricsJobOut, LyricsStatsOut, LyricsTrackPage
 from ..services import lyrics
 
 router = APIRouter(prefix="/api/lyrics", tags=["lyrics"])
@@ -26,7 +26,13 @@ def stats(db: Session = Depends(get_db)):
         .filter(
             LyricsTrack.status.in_([LyricsStatus.missing, LyricsStatus.plain]),
             LyricsTrack.lookup_at >= cutoff,
+            LyricsTrack.lookup_result != "error",
         )
+        .count()
+    )
+    errors = (
+        db.query(LyricsTrack)
+        .filter(LyricsTrack.status.in_([LyricsStatus.missing, LyricsStatus.plain]), LyricsTrack.lookup_result == "error")
         .count()
     )
     return LyricsStatsOut(
@@ -36,8 +42,31 @@ def stats(db: Session = Depends(get_db)):
         synced=counts.get(LyricsStatus.synced, 0),
         update_candidates=lyrics.update_candidates_query(db).count(),
         not_found_recently=not_found_recently,
+        errors=errors,
         last_scan_at=db.query(func.max(LyricsTrack.scanned_at)).scalar(),
     )
+
+
+@router.get("/errors", response_model=list[LyricsErrorGroupOut])
+def errors(db: Session = Depends(get_db)):
+    """Erreurs de la derniere tentative de mise a jour, regroupees par cause -
+    avec un exemple (chemin + message brut) pour diagnostiquer."""
+    rows = (
+        db.query(LyricsTrack)
+        .filter(LyricsTrack.status.in_([LyricsStatus.missing, LyricsStatus.plain]), LyricsTrack.lookup_result == "error")
+        .order_by(LyricsTrack.lookup_at.desc())
+        .all()
+    )
+    groups: dict[str, LyricsErrorGroupOut] = {}
+    for row in rows:
+        category = row.lookup_error or "Erreur inconnue"
+        if category in groups:
+            groups[category].count += 1
+        else:
+            groups[category] = LyricsErrorGroupOut(
+                category=category, count=1, example_path=row.path, example_detail=row.lookup_error_detail
+            )
+    return sorted(groups.values(), key=lambda g: g.count, reverse=True)
 
 
 @router.get("/job", response_model=LyricsJobOut)
@@ -71,6 +100,7 @@ def cancel():
 @router.get("/tracks", response_model=LyricsTrackPage)
 def tracks(
     status: LyricsStatus | None = None,
+    errors_only: bool = False,
     q: str | None = None,
     limit: int = 100,
     offset: int = 0,
@@ -79,6 +109,10 @@ def tracks(
     query = db.query(LyricsTrack)
     if status is not None:
         query = query.filter(LyricsTrack.status == status)
+    if errors_only:
+        query = query.filter(
+            LyricsTrack.status.in_([LyricsStatus.missing, LyricsStatus.plain]), LyricsTrack.lookup_result == "error"
+        )
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(

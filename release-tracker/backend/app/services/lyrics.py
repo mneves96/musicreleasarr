@@ -44,6 +44,11 @@ LOOKUP_RETRY_DELAY = timedelta(days=7)
 # au-dela, le time code a toutes les chances d'etre decale (autre version).
 DURATION_TOLERANCE_S = 3
 COMMIT_EVERY = 200
+# Erreurs passageres lrclib (limitation de debit, serveur surcharge, reseau) :
+# retentees quelques fois avec un delai croissant avant d'abandonner le titre.
+RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_S = 2
 SIDECAR_EXTENSIONS = (".lrc", ".txt")
 
 _SYNCED_RE = re.compile(r"^\s*\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]", re.MULTILINE)
@@ -315,13 +320,56 @@ def scan_library(force: bool = False) -> None:
 # --- Mise a jour via lrclib -------------------------------------------------
 
 
-def _lrclib_get(client: httpx.Client, artist: str, title: str, album: str | None, duration: float | None) -> dict | None:
+def _lrclib_request(client: httpx.Client, endpoint: str, params: dict) -> httpx.Response:
+    # Sur /get, un 503 vient de la recherche externe de lrclib, saturee
+    # durablement : inutile de la retenter (voir find_lyrics).
+    retry_codes = RETRY_STATUS_CODES - {503} if endpoint == "get" else RETRY_STATUS_CODES
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            resp = client.get(f"{LRCLIB_URL}/{endpoint}", params=params)
+        except (httpx.TimeoutException, httpx.TransportError):
+            if attempt == MAX_ATTEMPTS:
+                raise
+        else:
+            if resp.status_code not in retry_codes or attempt == MAX_ATTEMPTS:
+                return resp
+            retry_after = resp.headers.get("retry-after")
+            if retry_after and retry_after.isdigit():
+                time.sleep(min(int(retry_after), 60))
+                continue
+        time.sleep(RETRY_BACKOFF_S * attempt)
+    raise RuntimeError("unreachable")
+
+
+def describe_error(exc: Exception) -> tuple[str, str]:
+    """(categorie regroupable, detail) d'une erreur de mise a jour - la
+    categorie ne contient ni chemin ni titre pour pouvoir compter les
+    occurrences d'une meme cause dans l'UI."""
+    detail = f"{type(exc).__name__}: {exc}"
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP {exc.response.status_code} lrclib", detail
+    if isinstance(exc, httpx.TimeoutException):
+        return "Timeout lrclib", detail
+    if isinstance(exc, httpx.TransportError):
+        return f"Réseau lrclib ({type(exc).__name__})", detail
+    if isinstance(exc, PermissionError):
+        return "Écriture du .lrc refusée (permissions)", detail
+    if isinstance(exc, OSError):
+        return f"Écriture du .lrc impossible ({exc.strerror or type(exc).__name__})", detail
+    if isinstance(exc, ValueError):
+        return "Réponse lrclib invalide", detail
+    return type(exc).__name__, detail
+
+
+def _lrclib_get(
+    client: httpx.Client, endpoint: str, artist: str, title: str, album: str | None, duration: float | None
+) -> dict | None:
     params = {"artist_name": artist, "track_name": title}
     if album:
         params["album_name"] = album
     if duration:
         params["duration"] = int(round(duration))
-    resp = client.get(f"{LRCLIB_URL}/get", params=params)
+    resp = _lrclib_request(client, endpoint, params)
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
@@ -329,7 +377,7 @@ def _lrclib_get(client: httpx.Client, artist: str, title: str, album: str | None
 
 
 def _lrclib_search(client: httpx.Client, artist: str, title: str, duration: float | None) -> list[dict]:
-    resp = client.get(f"{LRCLIB_URL}/search", params={"artist_name": artist, "track_name": title})
+    resp = _lrclib_request(client, "search", {"artist_name": artist, "track_name": title})
     resp.raise_for_status()
     results = [r for r in resp.json() if not r.get("instrumental")]
     if duration:
@@ -338,23 +386,41 @@ def _lrclib_search(client: httpx.Client, artist: str, title: str, duration: floa
     return results
 
 
+def _pick(record: dict | None, plain: str | None) -> tuple[str | None, str | None]:
+    if not record or record.get("instrumental"):
+        return None, plain
+    if record.get("syncedLyrics"):
+        return record["syncedLyrics"], record.get("plainLyrics") or plain
+    return None, plain or record.get("plainLyrics") or None
+
+
 def find_lyrics(client: httpx.Client, artist: str, title: str, album: str | None, duration: float | None) -> tuple[str | None, str | None]:
-    """(paroles synchronisees LRC, paroles brutes) - correspondance exacte
-    lrclib d'abord (artiste/titre/album/duree), puis recherche plus large
-    filtree sur la duree si elle n'a rien donne de synchronise."""
-    plain: str | None = None
-    exact = _lrclib_get(client, artist, title, album, duration)
-    if exact and not exact.get("instrumental"):
-        if exact.get("syncedLyrics"):
-            return exact["syncedLyrics"], exact.get("plainLyrics")
-        plain = exact.get("plainLyrics") or None
+    """(paroles synchronisees LRC, paroles brutes), en trois temps :
+
+    1. /get-cached : correspondance exacte dans la base lrclib (artiste/titre/
+       album/duree), sans recherche externe - rapide et fiable.
+    2. /search : recherche plus large, filtree sur la duree du fichier.
+    3. /get : correspondance exacte AVEC recherche externe par lrclib, en
+       dernier recours seulement - cette recherche externe est souvent
+       saturee et repond alors 503 "ServerOverloaded", qu'on traite comme
+       "introuvable" plutot que comme une erreur (c'etait la cause de la
+       majorite des titres en erreur quand /get etait interroge en premier).
+    """
+    synced, plain = _pick(_lrclib_get(client, "get-cached", artist, title, album, duration), None)
+    if synced:
+        return synced, plain
 
     for result in _lrclib_search(client, artist, title, duration):
-        if result.get("syncedLyrics"):
-            return result["syncedLyrics"], result.get("plainLyrics") or plain
-        if plain is None and result.get("plainLyrics"):
-            plain = result["plainLyrics"]
-    return None, plain
+        synced, plain = _pick(result, plain)
+        if synced:
+            return synced, plain
+
+    try:
+        return _pick(_lrclib_get(client, "get", artist, title, album, duration), plain)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 503:
+            return None, plain
+        raise
 
 
 def _write_sidecar(path: str, content: str) -> None:
@@ -367,7 +433,14 @@ def update_candidates_query(db: Session, force: bool = False):
     query = db.query(LyricsTrack).filter(LyricsTrack.status.in_([LyricsStatus.missing, LyricsStatus.plain]))
     if not force:
         cutoff = datetime.utcnow() - LOOKUP_RETRY_DELAY
-        query = query.filter((LyricsTrack.lookup_at.is_(None)) | (LyricsTrack.lookup_at < cutoff))
+        # Les erreurs (reseau, permissions...) ne disent rien de la disponibilite
+        # des paroles : elles sont retentees a chaque mise a jour, contrairement
+        # aux titres reellement introuvables.
+        query = query.filter(
+            (LyricsTrack.lookup_at.is_(None))
+            | (LyricsTrack.lookup_at < cutoff)
+            | (LyricsTrack.lookup_result == "error")
+        )
     return query
 
 
@@ -384,6 +457,7 @@ def update_lyrics(force: bool = False) -> None:
                 if _cancel_requested():
                     _set_state(message="Mise à jour annulée")
                     break
+                row.lookup_error = row.lookup_error_detail = None
                 try:
                     if not os.path.isfile(row.path):
                         db.delete(row)
@@ -408,8 +482,11 @@ def update_lyrics(force: bool = False) -> None:
                     if row.lookup_result in ("synced", "plain"):
                         _apply_classification(row, row.path)
                 except Exception as exc:
-                    logger.warning("Echec de la recherche de paroles pour %s : %s", row.path, exc)
+                    category, detail = describe_error(exc)
+                    logger.warning("Echec de la recherche de paroles pour %s : %s", row.path, detail)
                     row.lookup_result = "error"
+                    row.lookup_error = category
+                    row.lookup_error_detail = detail
                     errors += 1
                 finally:
                     if row in db:

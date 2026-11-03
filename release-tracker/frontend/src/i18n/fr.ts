@@ -504,6 +504,11 @@ export const fr: Record<TranslationKey, TranslationValue> = {
   'lyrics.job.updateCounts': (vars) => `${vars.updated} complété(s) · ${vars.notFound} introuvable(s) · ${vars.errors} erreur(s)`,
   'lyrics.tracks.title': 'Titres',
   'lyrics.tracks.filterAll': 'Tous',
+  'lyrics.tracks.filterErrors': 'En erreur',
+  'lyrics.errors.title': (vars) => `Erreurs de recherche (${vars.count})`,
+  'lyrics.errors.hint':
+    "Regroupées par cause, avec un exemple pour chacune. Ces titres sont retentés à la prochaine mise à jour. Le détail complet est aussi dans les logs du conteneur.",
+  'lyrics.errors.showTracks': 'Voir ces titres',
   'lyrics.tracks.search': 'Filtrer par artiste, titre ou album...',
   'lyrics.tracks.empty': 'Aucun titre.',
   'lyrics.tracks.showing': (vars) => `${vars.shown} sur ${vars.total}`,

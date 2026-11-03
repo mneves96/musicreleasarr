@@ -364,7 +364,15 @@ export interface LyricsStats {
   synced: number
   update_candidates: number
   not_found_recently: number
+  errors: number
   last_scan_at: string | null
+}
+
+export interface LyricsErrorGroup {
+  category: string
+  count: number
+  example_path: string
+  example_detail: string | null
 }
 
 export interface LyricsJob {
@@ -390,6 +398,8 @@ export interface LyricsTrack {
   source: string | null
   lookup_at: string | null
   lookup_result: string | null
+  lookup_error: string | null
+  lookup_error_detail: string | null
 }
 
 export interface LyricsTrackPage {
@@ -548,12 +558,14 @@ export const api = {
   lyrics: {
     stats: () => request<LyricsStats>('/lyrics/stats'),
     job: () => request<LyricsJob>('/lyrics/job'),
+    errors: () => request<LyricsErrorGroup[]>('/lyrics/errors'),
     scan: (force = false) => request<LyricsJob>('/lyrics/scan', { method: 'POST', body: JSON.stringify({ force }) }),
     update: (force = false) => request<LyricsJob>('/lyrics/update', { method: 'POST', body: JSON.stringify({ force }) }),
     cancel: () => request<LyricsJob>('/lyrics/cancel', { method: 'POST' }),
-    tracks: (params: { status?: LyricsStatus; q?: string; limit?: number; offset?: number }) => {
+    tracks: (params: { status?: LyricsStatus; errorsOnly?: boolean; q?: string; limit?: number; offset?: number }) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
+      if (params.errorsOnly) qs.set('errors_only', 'true')
       if (params.q) qs.set('q', params.q)
       if (params.limit != null) qs.set('limit', String(params.limit))
       if (params.offset != null) qs.set('offset', String(params.offset))

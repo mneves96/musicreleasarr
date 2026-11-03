@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type LyricsJob, type LyricsStats, type LyricsStatus, type LyricsTrack } from '../api'
+import { api, type LyricsErrorGroup, type LyricsJob, type LyricsStats, type LyricsStatus, type LyricsTrack } from '../api'
 import Spinner, { LoadingBlock } from '../components/Spinner'
 import { useLanguage } from '../context/LanguageContext'
 import type { TranslationKey } from '../i18n/en'
@@ -14,6 +14,10 @@ const STATUS_STYLES: Record<LyricsStatus, { bar: string; text: string; key: Tran
   synced: { bar: 'bg-green-500', text: 'text-green-300', key: 'lyrics.stats.synced' },
 }
 const STATUSES: LyricsStatus[] = ['missing', 'plain', 'synced']
+// Filtre de la liste des titres : un statut de paroles, tous, ou les titres
+// dont la derniere recherche lrclib a echoue.
+type TrackFilter = LyricsStatus | 'all' | 'errors'
+const TRACK_FILTERS: TrackFilter[] = ['all', ...STATUSES, 'errors']
 
 const LOOKUP_KEYS: Record<string, TranslationKey> = {
   not_found: 'lyrics.lookup.not_found',
@@ -38,13 +42,14 @@ function StatCard({ label, value, sub, className = '' }: { label: string; value:
 export default function LyricsPage() {
   const { t, language } = useLanguage()
   const [stats, setStats] = useState<LyricsStats | null>(null)
+  const [errorGroups, setErrorGroups] = useState<LyricsErrorGroup[]>([])
   const [job, setJob] = useState<LyricsJob | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState<string | null>(null)
   const [retryAll, setRetryAll] = useState(false)
 
-  const [filter, setFilter] = useState<LyricsStatus | null>('missing')
+  const [filter, setFilter] = useState<TrackFilter>('missing')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [tracks, setTracks] = useState<LyricsTrack[]>([])
@@ -52,14 +57,18 @@ export default function LyricsPage() {
   const [tracksLoading, setTracksLoading] = useState(false)
   const wasRunningRef = useRef(false)
 
-  const loadStats = useCallback(() => api.lyrics.stats().then(setStats), [])
+  const loadStats = useCallback(
+    () => Promise.all([api.lyrics.stats().then(setStats), api.lyrics.errors().then(setErrorGroups)]),
+    [],
+  )
 
   const loadTracks = useCallback(
     async (offset: number) => {
       setTracksLoading(true)
       try {
         const page = await api.lyrics.tracks({
-          status: filter ?? undefined,
+          status: filter === 'all' || filter === 'errors' ? undefined : filter,
+          errorsOnly: filter === 'errors',
           q: debouncedQuery || undefined,
           limit: TRACKS_PAGE_SIZE,
           offset,
@@ -239,20 +248,52 @@ export default function LyricsPage() {
         {actionError && <p className="mt-3 text-sm text-red-300">{actionError}</p>}
       </div>
 
+      {errorGroups.length > 0 && !running && (
+        <div className="bg-app-surface border border-red-900/60 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+            <h2 className="font-medium">{t('lyrics.errors.title', { count: stats?.errors ?? 0 })}</h2>
+            <button onClick={() => setFilter('errors')} className="text-xs text-app-accent-text hover:underline">
+              {t('lyrics.errors.showTracks')}
+            </button>
+          </div>
+          <p className="text-xs text-app-text-faint mb-3">{t('lyrics.errors.hint')}</p>
+          <ul className="flex flex-col gap-3">
+            {errorGroups.map((group) => (
+              <li key={group.category} className="text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-red-300">{group.category}</span>
+                  <span className="text-xs text-app-text-faint whitespace-nowrap">{group.count}</span>
+                </div>
+                <div className="text-xs text-app-text-faint break-all">{group.example_path}</div>
+                {group.example_detail && (
+                  <code className="block mt-1 text-xs text-app-text-muted bg-app-bg rounded px-2 py-1 break-all">
+                    {group.example_detail}
+                  </code>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="bg-app-surface border border-app-border rounded-lg p-4">
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <h2 className="font-medium mr-2">{t('lyrics.tracks.title')}</h2>
-          {([null, ...STATUSES] as (LyricsStatus | null)[]).map((status) => (
+          {TRACK_FILTERS.map((value) => (
             <button
-              key={status ?? 'all'}
-              onClick={() => setFilter(status)}
+              key={value}
+              onClick={() => setFilter(value)}
               className={`text-xs px-2.5 py-1 rounded-full border ${
-                filter === status
+                filter === value
                   ? 'bg-app-surface-hover border-app-border-strong text-app-text'
                   : 'border-app-border text-app-text-muted hover:text-app-text'
               }`}
             >
-              {status ? t(STATUS_STYLES[status].key) : t('lyrics.tracks.filterAll')}
+              {value === 'all'
+                ? t('lyrics.tracks.filterAll')
+                : value === 'errors'
+                  ? t('lyrics.tracks.filterErrors')
+                  : t(STATUS_STYLES[value].key)}
             </button>
           ))}
           <input
@@ -284,9 +325,14 @@ export default function LyricsPage() {
                     <div className="text-xs text-app-text-faint truncate">
                       {track.album}
                       {track.status !== 'synced' && track.lookup_result && track.lookup_result in LOOKUP_KEYS && (
-                        <span>
+                        <span
+                          className={track.lookup_result === 'error' ? 'text-red-300' : ''}
+                          title={track.lookup_error_detail ?? undefined}
+                        >
                           {track.album ? ' · ' : ''}
-                          {t(LOOKUP_KEYS[track.lookup_result])}
+                          {track.lookup_result === 'error' && track.lookup_error
+                            ? track.lookup_error
+                            : t(LOOKUP_KEYS[track.lookup_result])}
                         </span>
                       )}
                     </div>
