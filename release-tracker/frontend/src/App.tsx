@@ -10,6 +10,7 @@ import SettingsPage from './pages/SettingsPage'
 import MetubePage from './pages/MetubePage'
 import BacklogPage from './pages/BacklogPage'
 import NavidromePage from './pages/NavidromePage'
+import LyricsPage from './pages/LyricsPage'
 import { PlayerProvider } from './context/PlayerContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './context/LanguageContext'
@@ -33,6 +34,7 @@ export default function App() {
                     <Route path="metube" element={<MetubePage />} />
                     <Route path="backlog" element={<BacklogPage />} />
                     <Route path="navidrome" element={<NavidromePage />} />
+                    <Route path="lyrics" element={<LyricsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                   </Route>
                 </Routes>

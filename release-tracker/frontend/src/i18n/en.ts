@@ -477,6 +477,39 @@ export const en = {
   'status.filed': 'Filed',
 
   'settings.appearance.title': 'Appearance',
+  'lyrics.title': 'Lyrics',
+  'lyrics.intro':
+    'Lyrics status of the library files (embedded tags and .lrc/.txt files next to the tracks, the same sources Navidrome reads).',
+  'lyrics.stats.total': 'Tracks',
+  'lyrics.stats.missing': 'No lyrics',
+  'lyrics.stats.plain': 'Lyrics without timecode',
+  'lyrics.stats.synced': 'Lyrics with timecode',
+  'lyrics.lastScan': (vars) => `Last scan: ${vars.date}`,
+  'lyrics.neverScanned': 'No scan yet - run one to compute the stats.',
+  'lyrics.scan': 'Scan library',
+  'lyrics.fullScan': 'Full rescan',
+  'lyrics.fullScanTitle': 'Re-reads every file, even those unchanged since the last scan',
+  'lyrics.update': 'Fetch missing lyrics',
+  'lyrics.updateTitle':
+    'Searches lrclib.net for tracks without lyrics or without timecode and writes a .lrc file next to the track when timed lyrics are found',
+  'lyrics.updateCandidates': (vars) => `${vars.count} track(s) to look up`,
+  'lyrics.notFoundRecently': (vars) =>
+    `${vars.count} track(s) already looked up without result in the last 7 days are skipped`,
+  'lyrics.retryAll': 'Retry them too',
+  'lyrics.cancel': 'Cancel',
+  'lyrics.job.scan': 'Scanning',
+  'lyrics.job.update': 'Updating lyrics',
+  'lyrics.job.progress': (vars) => `${vars.processed} / ${vars.total}`,
+  'lyrics.job.updateCounts': (vars) => `${vars.updated} completed · ${vars.notFound} not found · ${vars.errors} error(s)`,
+  'lyrics.tracks.title': 'Tracks',
+  'lyrics.tracks.filterAll': 'All',
+  'lyrics.tracks.search': 'Filter by artist, title or album...',
+  'lyrics.tracks.empty': 'No track.',
+  'lyrics.tracks.showing': (vars) => `${vars.shown} of ${vars.total}`,
+  'lyrics.tracks.loadMore': 'Load more',
+  'lyrics.lookup.not_found': 'Not found on lrclib',
+  'lyrics.lookup.no_tags': 'Missing artist/title tags',
+  'lyrics.lookup.error': 'Lookup error',
 } satisfies Record<string, TranslationValue>
 
 export type TranslationKey = keyof typeof en

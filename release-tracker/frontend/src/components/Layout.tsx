@@ -14,6 +14,7 @@ import {
   CloseIcon,
   DashboardIcon,
   LogoutIcon,
+  LyricsIcon,
   MenuIcon,
   NavidromeNavIcon,
   SettingsIcon,
@@ -184,6 +185,10 @@ export default function Layout() {
           <NavLink to="/navidrome" className={navLinkClass}>
             <NavidromeNavIcon className="w-4 h-4 shrink-0" />
             Navidrome
+          </NavLink>
+          <NavLink to="/lyrics" className={navLinkClass}>
+            <LyricsIcon className="w-4 h-4 shrink-0" />
+            Lyrics
           </NavLink>
         </nav>
         <div className="px-2 py-2 border-t border-app-border">

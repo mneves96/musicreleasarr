@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from .models import DownloadStatus, OwnershipStatus, ReleaseType, TaggingStatus
+from .models import DownloadStatus, LyricsStatus, OwnershipStatus, ReleaseType, TaggingStatus
 
 
 class ArtistSearchResult(BaseModel):
@@ -407,3 +407,51 @@ class GithubReleaseOut(BaseModel):
 
 class LastfmAuthFinishIn(BaseModel):
     token: str
+
+
+class LyricsStatsOut(BaseModel):
+    total: int
+    missing: int
+    plain: int
+    synced: int
+    # Pistes "missing"/"plain" que la prochaine mise a jour interrogera (hors
+    # titres deja cherches sans succes recemment, voir services/lyrics.py).
+    update_candidates: int
+    not_found_recently: int
+    last_scan_at: datetime | None
+
+
+class LyricsJobOut(BaseModel):
+    kind: Literal["scan", "update"] | None
+    running: bool
+    processed: int
+    total: int
+    updated: int
+    not_found: int
+    errors: int
+    started_at: datetime | None
+    finished_at: datetime | None
+    message: str | None
+
+
+class LyricsJobIn(BaseModel):
+    force: bool = False
+
+
+class LyricsTrackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    path: str
+    artist: str | None
+    title: str | None
+    album: str | None
+    status: LyricsStatus
+    source: str | None
+    lookup_at: datetime | None
+    lookup_result: str | None
+
+
+class LyricsTrackPage(BaseModel):
+    items: list[LyricsTrackOut]
+    total: int

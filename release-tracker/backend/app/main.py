@@ -13,6 +13,7 @@ from .routers import (
     auth,
     calendar,
     github_releases,
+    lyrics,
     metube,
     navidrome,
     reddit,
@@ -54,6 +55,7 @@ app.include_router(navidrome.router, dependencies=protected)
 app.include_router(scrobbling.router, dependencies=protected)
 app.include_router(reddit.router, dependencies=protected)
 app.include_router(github_releases.router, dependencies=protected)
+app.include_router(lyrics.router, dependencies=protected)
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 

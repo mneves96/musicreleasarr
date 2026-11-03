@@ -355,6 +355,48 @@ export interface MetubeAddPayload {
   auto_start?: boolean
 }
 
+export type LyricsStatus = 'missing' | 'plain' | 'synced'
+
+export interface LyricsStats {
+  total: number
+  missing: number
+  plain: number
+  synced: number
+  update_candidates: number
+  not_found_recently: number
+  last_scan_at: string | null
+}
+
+export interface LyricsJob {
+  kind: 'scan' | 'update' | null
+  running: boolean
+  processed: number
+  total: number
+  updated: number
+  not_found: number
+  errors: number
+  started_at: string | null
+  finished_at: string | null
+  message: string | null
+}
+
+export interface LyricsTrack {
+  id: number
+  path: string
+  artist: string | null
+  title: string | null
+  album: string | null
+  status: LyricsStatus
+  source: string | null
+  lookup_at: string | null
+  lookup_result: string | null
+}
+
+export interface LyricsTrackPage {
+  items: LyricsTrack[]
+  total: number
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -502,6 +544,22 @@ export const api = {
   scrobblingStats: () => request<ScrobblingStats>('/scrobbling/stats'),
   redditNavidromePosts: () => request<RedditPost[]>('/reddit/navidrome-posts'),
   githubReleases: (project: 'navidrome' | 'metube') => request<GithubRelease[]>(`/github-releases/${project}`),
+
+  lyrics: {
+    stats: () => request<LyricsStats>('/lyrics/stats'),
+    job: () => request<LyricsJob>('/lyrics/job'),
+    scan: (force = false) => request<LyricsJob>('/lyrics/scan', { method: 'POST', body: JSON.stringify({ force }) }),
+    update: (force = false) => request<LyricsJob>('/lyrics/update', { method: 'POST', body: JSON.stringify({ force }) }),
+    cancel: () => request<LyricsJob>('/lyrics/cancel', { method: 'POST' }),
+    tracks: (params: { status?: LyricsStatus; q?: string; limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams()
+      if (params.status) qs.set('status', params.status)
+      if (params.q) qs.set('q', params.q)
+      if (params.limit != null) qs.set('limit', String(params.limit))
+      if (params.offset != null) qs.set('offset', String(params.offset))
+      return request<LyricsTrackPage>(`/lyrics/tracks?${qs.toString()}`)
+    },
+  },
 
   tagging: {
     backlog: () => request<TaggingItem[]>('/tagging/backlog'),

@@ -300,3 +300,35 @@ class AuthSession(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("app_users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class LyricsStatus(str, enum.Enum):
+    missing = "missing"
+    plain = "plain"
+    synced = "synced"
+
+
+class LyricsTrack(Base):
+    """Inventaire des paroles de la bibliotheque (voir services/lyrics.py) - une
+    ligne par fichier audio, rafraichie par le scan de l'onglet Lyrics. Le
+    scan est incremental : file_mtime/sidecar_mtime permettent de ne relire
+    les tags que des fichiers modifies depuis le passage precedent."""
+
+    __tablename__ = "lyrics_tracks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    path: Mapped[str] = mapped_column(String, unique=True, index=True)
+    artist: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    album: Mapped[str | None] = mapped_column(String, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[LyricsStatus] = mapped_column(Enum(LyricsStatus), default=LyricsStatus.missing, index=True)
+    # "embedded" (tag dans le fichier), "lrc"/"txt" (fichier a cote de la piste)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+    file_mtime: Mapped[float] = mapped_column(Float, default=0)
+    sidecar_mtime: Mapped[float] = mapped_column(Float, default=0)
+    scanned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Derniere tentative de recuperation lrclib (avec ou sans succes) - evite
+    # de re-solliciter lrclib a chaque mise a jour pour des titres introuvables.
+    lookup_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lookup_result: Mapped[str | None] = mapped_column(String, nullable=True)
